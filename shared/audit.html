@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」 -->
+  <script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+  <style>.embedded [data-standalone] { display: none !important; }</style>
+<title>可疑紀錄 · 資訊科技課程</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+/* 教師工具頁：設定檔與共用程式都帶時間戳載入，改版後不會拿到瀏覽器快取的舊版 */
+(function () {
+  var v = '?v=' + Date.now();
+  document.write('<scr' + 'ipt src="../course/config.js' + v + '"></scr' + 'ipt>');
+  ['auth.js', 'audit.js'].forEach(function (f) {
+    document.write('<scr' + 'ipt src="' + f + v + '"></scr' + 'ipt>');
+  });
+})();
+</script>
+
+<style>
+  html,body,button{font-family:'Noto Sans TC',system-ui,sans-serif}
+  body{background:#e7e5e4}
+</style>
+</head>
+<body class="min-h-screen text-slate-800">
+<!-- =====================================================================
+     🔍 可疑紀錄（老師專用，只讀不寫）
+     找出章節測驗裡「沒有作答過程」或「每題都在 1 秒內」的通關紀錄。
+     這是提醒老師去看，不是判定；這一頁不擋任何人、也不改任何資料。
+     ===================================================================== -->
+
+<main class="max-w-5xl mx-auto px-4 py-8">
+  <header class="mb-6">
+    <a href="../course/teacher.html" data-standalone class="text-sm font-bold text-slate-400 hover:text-slate-700">← 回教師端</a>
+    <h1 class="text-2xl sm:text-3xl font-black mt-2">🔍 可疑紀錄</h1>
+    <p class="text-slate-500 text-sm mt-2 leading-relaxed">
+      找出資訊倫理章節測驗裡，不像是從測驗畫面正常作答寫進來的通關紀錄。<br>
+      <b class="text-slate-700">這是提醒你去看，不是判定。</b>
+      系統不會因為這一頁擋任何人，這一頁也不會改任何資料。
+    </p>
+  </header>
+  <div id="app"></div>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged,
+         setPersistence, browserSessionPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* 這一頁只讀不寫（import 裡刻意沒有 setDoc／updateDoc／deleteDoc），上課中也能放心開 */
+
+const C = window.CONFIG || {};
+const TERM = C.TERM || '11501';
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const COL = C.COLLECTIONS || {};
+const PROGRESS = COL.PROGRESS || (TERM + '-progress');
+const ROSTER = COL.ROSTER || 'roster';
+
+const el = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const state = { who: null, busy: '', msg: '', roster: {}, progress: {}, quiz: [] };
+
+function isTeacher(u) {
+  return !!(u && u.email && window.AUTH && AUTH.isTeacherEmail(u.email));
+}
+setPersistence(auth, browserSessionPersistence)      // 老師的登入只留在這個分頁
+  .catch(e => console.warn('設定持久性失敗', e))
+  .finally(() => {
+    onAuthStateChanged(auth, async (u) => {
+      if (!isTeacher(u)) { state.who = null; render(); return; }
+      state.who = u;
+      await loadAll();
+      render();
+    });
+  });
+
+window.auditLogin = async () => {
+  try { const c = await AUTH.askTeacherPassword(); if (c) await signInWithEmailAndPassword(auth, c.email, c.password); }
+  catch (e) { state.msg = '登入失敗：' + e.message; render(); }
+};
+window.auditReload = async () => { await loadAll(); render(); };
+
+async function loadAll() {
+  state.busy = '讀取名冊與進度…'; state.msg = ''; render();
+  try {
+    const [rs, ps] = await Promise.all([getDocs(collection(db, ROSTER)), getDocs(collection(db, PROGRESS))]);
+    const r = {}; rs.forEach(d => { r[d.id] = d.data() || {}; });
+    const p = {}; ps.forEach(d => { p[d.id] = d.data() || {}; });
+    state.roster = r; state.progress = p;
+    state.quiz = AUDIT.quiz(state.progress);
+  } catch (e) {
+    state.msg = '讀不到名冊或進度：' + e.message;
+  }
+  state.busy = '';
+}
+
+function who(sid) {
+  const r = state.roster[sid] || {};
+  return { cls: String(r.cls || ''), no: String(r.no || ''), name: String(r.name || '') };
+}
+function bySeat(a, b) {
+  const A = who(a.sid), B = who(b.sid);
+  return (A.cls.localeCompare(B.cls)) || ((Number(A.no) || 0) - (Number(B.no) || 0))
+      || String(a.unit).localeCompare(String(b.unit));
+}
+const when = t => {
+  if (!t) return '—';
+  const d = new Date(t);
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' +
+         String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+};
+function quizWhy(f) {
+  if (f.kind === 'robot') {
+    const p = f.pace || {};
+    return `每一題都在 1 秒內作答（中位 ${p.med}s、最慢 ${p.max}s、共 ${p.n} 題）`;
+  }
+  return '這筆通關沒有作答過程（耗時、每題秒數）—— 不是從測驗畫面寫進去的';
+}
+function row(f) {
+  const w = who(f.sid);
+  return `<tr class="border-t border-slate-100">
+    <td class="px-3 py-2 whitespace-nowrap">${esc(w.cls)}</td>
+    <td class="px-3 py-2 whitespace-nowrap">${esc(w.no)}</td>
+    <td class="px-3 py-2 whitespace-nowrap font-bold">${esc(w.name || f.sid)}</td>
+    <td class="px-3 py-2 whitespace-nowrap">${esc(f.unit)}${f.score != null ? `　<span class="text-slate-400 text-xs">正確率 ${esc(f.score)}%</span>` : ''}</td>
+    <td class="px-3 py-2 whitespace-nowrap text-slate-500">${esc(when(f.at))}</td>
+    <td class="px-3 py-2 text-rose-700">${esc(quizWhy(f))}</td></tr>`;
+}
+
+function render() {
+  const app = el('app');
+  if (!state.who) {
+    app.innerHTML = `<div class="bg-white rounded-2xl p-6 shadow-sm">
+      <p class="text-sm text-slate-600 mb-4">這一頁要讀全班的進度，只有老師帳號可以開。</p>
+      <button onclick="auditLogin()" class="px-5 py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700">教師登入</button>
+      ${state.msg ? `<p class="text-rose-600 text-sm mt-3">${esc(state.msg)}</p>` : ''}</div>`;
+    return;
+  }
+  if (state.busy) { app.innerHTML = `<div class="bg-white rounded-2xl p-6 shadow-sm text-slate-500">${esc(state.busy)}</div>`; return; }
+  if (state.msg) { app.innerHTML = `<div class="bg-white rounded-2xl p-6 shadow-sm text-rose-600">${esc(state.msg)}</div>`; return; }
+
+  const qz = state.quiz.slice().sort(bySeat);
+  app.innerHTML = `
+    <div class="flex items-center justify-between gap-3 mb-4 text-sm text-slate-500">
+      <span>已比對 ${Object.keys(state.progress).length} 位學生的進度</span>
+      <button onclick="auditReload()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-600 hover:bg-slate-50">重新整理</button>
+    </div>
+    <section class="bg-white rounded-2xl p-5 shadow-sm">
+      <h2 class="font-black text-lg mb-1">章節測驗 <span class="text-slate-400 text-sm font-bold">${qz.length} 筆</span></h2>
+      <p class="text-xs text-slate-400 mb-3 leading-relaxed">
+        測驗畫面通關時一定會一起記下耗時和每題秒數；沒有這些的，是繞過測驗畫面直接寫進去的。<br>
+        「每一題都在 1 秒內」看的是<b>最慢那一題</b> —— 人一定有卡住的題目，腳本每題一樣快，所以不會誤傷手速快的學生。</p>
+      ${qz.length
+        ? `<div class="overflow-x-auto"><table class="w-full text-sm">
+            <thead class="text-left text-slate-400 text-xs"><tr>
+              <th class="px-3 py-2">班級</th><th class="px-3 py-2">座號</th><th class="px-3 py-2">姓名</th>
+              <th class="px-3 py-2">章節</th><th class="px-3 py-2">時間</th><th class="px-3 py-2">說明</th></tr></thead>
+            <tbody>${qz.map(row).join('')}</tbody></table></div>`
+        : `<p class="text-emerald-700 text-sm">✅ 沒有發現可疑的測驗紀錄。</p>`}
+    </section>`;
+}
+
+render();
+</script>
+</body>
+</html>

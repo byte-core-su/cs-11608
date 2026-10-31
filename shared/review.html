@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ★ 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」與標頭 -->
+  <script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+  <style>.embedded [data-standalone] { display: none !important; }</style>
+<title>繳交審核與加分 · 資訊科技課程</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+
+<script>
+/* 教師工具頁：設定檔與共用程式都帶時間戳載入，改版後不會拿到瀏覽器快取的舊版
+   （GitHub Pages 會快取 10 分鐘，改了 CLASSROOM.GAS_URL 之後畫面會沿用舊值卻毫無徵兆） */
+(function () {
+  var v = '?v=' + Date.now();
+  document.write('<scr' + 'ipt src="../course/config.js' + v + '"></scr' + 'ipt>');
+  document.write('<scr' + 'ipt src="../course/content/flowchart.js' + v + '"></scr' + 'ipt>');
+  ['auth.js', 'grading.js', 'classroom.js'].forEach(function (f) {
+    document.write('<scr' + 'ipt src="' + f + v + '"></scr' + 'ipt>');
+  });
+})();
+</script>
+
+<style>
+  html,body,button,input,select{font-family:'Noto Sans TC',system-ui,sans-serif}
+  body{background:#e7e5e4}
+  .pop{animation:pop .3s ease both}
+  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body class="min-h-screen text-slate-800">
+
+<main class="max-w-5xl mx-auto px-4 py-8">
+  <header class="mb-6">
+    <a href="#" id="back-teacher" data-standalone class="text-sm font-bold text-slate-400 hover:text-slate-700">← 回教師端</a>
+    <h1 class="text-2xl sm:text-3xl font-black mt-2">📥 繳交審核與加分</h1>
+    <p class="text-slate-500 text-sm mt-2 leading-relaxed">
+      學生把<b>流程圖圖片</b>交到 Google Classroom，
+      你在這裡確認之後按一下給分：每一關 <b>+1⭐</b>。<br>
+      <span class="text-slate-400 text-xs">給分一律一個一個給 —— 系統只幫你把名單、繳交狀態和目前星數
+      排在一起，點開看過再決定的還是你。</span><br>
+      <span class="text-slate-300 text-[11px]">版本 <span id="ver" class="font-mono"></span>
+        —— 和預期不符就按 Ctrl+Shift+R 強制重新整理（GitHub Pages 會快取 10 分鐘）</span>
+    </p>
+  </header>
+
+  <div id="app"></div>
+</main>
+
+<!-- 作業預覽的浮動視窗：審核就是「看一眼、按一下」，不必每份都開新分頁。
+     ⚠️ Drive 有可能拒絕被嵌（權限或檔案類型），所以視窗裡一定要
+       同時留「在新分頁開啟」，不能只有 iframe，否則就變成死路。 -->
+<div id="modal" class="hidden fixed inset-0 z-50 bg-black/60 p-4 sm:p-8" role="dialog" aria-modal="true">
+  <div class="bg-white rounded-2xl max-w-4xl mx-auto h-full flex flex-col overflow-hidden shadow-2xl">
+    <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
+      <div class="min-w-0">
+        <div id="modal-title" class="font-bold truncate"></div>
+        <div id="modal-sub" class="text-xs text-slate-400 truncate"></div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <a id="modal-open" href="#" target="_blank" rel="noopener"
+           class="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline">在新分頁開啟</a>
+        <button id="modal-close" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 font-black">✕</button>
+      </div>
+    </div>
+    <div id="modal-body" class="flex-1 bg-slate-50"></div>
+    <div id="modal-foot" class="px-4 py-3 border-t border-slate-200 flex items-center gap-2 flex-wrap"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged,
+         setPersistence, browserSessionPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, getDocs, doc, setDoc, arrayUnion, deleteField }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const C = window.CONFIG || {};
+const TERM = C.TERM || '11501';
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const PROGRESS = (C.COLLECTIONS && C.COLLECTIONS.PROGRESS) || (TERM + '-progress');
+const ROSTER = (C.COLLECTIONS && C.COLLECTIONS.ROSTER) || 'roster';
+
+/* 十關流程圖（course/content/flowchart.js） */
+const FLOW = (window.FLOW_UNITS || []).map(u => ({ id: u.id, no: u.no, title: u.title }));
+
+/* 審核的東西：流程圖圖片（給分存 modules.flowchart.imgUnits，退件存 imgReview）。
+   退件存在 modules.flowchart.imgReview[單元] = { reason, at, by, work }：
+     學生的闖關頁讀得到，會顯示退件原因和「到 Classroom 重交」。
+   ⚠️ **不可以**存進 imgUnits：GRADING.bonusStars 會把那裡每一筆都算成一顆星 ——
+      退件存進去等於送他一顆星。
+   ⚠️ 為什麼不直接在 Classroom 退回：Classroom API 只能退回「由同一個 API 專案建立的作業」，
+      老師在 Classroom 網頁上建的作業從程式這邊退不回去。 */
+const KINDS = {
+  img: { key: 'img', label: '流程圖圖片', icon: '🖼️', units: FLOW, mod: 'flowchart', field: 'imgUnits', rfield: 'imgReview',
+         reasons: ['圖片看不清楚', '不是這一關的流程圖', '流程圖沒有排完', '檔案打不開'] }
+};
+
+/* 班級與座號：名冊的欄位是 cls／no。名冊沒填班級的學生歸在「未分班」，不會不見。 */
+function clsOf(sid, r) {
+  return String((r && r.cls) || '').trim() || '未分班';
+}
+function noOf(sid, r) {
+  return String((r && r.no) || '').trim();
+}
+
+const state = {
+  who: null,            // 登入的老師
+  no: 1,                // 第幾關
+  klass: '',            // 目前在看哪一班（載入後會自動選第一個）
+  roster: {},           // 學號 → { name, cls, no }
+  progress: {},         // 學號 → progress 文件
+  cr: { on: false, err: '', courses: [], works: [], courseId: '', workId: '', rows: {},
+        matched: '', ambiguous: null },   // 這一關配到哪一份作業／配到多份時的候選
+  busy: '',
+  msg: ''
+};
+
+const el = id => document.getElementById(id);
+// 同一個分頁開啟，所以要有回去的路
+{ const b = el('back-teacher'); if (b) b.href = '../course/teacher.html'; }
+// 版本印在畫面上：改版後看到舊值就知道是快取，不必猜是不是壞了
+{ const v = el('ver'); if (v) v.textContent = (window.CLASSROOM && CLASSROOM.VERSION) || '（沒載入 classroom.js）'; }
+const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ── 登入：只有老師 ─────────────────────────────────
+   ⚠️ 不能只判斷「有沒有人登入」。教師端和學生頁同一個 Firebase 專案、
+      同一個網域，登入狀態整個瀏覽器共用 —— 這台電腦開過學生頁的話，
+      user 就是非 null，直接放行會變成「畫面進得去但每一筆讀取都被規則擋下」。 */
+function isTeacher(u) {
+  return !!(u && u.email && window.AUTH && AUTH.isTeacherEmail(u.email));
+}
+/* ★ 持久性要和教師端一致（SESSION ＝ sessionStorage），而且要在掛上 onAuthStateChanged 之前設好，
+     不然從教師端進來又要再登入一次。
+   ⚠️ 這個登入不能省：Firestore 的安全規則要老師的 Firebase 身分才肯讓人讀全班名冊與進度、
+      寫加分欄位；Classroom 那條線（Apps Script ＋ 通行碼）Firestore 完全不認得。 */
+setPersistence(auth, browserSessionPersistence)
+  .catch(e => console.warn('設定持久性失敗', e))
+  .finally(() => {
+    onAuthStateChanged(auth, async (u) => {
+      if (!isTeacher(u)) { render(); return; }
+      state.who = u;
+      await loadAll();
+      render();
+    });
+  });
+
+async function loadAll() {
+  state.busy = '讀取名冊與進度…'; render();
+  try {
+    const [rs, ps] = await Promise.all([getDocs(collection(db, ROSTER)), getDocs(collection(db, PROGRESS))]);
+    const r = {};
+    rs.forEach(d => { r[d.id] = d.data() || {}; });
+    const p = {};
+    ps.forEach(d => { p[d.id] = d.data() || {}; });
+    state.roster = r; state.progress = p;
+    // 一載入就選好第一個班（教師成績登錄系統也是一開啟就有一個班在作用中）
+    if (!state.klass) { const cs = allClasses(); state.klass = cs.length ? cs[0] : ''; }
+    state.msg = '';
+    /* 通行碼上次已經存在這台瀏覽器了，就自動連接。連不上也不擋畫面：錯誤顯示在面板上，名單與加分照樣能用。 */
+    const gasUrl = (C.CLASSROOM && C.CLASSROOM.GAS_URL) || '';
+    if (gasUrl && CLASSROOM.savedKey() && !state.cr.on) connectClassroom();
+  } catch (e) {
+    state.msg = '讀不到資料：' + e.message;
+  }
+  state.busy = '';
+}
+
+/* ── Classroom ───────────────────────────────────── */
+async function connectClassroom(keyFromInput) {
+  const gasUrl = (C.CLASSROOM && C.CLASSROOM.GAS_URL) || '';
+  const key = String(keyFromInput != null ? keyFromInput : CLASSROOM.savedKey()).trim();
+  state.cr.err = ''; state.busy = '連線中…'; render();
+  try {
+    CLASSROOM.init(gasUrl, key);
+    await CLASSROOM.ping();                 // 先確認網址與通行碼，錯了不必等後面
+    CLASSROOM.saveKey(key);                 // 通行碼記在這台瀏覽器，不進版控
+    state.cr.courses = await CLASSROOM.courses();
+    state.cr.on = true;
+    await autoPickCourse();      // 班級選過了就不必再選一次課程
+  } catch (e) {
+    state.cr.err = e.message;      // classroom.js 已經把錯誤翻成「下一步怎麼辦」
+  }
+  state.busy = ''; render();
+}
+/* 依目前班級自動挑課程：「資訊科技 801」對到 801。
+   對不到（課名沒寫班級、或同一班有兩門課）就不動，下拉留著給老師自己選。 */
+async function autoPickCourse() {
+  if (!state.cr.on || !state.klass) return;
+  const r = CLASSROOM.findCourse(state.cr.courses, state.klass);
+  if (r.course && r.course.id !== state.cr.courseId) await pickCourse(r.course.id);
+}
+
+async function pickCourse(id) {
+  state.cr.courseId = id; state.cr.workId = ''; state.cr.rows = {};
+  /* ⚠️ 作業清單一定要先清空：換班之後 courseId 馬上變成新課程，但下面的 await 還沒回來，
+       這時按「讀取這一關」會在**上一門課**的清單裡配到同名作業，
+       拿舊課的作業 id 去問新課 —— Classroom 回「Requested entity was not found.」。
+     ⚠️ 只清空還不夠：連續換兩次班時，第一次的回應可能**晚於**第二次才回來，
+        所以下面要檢查有沒有過期。 */
+  state.cr.works = []; state.cr.matched = ''; state.cr.ambiguous = null;
+  // 課名裡有班級就自動篩到那一班（「資訊科技 801」→ 801）
+  const course = state.cr.courses.find(c => c.id === id);
+  const guess = CLASSROOM.classFromCourseName(course && course.name);
+  if (guess && allClasses().indexOf(guess) >= 0) state.klass = guess;
+  state.busy = '讀取作業清單…'; render();
+  let ws = null, err = '';
+  try { ws = await CLASSROOM.coursework(id); }
+  catch (e) { err = e.message; }
+  // ★ 過期的回應只能丟掉，不可以蓋掉比較新的那一次。
+  //   （busy 也交給比較新的那一次去清 —— 這裡清會把它的「讀取中」關掉。）
+  if (state.cr.courseId !== id) return;
+  if (ws) state.cr.works = ws;
+  if (err) state.cr.err = err;
+  state.busy = ''; render();
+}
+/**
+ * 讀取「這一關」的繳交。
+ *
+ * 老師的作業名稱帶著單元代號（「2026/08/06 任務一：2-1-1A 班級置物櫃」），
+ * 所以選好關卡按一下就找得到，不必每次在下拉選單裡翻。
+ * 找不到或找到多份時**不會亂猜** —— 改成讓老師自己指定，
+ * 猜錯的代價是整班的分數登記到別關去。
+ */
+async function loadThisUnit() {
+  state.cr.err = ''; state.cr.matched = ''; state.cr.ambiguous = null;
+  /* ⚠️ 清單還沒載完的時候不要去比對 —— 比對出來的東西屬於上一門課。
+     而且錯誤訊息要講「還沒載完」，不可以說「找不到」：
+     老師看到「找不到」會去改 Classroom 的作業標題，那是白費工。 */
+  if (!(state.cr.works || []).length) {
+    state.cr.err = '作業清單還沒載完（或這門課裡還沒有作業）。'
+                 + '等一下再按一次「讀取這一關」。';
+    render(); return;
+  }
+  const ids = [unitIdOf('img')].filter(Boolean);
+  const r = CLASSROOM.findWork(state.cr.works, ids);
+  if (r.work) { state.cr.matched = r.work.title; return pickWork(r.work.id); }
+  state.cr.ambiguous = r.many || [];
+  state.cr.err = (r.many && r.many.length)
+    ? `作業名稱裡有「${r.id}」的不只一份（${r.many.length} 份），請自己指定是哪一份。`
+    : `這門課裡找不到作業名稱含「${ids.join('」或「')}」的那一份。`
+      + '請確認作業標題有帶關卡代號，或自己從下拉選單指定。';
+  render();
+}
+
+async function pickWork(id) {
+  /* ⚠️ 記住這是**替哪一門課**問的。中途換班的話，回來的資料屬於上一班，
+     蓋上去就是張冠李戴 —— 而且畫面上完全看不出來，
+     老師會對著 801 的繳交，幫 802 的學生加分。 */
+  const cid = state.cr.courseId;
+  state.cr.workId = id;
+  state.busy = '讀取繳交狀況…'; render();
+  try {
+    /* Apps Script 回來的就是「學號 → 這一筆繳交」，
+       email → 學號 的對應在 .gs 裡面做完了 ——
+       這樣回應裡不含姓名與 email，網址萬一外流也不會把全班名單帶出去。 */
+    const rows = await CLASSROOM.submissions(cid, id);
+    if (state.cr.courseId !== cid) return;   // 換過課了，這份回應已經過期
+    state.cr.rows = rows;
+    state.cr.err = '';
+  } catch (e) {
+    if (state.cr.courseId !== cid) return;
+    state.cr.err = e.message;
+  }
+  state.busy = ''; render();
+}
+
+/* ── 給分／取消 ───────────────────────────────────
+   寫進 modules.flowchart.imgUnits[單元] = { at, by }。
+   這一格學生寫不動（安全規則擋著），所以學生端之後怎麼寫自己的進度都不會把加分蓋掉。
+   附件是不是圖片用 guessKind 判斷 —— 那只是「看起來」，最後仍然由老師點開確認。 */
+function attOf(sub, kind) {
+  if (!sub) return [];
+  return (sub.attachments || []).filter(a => CLASSROOM.guessKind(a) === kind);
+}
+
+async function award(sid, kindKey, on) {
+  const k = KINDS[kindKey];
+  const unitId = unitIdOf(kindKey);
+  if (!unitId) { state.msg = '沒有對應的關卡，無法加分。'; render(); return; }
+  /* 可疑就先問一次（不直接擋：把疑點講清楚、讓老師決定） */
+  if (on) {
+    const st = students().find(x => x.sid === sid);
+    const w = st && st.per[kindKey] && st.per[kindKey].warn;
+    if (w && !confirm(`${st.name}（${sid}）\n\n⚠️ ${w}\n\n還是要給這一分嗎？`)) return;
+  }
+  const cur = ((state.progress[sid] || {}).modules || {})[k.mod] || {};
+  const map = Object.assign({}, cur[k.field] || {});
+  const entry = { at: Date.now(), by: state.who.email };
+  if (on) map[unitId] = entry;
+  else delete map[unitId];
+  /* 給分就代表這一份過了 ⇒ 之前的退件一併清掉，學生那邊的「請補件」才會消失。 */
+  const rmap = Object.assign({}, cur[k.rfield] || {});
+  const hadReject = !!rmap[unitId];
+  if (on) delete rmap[unitId];
+
+  state.busy = '寫入…'; render();
+  try {
+    /* ★ 加分要進「每週歷程」（history），記在**老師審核的那一天**，週成績才會反映。
+       ⚠️ 取消加分要寫一筆**負的**，否則收回來的星星還留在那一週。
+       ⚠️ 補審（例如連假後一次審一整批）會全部堆在同一週 —— 這是這條規則的已知代價。
+       ★ history 的 stars 一律是「這一次**增減**幾顆」，不是總數（和 report.js 一致）。 */
+    const per = ((window.GRADING || {}).BONUS || {})[k.key] || 1;
+    /* ⚠️ 只寫這一關，要刪就用 deleteField()：setDoc({merge:true}) 對巢狀的 map 是**逐欄合併**，
+       「整份 map 少掉那一關」再 merge 的話，少掉的鍵不會被刪。 */
+    const patch = { [k.field]: { [unitId]: on ? entry : deleteField() } };
+    if (on && hadReject) patch[k.rfield] = { [unitId]: deleteField() };
+    await setDoc(doc(db, PROGRESS, sid), {
+      studentId: sid,
+      modules: { [k.mod]: patch },
+      history: arrayUnion({ module: k.mod, unit: unitId, at: Date.now(),
+                            stars: on ? per : -per, kind: 'bonus', by: state.who.email }),
+      updatedAt: Date.now()
+    }, { merge: true });
+    // 本機也更新，畫面立刻反映（不必整批重讀）
+    state.progress[sid] = state.progress[sid] || {};
+    state.progress[sid].modules = state.progress[sid].modules || {};
+    state.progress[sid].modules[k.mod] = Object.assign({}, cur, { [k.field]: map, [k.rfield]: rmap });
+    state.msg = '';
+  } catch (e) {
+    state.msg = '寫入失敗：' + e.message;
+  }
+  state.busy = ''; render();
+}
+
+/* ── 退件（不符合加分條件，請學生補件）──────────────────
+   reason 空字串 ＝ 撤回退件。 */
+async function reject(sid, kindKey, reason, opts) {
+  opts = opts || {};
+  const k = KINDS[kindKey];
+  const unitId = unitIdOf(kindKey);
+  if (!unitId) { state.msg = '沒有對應的關卡。'; render(); return false; }
+  const cur = ((state.progress[sid] || {}).modules || {})[k.mod] || {};
+  /* 已經給過分的不可以直接退件 —— 要先取消加分，星星才不會留著。 */
+  if (reason && GRADING.hasBonus(cur[k.field], unitId)) {
+    state.msg = '這一份已經給過加分了，要退件請先取消加分。'; render(); return false;
+  }
+  const w = (state.cr.works || []).find(x => x.id === state.cr.workId);
+  const entry = { reason: String(reason || '').slice(0, 200), at: Date.now(),
+                  by: state.who.email, work: w ? w.title : '' };
+  const rmap = Object.assign({}, cur[k.rfield] || {});
+  if (reason) rmap[unitId] = entry; else delete rmap[unitId];
+  if (!opts.quiet) { state.busy = '寫入…'; render(); }
+  let okW = false;
+  try {
+    await setDoc(doc(db, PROGRESS, sid), {
+      studentId: sid,
+      modules: { [k.mod]: { [k.rfield]: { [unitId]: reason ? entry : deleteField() } } },
+      updatedAt: Date.now()
+    }, { merge: true });
+    state.progress[sid] = state.progress[sid] || {};
+    state.progress[sid].modules = state.progress[sid].modules || {};
+    state.progress[sid].modules[k.mod] = Object.assign({}, cur, { [k.rfield]: rmap });
+    if (!opts.quiet) state.msg = '';
+    okW = true;
+  } catch (e) {
+    state.msg = '寫入失敗：' + e.message;
+  }
+  if (!opts.quiet) { state.busy = ''; render(); }
+  return okW;
+}
+
+/** 這一關的單元代號 */
+function unitIdOf(kindKey) {
+  const list = KINDS[kindKey].units;
+  const u = list.find(x => x.no === state.no);
+  return u ? u.id : '';
+}
+
+/** 名冊裡實際有哪些班級 */
+function allClasses() {
+  const set = {};
+  Object.keys(state.roster).forEach(sid => {
+    const c = clsOf(sid, state.roster[sid]);
+    if (c) set[c] = true;
+  });
+  return Object.keys(set).sort();
+}
+
+function students() {
+  return Object.keys(state.roster).sort()
+    .filter(sid => !state.klass || clsOf(sid, state.roster[sid]) === state.klass)
+    .map(sid => {
+      const r = state.roster[sid] || {};
+      const p = state.progress[sid] || {};
+      const sub = state.cr.rows[sid] || null;
+      const subAt = sub && sub.updateTime ? Date.parse(sub.updateTime) || 0 : 0;
+      const per = {};
+      Object.keys(KINDS).forEach(kk => {
+        const k = KINDS[kk], uid = unitIdOf(kk);
+        /* 合理性檢查：學生要先排對流程圖才生得出圖片。
+           還沒排對、或附件比排對的時間還早，都代表哪裡不對 —— 先講出來。 */
+        const base = uid ? GRADING.baseFor(p, uid) : { done: false, label: '沒有這一關' };
+        per[kk] = {
+          unitId: uid,
+          given: uid ? GRADING.hasBonus(((p.modules || {})[k.mod] || {})[k.field], uid) : false,
+          atts: attOf(sub, 'image'),
+          base: base,
+          warn: uid ? GRADING.bonusWarning(base, subAt) : '',
+          /* 退件了沒、退件之後有沒有重交（Classroom 的 updateTime 比退件晚＝重交了） */
+          rej: uid ? ((((p.modules || {})[k.mod] || {})[k.rfield] || {})[uid] || null) : null
+        };
+        per[kk].resub = !!(per[kk].rej && subAt && subAt > (Number(per[kk].rej.at) || 0));
+      });
+      return {
+        sid, name: r.name || '', cls: clsOf(sid, r), no: noOf(sid, r),
+        stars: GRADING.starsWithBonus(p),
+        sub, per,
+        // 不是圖片（或看不出類型）的附件單獨列出來，不要默默藏起來
+        other: sub ? (sub.attachments || []).filter(a => CLASSROOM.guessKind(a) !== 'image') : []
+      };
+    });
+}
+
+/* ── 畫面 ───────────────────────────────────────── */
+function render() {
+  if (!state.who) {
+    el('app').innerHTML = `
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center pop">
+        <div class="text-4xl mb-3">🔐</div>
+        <h2 class="text-xl font-black mb-2">請用教師帳號登入</h2>
+        <p class="text-slate-500 text-sm mb-2">這一頁會讀全班成績，只有老師進得來。</p>
+        <p class="text-slate-400 text-xs mb-5 leading-relaxed">
+          從教師端點「📥 繳交審核」進來的話會沿用你在那邊的登入，不必再登一次。</p>
+        <button id="login" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-6 py-3 rounded-xl">教師登入</button>
+      </div>`;
+    return;
+  }
+
+  const classes = allClasses();
+  const list = students();
+  const cnt = k => list.filter(s => s.per[k].given).length;
+  const todo = k => list.filter(s => needsReview(s.per[k])).length;
+  const inCnt = list.filter(s => s.sub && CLASSROOM.handedIn(s.sub)).length;
+  const maxNo = Math.max(FLOW.length, 1);
+
+  el('app').innerHTML = `
+    ${state.busy ? `<div class="mb-3 text-sm font-bold text-slate-500">⏳ ${esc(state.busy)}</div>` : ''}
+    ${state.msg ? `<div class="mb-3 bg-amber-50 border border-amber-300 text-amber-800 text-sm rounded-xl px-4 py-3">${esc(state.msg)}</div>` : ''}
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-4 pop">
+      <!-- 班級：一排藥丸分頁（不加「班級：」字樣，十二個班才排得下一行） -->
+      <div class="flex items-center gap-2 flex-wrap mb-4">
+        ${classes.length
+          ? classes.map(c => `
+            <button data-klass="${esc(c)}" class="px-4 py-2 rounded-full text-sm transition-all duration-200
+              ${c === state.klass
+                ? 'font-bold bg-blue-600 text-white shadow-md transform hover:scale-105'
+                : 'font-medium bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 hover:shadow-sm'}">
+              ${esc(c)}</button>`).join('')
+          : '<span class="text-sm text-slate-400">名冊是空的</span>'}
+      </div>
+
+      <!-- 關卡 -->
+      <div class="flex items-center gap-2 flex-wrap">
+        ${Array.from({ length: maxNo }, (_, i) => i + 1).map(n => `
+          <button data-no="${n}" class="w-10 h-10 rounded-full text-sm transition-all duration-200
+            ${n === state.no
+              ? 'font-bold bg-indigo-600 text-white shadow-md'
+              : 'font-medium bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}">
+            ${n}</button>`).join('')}
+      </div>
+      <div class="mt-3 text-xs text-slate-500 leading-relaxed">
+        ${esc(state.klass || '—')} 班 ${list.length} 人｜第 ${state.no} 關
+        ${FLOW.length ? `　🖼️ ${esc((FLOW.find(u => u.no === state.no) || {}).title || '')}` : ''}
+        <br>已給分 <b class="text-emerald-600">${cnt('img')}</b>
+        ${state.cr.on ? `｜未評分 <b class="text-blue-600">${todo('img')}</b>` : ''}
+        ${state.cr.on ? `｜Classroom 顯示已繳交 <b class="text-indigo-600">${inCnt}</b>` : ''}
+      </div>
+    </div>
+
+    ${crPanel()}
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      ${list.map(card).join('') || '<div class="text-slate-400 text-sm">這一班名冊是空的。</div>'}
+    </div>`;
+}
+
+/* 一張學生小卡：有繳交就加框線 —— 老師掃一眼就知道要點誰。 */
+function card(s) {
+  const hasAny = s.sub && CLASSROOM.handedIn(s.sub);
+  const base = hasAny
+    ? 'bg-white border-blue-300 shadow-[0_0_0_3px_rgba(147,197,253,0.35)]'
+    : 'bg-white border-gray-200';
+  return `
+    <div class="${base} border rounded-2xl p-4 transition-all duration-200 hover:shadow-lg">
+      <div class="flex items-baseline justify-between mb-3">
+        <h3 class="font-bold text-gray-800 text-lg truncate" title="${esc(s.name)}">${esc(s.name || '（名冊沒有姓名）')}</h3>
+        <span class="text-xs text-gray-400 font-mono shrink-0 ml-2">${esc(s.cls)} ${esc(s.no)}號</span>
+      </div>
+      <div class="text-[11px] text-gray-400 font-mono -mt-2 mb-3">${esc(s.sid)}　
+        <span class="text-amber-500">流程圖 ${s.stars.flowchart}⭐</span>
+      </div>
+      ${block(s, 'img')}
+      ${s.other.length ? `<div class="mt-2 text-[11px] text-slate-400">
+        其他附件：${s.other.map(a => link(a, s.sid, '')).join('、')}</div>` : ''}
+    </div>`;
+}
+
+/** 還等老師看的那一格 ＝ 有附件、還沒給分、不是「退件了在等重交」。
+   ⚠️ 和 block() 的判斷要一致 —— 數字是幾，畫面上就要數得出幾格。 */
+function needsReview(p) {
+  return !!(p && p.atts.length && !p.given && !(p.rej && !p.resub));
+}
+
+/** 卡片上的審核區塊 */
+function block(s, kk) {
+  const k = KINDS[kk], p = s.per[kk];
+  const has = p.atts.length > 0;
+  /* 有繳交但「哪裡不對」時用琥珀色框 —— 和「沒交」「已加分」分得開。
+     三種顏色各有意思：灰虛線＝沒交、藍＝可以審、琥珀＝有疑慮、綠＝已給分。 */
+  /* 退件：玫瑰色＝等他重交；重交了＝藍框加一行「請再看一次」 */
+  const box = p.given
+    ? 'bg-emerald-50 border-emerald-400'
+    : (p.rej && !p.resub) ? 'bg-rose-50 border-rose-400'
+    : (has ? (p.warn ? 'bg-amber-50 border-amber-400' : 'bg-white border-blue-400')
+           : 'bg-slate-50 border-dashed border-slate-300');
+  return `
+    <div class="border-2 ${box} rounded-xl p-2 text-center">
+      <div class="text-xs font-black text-slate-600 mb-1">${k.icon} ${esc(k.label)}</div>
+      <div class="text-[10px] mb-1 ${p.base.done ? 'text-slate-400' : 'text-amber-700 font-bold'}">${esc(p.base.label || '')}</div>
+      <div class="flex items-center justify-center gap-1.5 flex-wrap mb-2 min-h-[2.2em]">
+        ${has ? p.atts.map(a => link(a, s.sid, kk)).join('')
+              : `<span class="text-[11px] text-slate-400">${state.cr.on ? '未繳交' : '未連接'}</span>`}
+      </div>
+      ${p.warn && has ? `<div class="text-[10px] text-amber-700 leading-snug mb-1">⚠️ ${esc(p.warn)}</div>` : ''}
+      ${p.rej && !p.given
+        ? (p.resub
+            ? `<div class="text-[10px] text-blue-700 font-bold leading-snug mb-1">🔄 退件後已重新繳交，請再看一次</div>`
+            : `<div class="text-[10px] text-rose-700 font-bold leading-snug mb-1">↩️ 已退件：${esc(p.rej.reason)}<br><span class="font-normal">等學生重交</span></div>`)
+        : ''}
+      <!-- ★ 這裡刻意「不是加分按鈕」：要先點開預覽、看完在視窗裡給（「看過再給」正是這個功能存在的理由）。
+           已加分但附件不見了的少數情況，留一個要確認的小字連結可以取消。 -->
+      ${p.given
+        ? (has
+            ? `<button data-prev="${esc(p.atts[0].link)}" data-title="${esc(p.atts[0].title)}"
+                 data-sid="${esc(s.sid)}" data-kind="${kk}"
+                 class="w-full px-2 py-1 rounded-lg text-xs font-bold text-emerald-700
+                        bg-emerald-100 hover:bg-emerald-200 transition">
+                 ✅ 已加分 +${GRADING.BONUS[kk]}⭐
+               </button>`
+            /* 給過分但附件不見了（作業被撤回、老師改了作業）——
+               沒有東西可以點開，只好留一個要確認的小字連結，不然分數就取消不掉。 */
+            : `<button data-undo="${esc(s.sid)}" data-kind="${kk}"
+                 class="text-xs font-bold text-emerald-700 hover:text-rose-600">
+                 ✅ 已加分 +${GRADING.BONUS[kk]}⭐<span class="text-[10px] font-normal underline ml-1">取消</span>
+               </button>`)
+        : (has ? '<div class="text-xs text-slate-400">點圖示看過再給分</div>'
+               : '<div class="text-xs text-slate-300">—</div>')}
+    </div>`;
+}
+
+/* 附件：一個小圖示，點了在浮動視窗裡預覽。
+   不寫檔名（學生的檔名很長，會把卡片撐爛）：檔名放進 title，游標停著還是看得到。
+   ⚠️ 圖示是用副檔名猜的，猜不出來就用 📎 —— 別讓它看起來像系統驗過了。 */
+const ATT_ICON = { image: '🖼️', video: '🎬', unknown: '📎' };
+function link(a, sid, kk) {
+  const g = CLASSROOM.guessKind(a);
+  return `<button data-prev="${esc(a.link)}" data-title="${esc(a.title)}"
+     data-sid="${esc(sid || '')}" data-kind="${esc(kk || '')}" title="${esc(a.title)}"
+     class="w-9 h-9 rounded-lg bg-white border-2 border-indigo-300 hover:border-indigo-600
+            hover:bg-indigo-50 transition text-base leading-none">${ATT_ICON[g] || '📎'}</button>`;
+}
+
+/* ── 預覽視窗 ─────────────────────────────────────── */
+let previewing = null;      // { sid, kind } —— 看完可以直接在視窗裡加分
+
+function openPreview(link0, title, sid, kk) {
+  const url = CLASSROOM.previewUrl({ link: link0 });
+  previewing = (sid && kk) ? { sid, kind: kk } : null;
+  el('modal-title').textContent = title || '作業預覽';
+  const s = students().find(x => x.sid === sid);
+  el('modal-sub').textContent = s ? `${s.name}　${s.cls} ${s.no}號` : '';
+  el('modal-open').href = link0;
+  el('modal-body').innerHTML = url
+    ? `<iframe src="${esc(url)}" class="w-full h-full" allow="autoplay" allowfullscreen
+         sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"></iframe>`
+    : `<div class="h-full flex flex-col items-center justify-center text-slate-500 text-sm gap-2">
+         <div>這個附件沒辦法直接嵌在頁面裡預覽。</div>
+         <a href="${esc(link0)}" target="_blank" rel="noopener"
+            class="text-indigo-600 underline font-bold">在新分頁開啟</a>
+       </div>`;
+  // 看完直接在視窗裡加分，不必關掉再去卡片上找
+  el('modal-foot').innerHTML = previewing
+    ? (() => {
+        const given = s && s.per[kk] && s.per[kk].given;
+        const w = s && s.per[kk] && s.per[kk].warn;
+        return `<button id="modal-award" data-on="${given ? '0' : '1'}"
+          class="px-5 py-2.5 rounded-lg text-sm font-bold transition
+          ${given ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'}">
+          ${given ? '✅ 已加分（點一下取消）' : `給 ${KINDS[kk].icon} ${esc(KINDS[kk].label)} +${GRADING.BONUS[kk]}⭐`}
+        </button>
+        ${given ? '' : `<button id="modal-reject" class="px-4 py-2.5 rounded-lg text-sm font-bold transition
+          border-2 border-rose-300 text-rose-700 bg-white hover:bg-rose-50">↩️ 不符合，請補件</button>`}
+        ${(s && s.per[kk] && s.per[kk].rej && !given)
+          ? `<button id="modal-unreject" class="text-xs text-slate-500 underline hover:text-slate-700">撤回退件</button>` : ''}
+        ${w ? `<span class="text-xs text-amber-700 font-bold">⚠️ ${esc(w)}</span>`
+            : '<span class="text-xs text-slate-400">看過沒問題就按這裡，不必關掉視窗。</span>'}`;
+      })()
+    : '';
+  el('modal').classList.remove('hidden');
+}
+
+/* 退件理由：常見的幾個一鍵選，也可以自己打（學生會照字看到）。 */
+function openRejectPanel() {
+  if (!previewing) return;
+  const k = KINDS[previewing.kind];
+  el('modal-foot').innerHTML = `
+    <div class="w-full">
+      <div class="text-xs font-bold text-rose-700 mb-1.5">退件原因（學生會在闖關頁面看到這句話）：</div>
+      <div class="flex flex-wrap gap-1.5 mb-2">
+        ${k.reasons.map(r => `<button data-reason="${esc(r)}" class="px-2.5 py-1 rounded-full text-xs font-bold
+            border border-rose-300 text-rose-700 bg-rose-50 hover:bg-rose-100">${esc(r)}</button>`).join('')}
+      </div>
+      <div class="flex gap-2">
+        <input id="reject-text" maxlength="200" placeholder="或自己寫，例如：請把整張流程圖都截進去"
+          class="flex-1 min-w-0 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        <button id="reject-send" class="px-4 py-2 rounded-lg text-sm font-bold bg-rose-600 text-white hover:bg-rose-700">送出退件</button>
+        <button id="reject-cancel" class="px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100">取消</button>
+      </div>
+    </div>`;
+  const t = el('reject-text'); if (t) t.focus();
+}
+
+function closePreview() {
+  el('modal').classList.add('hidden');
+  el('modal-body').innerHTML = '';
+  previewing = null;
+}
+
+function errBox(msg) {
+  const html = esc(msg).replace(/(https?:\/\/\S+)/g,
+    '<a href="$1" target="_blank" rel="noopener" class="underline font-bold break-all">$1</a>');
+  return `<div class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-3 whitespace-pre-wrap leading-relaxed">${html}</div>`;
+}
+
+function crPanel() {
+  const gasUrl = (C.CLASSROOM && C.CLASSROOM.GAS_URL) || '';
+  if (!state.cr.on) {
+    return `
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-4 pop">
+        <div class="font-black text-sm mb-1">🔗 Google Classroom（可不接）</div>
+        <p class="text-xs text-slate-500 leading-relaxed mb-3">
+          接起來之後，這一頁會直接列出誰交了、交了什麼，點開就能看。<br>
+          <b>不接也能用</b> —— 自己開 Classroom 看完，回來按給分就好。
+        </p>
+        ${gasUrl ? '' : `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+          還沒設定 <span class="font-mono">CLASSROOM.GAS_URL</span>（在 course/config.js）。
+          部署步驟寫在 <span class="font-mono">gas/classroom.gs</span> 開頭，約五分鐘。</p>`}
+        ${state.cr.err ? errBox(state.cr.err) : ''}
+        <!-- 通行碼刻意不放在 config.js（網站是公開的）：在這裡輸入一次，記在這台瀏覽器裡。 -->
+        <div class="flex flex-wrap items-end gap-2">
+          <div>
+            <label class="block text-xs font-black text-slate-500 mb-1">通行碼</label>
+            <input id="cr-key" type="password" value="${esc(CLASSROOM.savedKey())}" placeholder="Apps Script 的 QUERY_KEY"
+                   class="border-2 border-slate-200 rounded-lg px-3 py-2 text-sm w-56">
+          </div>
+          <button id="cr-connect" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-lg" ${gasUrl ? '' : 'disabled'}>連接 Google Classroom</button>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-2">通行碼就是 Apps Script「專案設定 → 指令碼屬性」裡的 <span class="font-mono">QUERY_KEY</span>，只會存在這台電腦。</p>
+      </div>`;
+  }
+  return `
+    <div class="bg-white rounded-2xl border border-indigo-200 shadow-sm p-5 mb-4 pop">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-black text-sm">🔗 Google Classroom　<span class="text-emerald-600 text-xs">已連接</span></div>
+        <button id="cr-off" class="text-xs text-slate-400 hover:text-rose-600 font-bold">中斷並清除通行碼</button>
+      </div>
+      ${state.cr.err ? errBox(state.cr.err) : ''}
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">課程（依班級自動對應，可改）</label>
+          <select id="cr-course" class="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">請選擇…</option>
+            ${state.cr.courses.map(c => `<option value="${esc(c.id)}" ${c.id === state.cr.courseId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+          </select>
+          <p class="text-[11px] text-slate-400 mt-1">
+            ${state.cr.courseId ? '已依班級對到這門課。' : '課名要帶班級（例如「資訊科技 801」）才對得到，否則請自己選。'}
+          </p>
+        </div>
+        <div class="flex items-end">
+          <button id="cr-load" ${state.cr.courseId ? '' : 'disabled'}
+            class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold px-4 py-2 rounded-lg">
+            🔍 讀取第 ${state.no} 關的繳交
+          </button>
+        </div>
+      </div>
+      ${state.cr.matched ? `<p class="mt-2 text-xs text-emerald-700">已對到作業：<b>${esc(state.cr.matched)}</b></p>` : ''}
+      ${(state.cr.ambiguous || state.cr.err) && state.cr.courseId ? `
+        <div class="mt-3">
+          <label class="block text-xs font-black text-slate-500 mb-1">自己指定作業</label>
+          <select id="cr-work" class="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">請選擇…</option>
+            ${((state.cr.ambiguous && state.cr.ambiguous.length) ? state.cr.ambiguous : state.cr.works)
+              .map(w => `<option value="${esc(w.id)}" ${w.id === state.cr.workId ? 'selected' : ''}>${esc(w.title)}</option>`).join('')}
+          </select>
+        </div>` : ''}
+      ${state.cr.workId ? `
+        <p class="mt-3 text-xs text-slate-400">
+          讀好了。點卡片上的附件看內容，確認沒問題再按 +1⭐ ——
+          <b>一個一個給</b>，系統分不出交的是不是對的東西。
+        </p>` : ''}
+    </div>`;
+}
+
+/* ── 事件 ───────────────────────────────────────── */
+document.addEventListener('click', async (e) => {
+  if (e.target.closest('#login')) {
+    try { await (async () => { const c = await AUTH.askTeacherPassword(); if (c) await signInWithEmailAndPassword(auth, c.email, c.password); })(); }
+    catch (err) { state.msg = '登入失敗：' + err.message; render(); }
+    return;
+  }
+  const cb = e.target.closest('[data-klass]');
+  if (cb) {
+    state.klass = cb.dataset.klass;
+    // 換班就換課程，順便清掉上一班的繳交資料（留著會張冠李戴）
+    state.cr.workId = ''; state.cr.rows = {}; state.cr.matched = ''; state.cr.ambiguous = null;
+    render();
+    autoPickCourse();
+    return;
+  }
+  const nb = e.target.closest('[data-no]');
+  if (nb) {
+    state.no = Number(nb.dataset.no);
+    // 換關卡就要重新對作業 —— 舊的繳交資料留著會張冠李戴
+    state.cr.workId = ''; state.cr.rows = {}; state.cr.matched = ''; state.cr.ambiguous = null;
+    render(); return;
+  }
+  if (e.target.closest('#cr-load')) { loadThisUnit(); return; }
+  if (e.target.closest('#cr-connect')) {
+    const box = document.getElementById('cr-key');
+    connectClassroom(box ? box.value : undefined);
+    return;
+  }
+  if (e.target.closest('#cr-off')) {
+    CLASSROOM.forgetKey();
+    state.cr = { on: false, err: '', courses: [], works: [], courseId: '', workId: '', rows: {} };
+    render(); return;
+  }
+  const pv = e.target.closest('[data-prev]');
+  if (pv) {
+    e.preventDefault();
+    openPreview(pv.dataset.prev, pv.dataset.title, pv.dataset.sid, pv.dataset.kind);
+    return;
+  }
+  if (e.target.closest('#modal-close') || e.target.id === 'modal') { closePreview(); return; }
+  const ma = e.target.closest('#modal-award');
+  if (ma && previewing) {
+    const { sid, kind } = previewing;
+    award(sid, kind, ma.dataset.on === '1').then(closePreview);
+    return;
+  }
+  if (e.target.closest('#modal-reject')) { openRejectPanel(); return; }
+  const rb = e.target.closest('[data-reason]');
+  if (rb) { const t = el('reject-text'); if (t) { t.value = rb.dataset.reason; t.focus(); } return; }
+  if (e.target.closest('#reject-send') && previewing) {
+    const t = el('reject-text'); const reason = t ? t.value.trim() : '';
+    /* ⚠️ 空白理由不送：學生只看到「被退件」卻不知道為什麼，比沒退件更糟。 */
+    if (!reason) { if (t) { t.classList.add('border-rose-500'); t.placeholder = '請先選一個原因或自己寫一句'; } return; }
+    const { sid, kind } = previewing;
+    reject(sid, kind, reason).then(closePreview);
+    return;
+  }
+  if (e.target.closest('#reject-cancel') && previewing) {
+    const pv2 = previewing; openPreview(el('modal-open').href, el('modal-title').textContent, pv2.sid, pv2.kind); return;
+  }
+  if (e.target.closest('#modal-unreject') && previewing) {
+    const { sid, kind } = previewing;
+    reject(sid, kind, '').then(closePreview);
+    return;
+  }
+  const ub = e.target.closest('[data-undo]');
+  if (ub) {
+    const st = students().find(x => x.sid === ub.dataset.undo);
+    if (confirm(`取消 ${st ? st.name : ub.dataset.undo} 的「${KINDS[ub.dataset.kind].label}」加分？`)) {
+      award(ub.dataset.undo, ub.dataset.kind, false);
+    }
+    return;
+  }
+});
+// Esc 關視窗
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !el('modal').classList.contains('hidden')) closePreview();
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'cr-course') { pickCourse(e.target.value); return; }
+  if (e.target.id === 'cr-work') { pickWork(e.target.value); return; }
+});
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>流程圖與程式設計</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+    body{ font-family:'Noto Sans TC',sans-serif; background:#f1f5f9; color:#1e293b; }
+    @keyframes pop{0%{opacity:0;transform:translateY(10px) scale(.97)}100%{opacity:1;transform:none}}
+    .pop{animation:pop .35s ease-out both}
+    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+    .shake{animation:shake .3s}
+    /* ── 程式截圖點一下放大 ──────────────────────────
+       Scratch 積木上的字在卡片裡很小，投影出去更看不清楚。
+       遮罩用 position:fixed 蓋滿整個視窗；圖片用 object-fit:contain（積木圖被裁切等於白做）。 */
+    .zoomable{cursor:zoom-in}
+    #imgBox{position:fixed;inset:0;z-index:60;display:none;
+            background:rgba(15,23,42,.92);
+            align-items:center;justify-content:center;
+            overscroll-behavior:contain;touch-action:none}
+    #imgBox.on{display:flex}
+    #imgBox img{max-width:95vw;max-height:88vh;object-fit:contain;
+                border-radius:12px;background:#fff;
+                transition:transform .18s ease;cursor:zoom-in;
+                user-select:none;-webkit-user-drag:none}
+    #imgBox img.big{cursor:grab}
+    #imgBox img.big.dragging{cursor:grabbing;transition:none}
+    /* ⚠️ 按鈕要夠大：這一頁會投影，也會在手機上用。
+       44px 是能穩定點到的下限。 */
+    .zBtn{position:absolute;background:rgba(255,255,255,.14);color:#fff;
+          border:0;border-radius:999px;width:52px;height:52px;
+          font-size:26px;line-height:1;cursor:pointer;
+          display:flex;align-items:center;justify-content:center}
+    .zBtn:hover{background:rgba(255,255,255,.28)}
+    #zPrev{left:12px;top:50%;transform:translateY(-50%)}
+    #zNext{right:12px;top:50%;transform:translateY(-50%)}
+    #zClose{right:12px;top:12px}
+    #zHint{position:absolute;left:0;right:0;bottom:14px;text-align:center;
+           color:#cbd5e1;font-size:12px;font-weight:700;pointer-events:none}
+    /* ── 關卡小卡 ──────────────────────────────────
+       ★ 克制為主：這一頁要投影、也要在手機上讀得到。
+         裝飾只做三件事 —— 左緣的關卡色帶、卡片進場的時間差、
+         完成時的綠色光暈。其餘留白。
+       ⚠️ 色帶用 border-left 就好，不要背景漸層 ——
+          投影機把淡色漸層打出來是一片糊的。 */
+    .unit-btn{border-left-width:6px}
+    .unit-btn.c-blue{border-left-color:#60a5fa}
+    .unit-btn.c-cyan{border-left-color:#22d3ee}
+    .unit-btn.c-purple{border-left-color:#a78bfa}
+    .unit-btn.c-green{border-left-color:#4ade80}
+    .unit-btn.c-orange{border-left-color:#fb923c}
+    .unit-btn.c-red{border-left-color:#f87171}
+    .unit-btn.c-indigo{border-left-color:#818cf8}
+    .unit-btn.c-slate{border-left-color:#94a3b8}
+    .unit-btn.c-yellow{border-left-color:#facc15}
+    .unit-btn.c-amber{border-left-color:#fbbf24}
+    .unit-btn.locked{border-left-color:#cbd5e1}
+    /* 進場的時間差：一張一張浮上來，不是十張同時閃出來。
+       ⚠️ 上限 10 —— 再多會讓最後一張等超過一秒，那就變成卡頓感。 */
+    .unit-btn{animation:pop .35s ease-out both}
+    .unit-btn:nth-child(1){animation-delay:.02s}
+    .unit-btn:nth-child(2){animation-delay:.05s}
+    .unit-btn:nth-child(3){animation-delay:.08s}
+    .unit-btn:nth-child(4){animation-delay:.11s}
+    .unit-btn:nth-child(5){animation-delay:.14s}
+    .unit-btn:nth-child(6){animation-delay:.17s}
+    .unit-btn:nth-child(7){animation-delay:.20s}
+    .unit-btn:nth-child(8){animation-delay:.23s}
+    .unit-btn:nth-child(9){animation-delay:.26s}
+    .unit-btn:nth-child(n+10){animation-delay:.29s}
+    /* ⚠️ 會暈車的人要能關掉 —— 系統設定裡開了「減少動態效果」就不要動。 */
+    @media (prefers-reduced-motion:reduce){
+      .unit-btn{animation:none}
+      .unit-btn:hover{transform:none}
+    }
+  </style>
+<style>
+/* === 全站紙膠帶手作風套件（以 hub 為準，勿重複注入） === */
+body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba(120,113,108,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(120,113,108,.06) 1px,transparent 1px) !important; background-size:26px 26px !important; }
+.tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08);background:rgba(250,204,21,.3);z-index:5}
+.underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
+/* 螢光筆畫重點：閱讀頁自動標示「」內的關鍵詞 */
+.hl{background:linear-gradient(transparent 52%, rgba(250,204,21,.65) 52%);font-weight:800;padding:0 1px;border-radius:2px}
+.hl-b{background:linear-gradient(transparent 52%, rgba(147,197,253,.7) 52%);font-weight:800;padding:0 1px;border-radius:2px}
+</style>
+  <!-- 全站共用設定（要在 guard 之前載入）-->
+  <script src="config.js"></script>
+<!-- 登入邏輯單一來源 -->
+<script src="../shared/auth.js"></script>
+  <!-- 身分守門：未從闖關基地登入者導回入口 -->
+  <script src="../shared/guard.js"></script>
+</head>
+<body class="min-h-screen">
+  <a href="hub.html" title="返回闖關基地" class="fixed top-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800 text-white font-bold text-sm px-3.5 py-2 rounded-full shadow-lg hover:bg-slate-700 transition">← 返回基地</a>
+  <div id="app"></div>
+
+  <!-- 全站共用計分規則（單一來源） -->
+  <script src="../shared/grading.js"></script>
+  <script src="../shared/readhold.js"></script>
+<script src="content/flowchart.js"></script>
+  <!-- 晨星勇者的開放條件（十關都通關）—— 和遊戲頁同一支判斷 -->
+  <script src="../shared/gamesave.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = window.CONFIG.FIREBASE;   // 設定集中在 config.js
+    const COLLECTION = window.CONFIG.COLLECTIONS.PROGRESS;
+    const ROSTER = window.CONFIG.COLLECTIONS.ROSTER;
+    const SAVED_KEY = 'sid' + (window.CONFIG.TERM || '11501');   // 和闖關基地同一個登入紀錄
+    const STARS_PER_UNIT = (window.GRADING && window.GRADING.FLOWCHART_PER_UNIT) || 2;   // 規則定義在 shared/grading.js
+    /* 加分星（老師在「繳交審核」看過流程圖圖片才給）。
+       ⚠️ 數字也在 shared/grading.js（GRADING.BONUS），不要在這裡另外訂 ——
+          闖關基地那張卡是用 GRADING.starsWithBonus 算的，兩邊不同就會「同一份成績兩個數字」。 */
+    const B_IMG = ((window.GRADING || {}).BONUS || {}).img || 1;
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // 十個單元的資料在 content/flowchart.js（審核頁也要用同一份）
+    const UNITS = window.FLOW_UNITS;
+
+    /* ── 每個步驟的一句話說明 ────────────────────────────
+       ★ 為什麼要加：步驟卡上只有一句很短的術語（「用『插入』把物品放到
+         指定編號」），看得懂字但不見得知道它在做什麼、該排在誰前面。
+         學生只好用猜的，猜錯就扣次數 —— 那是在考手氣不是考理解。
+       ★ 但說明不能洩漏順序：這裡只講「這一步在做什麼、為什麼要它」，
+         絕不寫「這是第 3 步」或「要放在 XXX 後面」。
+       key 是步驟文字（去掉開頭的全形縮排空白），干擾用的步驟也要有 —— 
+       看懂了才知道它不屬於這一題。 */
+    const STEP_NOTES = {
+      '開始': '流程圖的起點，每張流程圖都從這裡出發',
+      '結束': '流程圖的終點',
+
+      // 1 班級置物櫃
+      '建立清單（置物櫃）': '先有櫃子才能放東西 —— 清單要先建立才能使用',
+      '用「添加」把物品放到最後一格': '接在現有資料的後面，不會影響前面的編號',
+      '用「插入」把物品放到指定編號': '塞進中間，後面的東西會整批往後挪一格',
+      '用「取代」更新指定格子的物品': '格子位置不變，只換裡面的內容',
+      '用「刪除」清空指定格子': '拿掉某一格，後面的會往前遞補',
+      '用「全部刪除」重置清單': '整個清空，回到什麼都沒有的狀態',
+
+      // 2 集合點名
+      '用「長度」取得班級總人數': '清單裡有幾筆資料＝班上有幾個人',
+      '輸入要查詢的姓名': '要先知道找誰，才能去名單裡比對',
+      '判斷：清單包含這個人嗎？': '菱形＝要做決定，答案只有「是」或「否」',
+      '是→說出「在名單內、第幾號」': '判斷成立時走的那一條路',
+      '否→說出「不在名單內」': '判斷不成立時走的那一條路',
+
+      // 3 演奏小星星
+      '把音階匯入清單': '把整首曲子的音一次存進清單',
+      '編號設為 1': '從第 1 個音開始 —— 這個變數負責記「現在演奏到第幾個」',
+      '重複（清單長度）次': '有幾個音就重複幾次，曲子多長都不必改程式',
+      '演奏清單第（編號）項的音': '迴圈內：把「現在這一個」音播出來',
+      '編號 = 編號 ＋ 1': '迴圈內：往下一個音移動，沒有這一步會一直播同一個音',
+
+      // 4 計算成績
+      '清空清單、總分設為 0': '重算之前要先歸零，不然會累加到上一次的結果',
+      '把成績匯入清單': '把每個人的分數存進清單',
+      '重複（清單長度）次：總分 = 總分 ＋ 清單第 i 項': '一筆一筆加起來，這是「累加」的標準寫法',
+      '平均 = 總分 ÷ 清單長度': '全部加完之後才算得出平均',
+      '判斷：平均 ≥ 60？': '菱形＝要做決定，用平均分數決定及不及格',
+      '是→顯示「及格」；否→顯示「不及格」': '兩條路各自的結果',
+
+      // 5 抽號碼
+      '用迴圈把 1～座號 加入清單': '先把全班座號準備好，才有得抽',
+      '重複（要抽的人數）次': '要抽幾個人就重複幾次',
+      '從 1～清單長度 隨機抽一個編號': '迴圈內：抽的是「第幾格」，不是號碼本身',
+      '說出抽中的號碼': '迴圈內：把抽到的結果講出來',
+      '從清單刪除該號碼（防重複）': '迴圈內：抽過就拿掉，下次才不會抽到同一個人',
+
+      // 6 撲克發牌
+      '用雙重迴圈建立 52 張牌': '4 種花色 × 13 個數字，用兩層迴圈組合出來',
+      '洗牌：隨機抽牌移到新清單，直到原牌堆清空': '打亂順序 —— 要先洗好才能發',
+      '點擊發牌': '事件：玩家按下去才開始發牌',
+      '依清單第 1 項換造型': '發牌時：最上面那張就是清單的第 1 項',
+      '刪除清單第 1 項': '發牌時：發出去的牌要從牌堆拿掉',
+      '清單為空→隱藏角色': '牌發完了，把牌堆藏起來',
+
+      // 7 動物點點名
+      '建立「全域變數」總數並歸零': '全域＝所有角色共用同一個數字',
+      '點擊動物→全域變數 ＋ 1（大家共用、接續累加）': '點哪一隻都加到同一個數字上',
+      '建立「角色變數」各自計數': '角色變數＝每個角色都有一份自己的',
+      '點擊某隻小貓→該角色變數 ＋ 1（各自獨立）': '只有被點的那一隻會加，其他不受影響',
+
+      // 8 戰車王
+      '設定每輛敵機的血量（角色變數）': '每架敵機各記各的血，才不會一起扣',
+      '偵測方向鍵→移動戰車': '事件：按方向鍵控制自己的戰車',
+      '按空白鍵→發射子彈分身': '事件：用分身當子彈，可以同時射很多發',
+      '判斷：子彈碰到敵機？': '菱形＝要做決定，有沒有打中',
+      '是→爆炸造型、刪除子彈、該敵機血量 －1': '打中之後要做的三件事',
+      '血量 = 0→敵機消失': '血扣完了才把敵機移除',
+
+      // 9 分身小貓
+      '隱藏本尊': '本尊只負責生分身，自己不出場',
+      '重複 N 次：編號 ＋1、建立分身': '先加編號再生分身，分身才會帶著不同的號碼',
+      '當分身產生': '事件：每一個分身出生時各自執行下面這段',
+      '繼承編號當作專屬 ID': '分身內：記住自己是第幾號',
+      '一邊走一邊說出自己的編號': '分身內：證明每一隻真的都不一樣',
+
+      // 10 螞蟻搬乳酪
+      '用分身產生大量螞蟻': '一次做出很多隻，不必複製角色',
+      '每隻螞蟻面朝乳酪前進': '每隻分身各自去找目標',
+      '判斷：碰到乳酪？': '菱形＝要做決定，找到了沒',
+      '是→狀態設為「搬運中」、乳酪跟隨螞蟻': '找到之後改變狀態，乳酪才會跟著走',
+      '判斷：回到蟻穴？': '菱形＝要做決定，搬到家了沒',
+      '是→分數 ＋1、乳酪重置回起點': '搬到家才得分，然後重新開始下一輪'
+    };
+    /** 放進 HTML 前先逸出，Mermaid 程式碼裡有 --> 這種符號 */
+    function esc(t){ return String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+    /** 取步驟說明（步驟文字前面可能有全形縮排空白，要先去掉） */
+    function stepNote(s){ return STEP_NOTES[String(s).replace(/^[　\s]+/, '')] || ''; }
+
+
+    /* ── 流程圖 → Mermaid 程式碼 ──────────────────────────
+       學生排完之後，把同一張流程圖變成 Mermaid 語法，
+       貼到 mermaid.ai 就會長出真正的流程圖（有方框、菱形、箭頭）。
+
+       ★ 為什麼值得做：排卡片排出來的是「順序」，但流程圖真正的重點是
+         **形狀有意義** —— 圓角是起訖、矩形是處理、菱形是判斷、
+         平行四邊形是輸入輸出。看到自己排的東西變成正式的流程圖，
+         那些形狀才會從課本上的圖變成自己畫得出來的東西。
+       ★ 形狀依步驟文字判斷，規則就是課本教的那一套：
+         開始／結束 → 圓角     判斷／？ → 菱形
+         輸入／說出／顯示／演奏 → 平行四邊形     其餘 → 矩形 */
+    function mermaidShape(text){
+      if(text==='開始' || text==='結束') return ['([', '])'];
+      if(/判斷|？|\?$/.test(text))       return ['{', '}'];
+      if(/^輸入|說出|顯示|演奏|換造型/.test(text)) return ['[/', '/]'];
+      return ['[', ']'];
+    }
+    function toMermaid(steps){
+      const out = ['flowchart TD'];
+      const id = i => 'S' + i;
+      let pending = [];          // 還在等著接到下一個節點的節點
+      let lastDecision = null;   // 最近一個菱形（是／否 要從它分出去）
+      let parent = null;         // 縮排步驟的上層節點
+      let chain = null;          // 縮排段落目前接到哪一個
+
+      steps.forEach((raw, i) => {
+        const indented = /^[　\s]/.test(raw);
+        const text = String(raw).replace(/^[　\s]+/, '');
+        const [o, c] = mermaidShape(text);
+        out.push('    ' + id(i) + o + '"' + text.replace(/"/g, "'") + '"' + c);
+
+        if(indented){
+          // 縮排＝上一個節點的內容（迴圈裡面、或事件底下）
+          out.push('    ' + id(chain === null ? parent : chain) + ' --> ' + id(i));
+          chain = i;
+          return;
+        }
+        // 離開縮排段落：如果上層是迴圈，最後一步要繞回去
+        if(chain !== null && parent !== null){
+          if(/重複|迴圈/.test(String(steps[parent]).replace(/^[　\s]+/, ''))){
+            out.push('    ' + id(chain) + ' --> ' + id(parent));
+            pending = [parent];
+          } else {
+            pending = [chain];
+          }
+          chain = null;
+        }
+
+        // 「是→…」「否→…」要從最近的菱形分出去，並標上是／否
+        const both = /是→/.test(text) && /否→/.test(text);
+        const yes = !both && /^是→/.test(text);
+        const no  = !both && /^否→/.test(text);
+        if((yes || no) && lastDecision !== null){
+          out.push('    ' + id(lastDecision) + ' -->|' + (yes ? '是' : '否') + '| ' + id(i));
+          pending = pending.filter(x => x !== lastDecision).concat(i);
+        } else {
+          pending.forEach(pv => out.push('    ' + id(pv) + ' --> ' + id(i)));
+          pending = [i];
+        }
+
+        if(/判斷|？/.test(text)) lastDecision = i;
+        parent = i;
+      });
+      return out.join('\n');
+    }
+    /** Mermaid 官方網站沒有「用網址帶程式碼」的公開格式，所以做成「複製 → 貼上」 */
+    const MERMAID_SITE = 'https://mermaid.ai/';
+
+    /* ── Mermaid 面板（過關畫面與關卡列表的「🧜 流程圖代碼」共用）────────
+       這段程式碼是 toMermaid(u.steps)：來自單元定義的**正確步驟**，每個學生都一樣，
+       不是學生的作品 ⇒ 不用存，排對過的關卡隨時都能再拿到。 */
+    function mermaidPanel(u){
+      return `              <details class="text-left bg-indigo-50 border border-indigo-200 rounded-xl mb-5" open>
+                <summary class="cursor-pointer px-4 py-3 font-bold text-indigo-800 text-sm">
+                  🧜 把這張流程圖變成真的圖（Mermaid）
+                </summary>
+                <div class="px-4 pb-4">
+                  <p class="text-xs text-indigo-900/70 leading-relaxed mb-2">
+                    下面是這張流程圖的 <b>Mermaid 程式碼</b>。複製起來貼到
+                    <a href="${MERMAID_SITE}" target="_blank" rel="noopener" class="underline font-bold">mermaid.ai</a>，
+                    就會畫出正式的流程圖。<br>
+                    注意形狀：<b>圓角</b>＝開始／結束、<b>矩形</b>＝處理、
+                    <b>菱形</b>＝判斷、<b>平行四邊形</b>＝輸入／輸出。
+                  </p>
+                  <pre id="mmd-code" class="bg-white border border-indigo-200 rounded-lg p-3 text-[11px] leading-relaxed overflow-auto max-h-56 whitespace-pre">${esc(toMermaid(u.steps))}</pre>
+                  <div class="flex flex-wrap gap-2 mt-2">
+                    <button id="copy-mmd" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">📋 複製程式碼</button>
+                    <a href="${MERMAID_SITE}" target="_blank" rel="noopener" class="bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-xs font-bold px-4 py-2 rounded-lg transition">開啟 Mermaid →</a>
+                  </div>
+                </div>
+              </details>`;
+    }
+
+    const COLORS = {
+      blue:'bg-blue-100 text-blue-600 border-blue-400', cyan:'bg-cyan-100 text-cyan-600 border-cyan-400',
+      purple:'bg-purple-100 text-purple-600 border-purple-400', green:'bg-green-100 text-green-600 border-green-400',
+      orange:'bg-orange-100 text-orange-600 border-orange-400', red:'bg-red-100 text-red-600 border-red-400',
+      indigo:'bg-indigo-100 text-indigo-600 border-indigo-400', slate:'bg-slate-100 text-slate-600 border-slate-400',
+      yellow:'bg-yellow-100 text-yellow-600 border-yellow-400', amber:'bg-amber-100 text-amber-600 border-amber-400'
+    };
+
+    /* ── 🎬 教學影片也可以放在 Google 雲端硬碟 ────────────────
+       學校帳號若沒有開放 YouTube，嵌入的 YouTube 影片會被擋（「貴組織不允許存取」），
+       這時把影片放雲端硬碟。
+       ★ 怎麼填：在雲端硬碟對影片按「共用 → 複製連結」，**整條連結直接貼進引號裡**
+         （https://drive.google.com/file/d/XXXX/view?usp=sharing 這種），程式會自己取出 ID。
+         共用設定要讓學生看得到（學校網域或「知道連結的任何人」）。
+       ★ 沒填的關卡播 YouTube（下面 PROG 的 video）—— 一關一關換也可以。 */
+    const VIDEO_DRIVE = {
+      '2-1-1A': '',
+      '2-1-1B': '',
+      '2-1-2':  '',
+      '2-1-3':  '',
+      '2-1-4':  '',
+      '2-1-5':  '',
+      '2-2-1':  '',
+      '2-2-2':  '',
+      '2-3-1':  '',
+      '2-3-2':  ''
+    };
+    /** 雲端硬碟連結 → 檔案 ID；貼的是 ID 本身也可以。認不出來回空字串。 */
+    function driveId(s){
+      s = String(s || '').trim();
+      if(!s) return '';
+      const m = s.match(/\/d\/([A-Za-z0-9_-]{20,})/) || s.match(/[?&]id=([A-Za-z0-9_-]{20,})/);
+      if(m) return m[1];
+      return /^[A-Za-z0-9_-]{20,}$/.test(s) ? s : '';
+    }
+    /** 教學影片的播放區：有雲端硬碟就用雲端硬碟，沒有才用 YouTube。 */
+    function videoHTML(unitId, p){
+      const id = driveId(VIDEO_DRIVE[unitId]);
+      const src = id ? `https://drive.google.com/file/d/${id}/preview`
+                     : `https://www.youtube.com/embed/${p.video}`;
+      /* ⚠️ 播放器下面一定要有「看不到怎麼辦」：被擋的時候 iframe 裡是 Google 的錯誤頁，
+            學生不會知道該怎麼辦，只會舉手說「影片壞了」。 */
+      const help = id
+        ? `影片沒出現？<a href="https://drive.google.com/file/d/${id}/view" target="_blank" rel="noopener" class="underline font-bold text-indigo-600">在雲端硬碟開啟</a>（要用學校帳號登入）`
+        : `看到「貴組織不允許存取」？學校帳號不能看 YouTube，請跟老師說。`;
+      return `<div class="relative rounded-xl overflow-hidden bg-black" style="padding-top:56.25%">
+                    <iframe class="absolute inset-0 w-full h-full" src="${src}" title="教學影片" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                  </div>
+                  <div class="text-[11px] text-slate-400 mt-1">${help}</div>`;
+    }
+
+    // 各單元的程式設計素材（影片、專案連結、截圖、測驗題庫）— 來源：Scratch 進階程式設計
+    const G='https://raw.githubusercontent.com/su-yung-sheng/classroom/refs/heads/main/';
+    const PROG = {
+      '2-1-1A':{ video:'84cCkGKsPsI', project:'1312098402', imgs:[G+'11501-2-1-1(1)-1.png',G+'11501-2-1-1(1)-2.png'], quiz:[
+        {q:'在 Scratch 清單中，第一個項目的編號（索引）是多少？',o:['0','1','-1','A'],a:1},
+        {q:'若要刪除清單中所有的東西，該使用哪個積木？',o:['刪除第 1 項','替換第 1 項內容','刪除清單的所有項目','隱藏清單'],a:2},
+        {q:'若要將新物品加到置物櫃的「最後一個空位」，應使用哪個積木？',o:['插入...到清單','添加...到清單','替換第 1 項','刪除項目'],a:1},
+        {q:'「插入物品到第 3 項」後，原本在第 3 項的物品會如何？',o:['永遠消失','被新物品取代','往後移變成第 4 項','往前移變成第 2 項'],a:2},
+        {q:'如果想把第 2 項的物品「直接換成」別的東西，最適合用哪個積木？',o:['替換第 2 項內容','插入到第 2 項','添加到最後','隱藏清單'],a:0} ] },
+      '2-1-1B':{ video:'bu5sIhT_8ys', project:'1312098637', imgs:[G+'11501-2-1-1(2)-1.png',G+'11501-2-1-1(2)-2.png'], quiz:[
+        {q:'要判斷「小明」是否在名單內，最快速的積木是？',o:['如果 1=1','清單包含 小明 嗎？','重複執行直到...','詢問並等待'],a:1},
+        {q:'如何取得目前班級總共有多少人？',o:['清單的長度','變數設為 0','隨機取數','移動 10 步'],a:0},
+        {q:'想要知道「小華」是幾號（在清單的第幾個位置），該使用哪個功能？',o:['項目 小華 的位置','包含 小華 嗎？','刪除 小華','添加 小華'],a:0},
+        {q:'在迴圈中依序點名時，通常會建立一個變數當作什麼？',o:['角色顏色','背景音量','索引值（如：座號）','畫面座標'],a:2},
+        {q:'若清單長度顯示是 30，代表什麼意思？',o:['第一個名字叫30','名單裡總共有30筆資料','學生的最高分是30','點名需要花30秒'],a:1} ] },
+      '2-1-2':{ video:'mSTXHTgzFNk', project:'1312098678', imgs:[G+'11501-2-1-2-1.png',G+'11501-2-1-2-2.png'], quiz:[
+        {q:'在演奏過程中，用來控制目前讀到第幾個音符的工具通常是？',o:['背景顏色','造型編號','變數（如：編號）','滑鼠座標'],a:2},
+        {q:'若要讓整首音樂的節奏變快，應該調整什麼？',o:['改變外觀顏色','改變聲音音量','減少清單長度','演奏音符 ... 拍'],a:3},
+        {q:'為了依序從清單拿出每一個音階，通常會搭配哪一種迴圈？',o:['重複無限次','如果...那麼','重複執行 (清單長度) 次','等待直到'],a:2},
+        {q:'要讀取清單中「目前的音階」，積木應該怎麼組合？',o:['清單的第 (編號) 項','刪除第 1 項','添加音階','包含音階嗎？'],a:0},
+        {q:'為什麼要把音樂存進清單，而不是放一堆演奏積木？',o:['因為顏色比較好看','防止電腦壞掉','為了程式碼精簡且容易管理','可以順便進行點名'],a:2} ] },
+      '2-1-3':{ video:'gNS_IuKD6K8', project:'1312098703', imgs:[G+'11501-2-1-3-1.png'], quiz:[
+        {q:'計算平均分數時，總分的除數應該設為多少？',o:['固定除以 10','目前的秒數','清單的長度','隨機數字'],a:2},
+        {q:'若要清除之前的舊資料重新計算，程式開頭應先做什麼？',o:['隱藏所有變數','移動角色到原點','刪除清單的所有項目','換成下一個造型'],a:2},
+        {q:'在迴圈累加總分時，應該將「總分」變數加上什麼？',o:['數字 10','清單的第 (編號) 項','清單的總長度','隨機取數'],a:1},
+        {q:'如何用積木判斷算出來的平均是否及格？',o:['如果 (平均 < 60)','如果 (長度 = 60)','包含 60 嗎？','刪除第 60 項'],a:0},
+        {q:'若忘記在程式開始時將「總分」變數設為0，會發生什麼事？',o:['程式直接當機','無法輸入新成績','總分會連前一次的結果一起加進去','清單資料會不見'],a:2} ] },
+      '2-1-4':{ video:'NWy1XDujWVc', project:'1312098720', imgs:[G+'11501-2-1-4-1.png',G+'11501-2-1-4-2.png'], quiz:[
+        {q:'為了確保已經抽中的人不會再被抽到，抽出號碼後必須執行什麼動作？',o:['停止全部腳本','從清單中刪除該項','將編號變數設為 0','說出你好'],a:1},
+        {q:'抽籤時，隨機取數的範圍應該設為 1 到多少？',o:['固定 99','固定 10','清單的長度','今天的日期'],a:2},
+        {q:'想要將 1 到 26 號自動加進清單，最適合用什麼方法？',o:['自己手打添加積木 26 次','使用計次迴圈配合變數累加','隨機取數 1~26','廣播訊息給 26 個人'],a:1},
+        {q:'抽籤時，為什麼隨機取數的最大值必須是「清單的長度」而不是固定數字？',o:['這樣才不會抽到因為刪除而變成空白的格子','因為規定只能填長度','為了讓遊戲畫面好看','這樣比較好背'],a:0},
+        {q:'若要連續抽出 5 個號碼，應該把抽籤的積木邏輯放在哪裡？',o:['如果...那麼','重複執行 5 次','當背景換成','廣播訊息'],a:1} ] },
+      '2-1-5':{ video:'BgS2CIveXpY', project:'1312098747', imgs:[G+'11501-2-1-5-1.png',G+'11501-2-1-5-2.png'], quiz:[
+        {q:'如何將「紅心」與「A」兩個資料組合成「紅心A」？',o:['相加 (+)','字串組合','如果...那麼','計時器'],a:1},
+        {q:'一副標準的撲克牌（不含鬼牌）總共有幾張？',o:['13 張','26 張','48 張','52 張'],a:3},
+        {q:'發牌動畫中，為什麼發完一張牌後要「刪除清單第 1 項」？',o:['開容量滿了','為了確保發過的牌不會再出現，並讓下一張遞補','為了切換角色的造型','可以讓電腦跑得變快'],a:1},
+        {q:'建立 52 張牌庫時，利用「雙重迴圈」（迴圈包迴圈），外層與內層分別控制什麼？',o:['音量與顏色','花色與數字','大小與位置','廣播與接收'],a:1},
+        {q:'從原始牌堆隨機抽取一張，放到新的洗牌清單，這被稱為什麼演算法的基礎？',o:['洗牌演算法','排序演算法','尋路演算法','碰撞偵測演算'],a:0} ] },
+      '2-2-1':{ video:'iJCyqohNtoA', project:'1312098793', imgs:[G+'11501-2-2-1-1.png'], quiz:[
+        {q:'若要替每隻怪物記錄各自專屬的「生命值」，適合建立哪種變數？',o:['全域變數','角色變數（僅適用當前角色）','清單','廣播訊息'],a:1},
+        {q:'關於「全域變數」的特性，下列何者正確？',o:['只有建立它的角色才能修改','無法被顯示在舞台上','所有角色都可以共同讀寫','每次點擊綠旗一定會自動歸零'],a:2},
+        {q:'當一隻小貓廣播了「點名」，為什麼其他動物會跟著做動作？',o:['因為動物們很聰明','原因為有使用「當收到訊息」積木','因為大家設定了一樣的顏色','因為有設定相同的計時器'],a:1},
+        {q:'如果計數器變數是「全域」的，點擊不同角色時數字會如何變化？',o:['各自獨立從頭計算','互相覆蓋最後都變成 0','接續著上一個數字一起累加','會變成無法辨識的亂碼'],a:2},
+        {q:'「僅適用當前角色」的變數，在畫面上產生分身時會有什麼效果？',o:['所有分身共用同一個變數數值','每個分身都會有自己獨立的一份變數','分身會因為讀取不到變數而消失','會讓遊戲發生錯誤當機'],a:1} ] },
+      '2-2-2':{ video:'R4X1hVSrF88', project:'1312098819', imgs:[G+'11501-2-2-2-1.png',G+'11501-2-2-2-2.png',G+'11501-2-2-2-3.png'], quiz:[
+        {q:'若要讓戰車前進，應該使用哪個指令？',o:['移動 10 點','旋轉 15 度','改變大小','定位到隨機'],a:0},
+        {q:'判斷子彈是否打中對手，應使用哪個積木？',o:['碰到顏色','距離鼠標','碰到 [對手角色名稱]','響度 > 10'],a:2},
+        {q:'若要讓發射出的子彈往戰車的「前方」飛，子彈產生時的第一步是？',o:['改變外觀顏色','面朝戰車的方向並定位到戰車','放大尺寸','刪除分身'],a:1},
+        {q:'敵軍被子彈打中後要獨立扣血，這個「血量」變數應該設定為？',o:['全域變數','角色變數（僅適用當前角色）','清單結構','廣播事件'],a:1},
+        {q:'按下空白鍵發射子彈，為了不要讓原本的子彈角色飛出去，我們通常會怎麼做？',o:['建立子彈的分身去發射','把子彈隱藏就好','換一個背景','發出爆炸的聲音'],a:0} ] },
+      '2-3-1':{ video:'rDJ2tZ-h9MM', project:'1312098844', imgs:[G+'11501-2-3-1-1.png'], quiz:[
+        {q:'針對分身專屬的行為，積木開頭應該接哪個事件？',o:['當背景換成...','當收到訊息...','當分身產生...','當綠旗被點擊...'],a:2},
+        {q:'為了防止電腦跑不動（LAG），不需要的分身應該怎麼處理？',o:['隱藏起來','刪除此分身','改變顏色特效','換下一個造型'],a:1},
+        {q:'為了讓每隻分身有專屬的編號(ID)，必須在建立分身前改變什麼變數？',o:['全域變數','角色變數（僅適用當前角色）','滑鼠的 X 座標','系統計時器'],a:1},
+        {q:'為什麼在開始產生分身前，通常會將「本尊」隱藏起來？',o:['因為本尊的造型比較醜','確保畫面上只有受程式完整控制的分身群組','會比較節省電腦電力','這是 Scratch 官方的嚴格規定'],a:1},
+        {q:'如果要一次產生 10 隻小貓，最聰明（精簡程式）的做法是？',o:['把角色直接複製 10 次','使用「重複 10 次」包住「建立分身」','在螢幕上狂點滑鼠','建立 10 個不同的變數'],a:1} ] },
+      '2-3-2':{ video:'zRXISRqhhG0', project:'1312098868', imgs:[G+'11501-2-3-2-1.png',G+'11501-2-3-2-2.png'], quiz:[
+        {q:'要讓乳酪看起來像被螞蟻搬著走，應讓乳酪不停執行哪個積木？',o:['定位到 [螞蟻]','一直旋轉','持續改變顏色','把自己隱藏起來'],a:0},
+        {q:'如何讓螞蟻知道乳酪在哪個方向並前進？',o:['移動 10 點','定位到 隨機位置','面朝 [乳酪]','碰到邊緣就反彈'],a:2},
+        {q:'螞蟻碰到乳酪後，要知道自己正在「搬運中」，可以設定什麼來記錄狀態？',o:['全域廣播','播放音效','狀態變數 (例如：已拿到食物=1)','更換背景圖片'],a:2},
+        {q:'螞蟻把乳酪搬回蟻穴得分後，乳酪應該怎麼辦？',o:['直接刪除乳酪角色','定位回起點，重新產生（重置）','體積變得更大','一直跟著螞蟻永遠不放'],a:1},
+        {q:'大量螞蟻一起去找乳酪，為了精簡程式碼，我們會大量使用什麼功能？',o:['分身機制','迴圈積木','畫筆功能','翻譯擴充功能'],a:0} ] }
+    };
+
+    // 每個單元的一句情境（機器人開場用）
+    const INTRO = {
+      '2-1-1A':'我們要用「清單」當成班級置物櫃，練習把物品 新增、插入、取代、刪除。',
+      '2-1-1B':'要做集合點名：查某人在不在名單裡、全班總共幾人。',
+      '2-1-2':'把音階存進清單，再用迴圈一個一個依序演奏出來。',
+      '2-1-3':'把全班成績存進清單，加總算出平均，再判斷及不及格。',
+      '2-1-4':'從全班座號中隨機抽人，而且抽過的人不能再被抽到。',
+      '2-1-5':'先建立 52 張撲克牌、洗牌，再一張一張發出去。',
+      '2-2-1':'比較「全域變數（大家共用）」和「角色變數（各自獨立）」的差別。',
+      '2-2-2':'控制戰車移動、發射子彈，子彈打中敵機就扣血。',
+      '2-3-1':'用「分身」產生很多小貓，而且每隻小貓都有自己的編號。',
+      '2-3-2':'很多螞蟻去找乳酪、搬回蟻穴得分。'
+    };
+
+    // 依當前單元組出候選元件（正確步驟＋來自其他單元的陷阱）
+    // 產生候選元件：正確步驟 + 陷阱；並補到「偶數」讓兩欄排版對齊
+    function buildCandidates(u){
+      const pool = [];
+      UNITS.forEach(x=>{ if(x.id!==u.id) x.steps.forEach(s=>{ if(s!=='開始'&&s!=='結束'&&!u.steps.includes(s)) pool.push(s); }); });
+      const bank = shuffle([...new Set(pool)]);
+      let need = 3;                                   // 基本陷阱數
+      if((u.steps.length + need) % 2 !== 0) need++;   // 總數湊成偶數（版面兩欄才不會落單）
+      const distractors = bank.slice(0, Math.min(need, bank.length));
+      return shuffle([...u.steps, ...distractors]);
+    }
+
+    let state = { status:'loading', studentId:'', studentName:'', slowNote:'', mmdUnit:null, done:{},
+                  progStars:{}, imgUnits:{}, imgReview:{}, unit:null, candidates:[], selected:{}, selMsg:'', placed:[], pool:[], mistakes:0,
+                  qIdx:0, qPicked:null, qScore:0, refOpen:false, leadOpen:false, graderOpen:false,
+                  readLeft:0, hintUsed:false, hintLeft:0, selTries:0,
+                  quizSet:[], quizPassed:false, qPulled:false,
+                  leadDone:false,      // 前導教材「Scratch 清單學習機」是否已通過結業測驗
+                  leadMsg:'' };        // 前導教材完成紀錄存不進去時的提示
+
+    /* ===== 關卡開放 =====
+       十關全部開放，順序學生自己決定。
+       作品星：有接 Apps Script 評分服務（config.js 的 GRADER_URL）就上傳評分，
+       沒接就是「交給老師」，作品星不計。
+       「通關了沒」（晨星勇者的開放條件）用 shared/grading.js 的 GRADING.GATE.cleared。 */
+    const GRADER_URL = String((window.CONFIG && window.CONFIG.GRADER_URL) || '').trim();
+    const WORK = !!GRADER_URL;      // 有沒有作品星
+    const GATE = (window.GRADING && window.GRADING.GATE) || { cleared: function(){ return false; } };
+
+    // 自動畫重點：把「」內的關鍵詞塗上螢光筆；數字＋單位（例如 52 張、1 到 26）用藍色
+    function mark(t){
+      return String(t||'')
+        .replace(/「([^」]+)」/g, '<span class="hl">「$1」</span>')
+        .replace(/(\d+(?:\s*[～~-]\s*\d+)?\s*(?:張|次|項|個|人|拍|秒|分))/g, '<span class="hl-b">$1</span>');
+    }
+
+    const READ_SECONDS = 30;   // 閱讀頁強制停留秒數（切走畫面會暫停）
+
+    /* 這一關要強制讀幾秒。
+       ⚠️ 已經排對過流程圖的關卡回傳 0 —— 強制停留是為了「第一次別亂點」，
+          不是懲罰。已經通關的人回來查資料、或想重排一次練習，
+          每次都被鎖 30 秒只會讓人覺得系統在找麻煩。
+          排錯太多次被退回重讀時也一樣：他本來就會通關的關卡，
+          再罰他讀一次沒有意義。 */
+    function readSecondsFor(u) {
+      return (u && state.done[u.id]) ? 0 : READ_SECONDS;
+    }
+    const HINT_SECONDS = 10;   // 選件頁提示顯示秒數（只有一次機會）
+    const SELECT_TRIES = 3;    // 選元件可確認的次數，用完退回重讀
+    let readHold = null, hintTimer = null;
+    function clearTimers(){
+      if(readHold){ readHold.stop(); readHold=null; }
+      if(hintTimer){ clearInterval(hintTimer); hintTimer=null; }
+    }
+
+    /* ── 閱讀倒數 ──────────────────────────────────────
+       ★ 規則在 shared/readhold.js，這裡只管畫面文字。
+         什麼叫「離開」（切分頁／並列視窗焦點跑掉）、寬限幾秒、
+         什麼時候從頭算、保險絲（hasFocus() 一直回 false 的環境不會卡死）—— 全部在那一支。
+       ★ 直接改按鈕文字，不整頁重繪 —— 避免內嵌教材 iframe 被重載。 */
+    function paintRead(v){
+      const btn = document.getElementById('begin-sel');
+      if(!btn) return;
+      if(v && v.left > 0){
+        btn.disabled = true;
+        btn.textContent =
+          v.state === 'reset' ? `⏸ 離開太久，從頭算（還要 ${v.left} 秒）` :
+          v.state === 'pause' ? `⏸ 已暫停：請回到這個畫面才會繼續倒數（還要 ${v.left} 秒）` :
+                                `請先仔細閱讀…（還要 ${v.left} 秒）`;
+        btn.className = 'mt-5 w-full bg-slate-300 text-white font-bold text-lg py-3 rounded-xl cursor-not-allowed transition';
+      }else{
+        btn.disabled = false;
+        btn.textContent = '我讀完了，開始闖關 →';
+        btn.className = 'mt-5 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-lg py-3 rounded-xl active:scale-95 transition';
+      }
+    }
+    function startReadCountdown(){
+      if(readHold){ readHold.stop(); readHold = null; }
+      /* 沒載到 readhold.js 就直接放行。
+         少讀 30 秒的代價，遠小於整節課卡在一個不會動的按鈕前面。 */
+      if(!window.READHOLD){ state.readLeft = 0; paintRead(null); return; }
+      readHold = window.READHOLD.start({
+        sec:  readSecondsFor(state.unit),
+        left: state.readLeft,          // 重繪時從目前秒數接著算
+        onTick: v => { state.readLeft = v.left; paintRead(v); },
+        onDone: () => { state.readLeft = 0; paintRead(null); }
+      });
+    }
+    /* 切回畫面時立刻換文字，不用等下一秒。
+       ⚠️ 只換「暫停／繼續」，不猜有沒有重算 —— 那要等下一次 onTick，
+          在這裡猜會和真正的狀態對不上。 */
+    ['visibilitychange','focus','blur'].forEach(ev=>{
+      window.addEventListener(ev, ()=>{
+        if(state.status==='read' && readHold && state.readLeft > 0){
+          paintRead({ left: state.readLeft, state: readHold.away() ? 'pause' : 'run' });
+        }
+      });
+    });
+    /* ===== 上傳 .sb3 → Apps Script 和範例比對給星 =====
+       星數由 Apps Script 用老師的身分寫進資料庫（學生改不到），這裡只負責送檔、顯示結果、重讀進度。
+       ⚠️ 不整頁 render()：結果要留在畫面上讓學生看完「還缺什麼」。 */
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('#work-send');
+      if (!btn) return;
+      const out = document.getElementById('work-result');
+      const f = (document.getElementById('work-file').files || [])[0];
+      const say = (html, cls) => { out.innerHTML = `<div class="rounded-lg px-3 py-2 border ${cls}">${html}</div>`; };
+      if (!f) { say('請先選擇 .sb3 檔案。', 'bg-amber-50 border-amber-200 text-amber-800'); return; }
+      if (!/\.sb3$/i.test(f.name)) { say('要傳 Scratch 存出來的 <b>.sb3</b> 檔。', 'bg-amber-50 border-amber-200 text-amber-800'); return; }
+      if (f.size > 20 * 1024 * 1024) { say('檔案太大了（超過 20MB），請把用不到的音效、造型刪掉再存一次。', 'bg-amber-50 border-amber-200 text-amber-800'); return; }
+      btn.disabled = true; btn.textContent = '評分中…（約 5～15 秒）';
+      out.innerHTML = '';
+      try {
+        const b64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(String(r.result).split(',')[1] || '');
+          r.onerror = () => rej(new Error('讀不到這個檔案'));
+          r.readAsDataURL(f);
+        });
+        if (!auth.currentUser) throw new Error('登入狀態不見了，請回闖關基地重新登入。');
+        const idToken = await auth.currentUser.getIdToken();
+        /* ⚠️ 不設 Content-Type（預設 text/plain）：Apps Script 不處理跨網域的預檢請求 */
+        const resp = await fetch(GRADER_URL, { method: 'POST',
+          body: JSON.stringify({ kind: 'grade', idToken, unit: btn.dataset.unit, unitNo: Number(btn.dataset.no), total: UNITS.length, b64 }) });
+        const r = await resp.json();
+        if (!r.ok) throw new Error(r.message || '評分失敗');
+        const lv = r.levels || {};
+        const star = r.stars > 0 ? '⭐'.repeat(r.stars) : '還沒有星';
+        const best = (r.bestStars > r.stars) ? `<div class="text-xs text-slate-500 mt-1">（這一關你最好的成績是 ${'⭐'.repeat(r.bestStars)}，星數取最高，不會變低）</div>` : '';
+        say(`<div class="text-lg font-black">${r.score} 分　${star}</div>
+             <div class="text-xs text-slate-600 mt-1">積木 ${lv.block}%　位置 ${lv.place}%　設定值 ${lv.value}%</div>
+             <div class="mt-2">${esc(r.message || '')}</div>${best}
+             ${r.stars < 3 ? '<div class="mt-2 text-xs font-bold">改好之後再存一次、再傳一次就好。</div>' : '<div class="mt-2 text-xs font-bold">🏆 和範例一致！</div>'}`,
+            r.stars >= 3 ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : r.stars === 2 ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-rose-50 border-rose-300 text-rose-900');
+        if (state.studentId) { loadProgress(state.studentId).catch(() => {}); }
+      } catch (err) {
+        const msg = (err && err.message) || '';
+        say(/Failed to fetch|NetworkError|Load failed/i.test(msg)
+              ? '連不到評分服務 —— 請檢查網路，等一下再試；還是不行就告訴老師。'
+              : esc(msg), 'bg-rose-50 border-rose-200 text-rose-800');
+      } finally {
+        btn.disabled = false; btn.textContent = '送出評分';
+      }
+    });
+
+    let _graderWired = false;
+    function wireGraderHeight(){
+      if(_graderWired) return;
+      _graderWired = true;
+      window.addEventListener('message', (e) => {
+        const d = e.data;
+        if(!d) return;
+        const cur = document.getElementById('grader-frame');
+        if(!cur || e.source !== cur.contentWindow) return;   // 只收自家評分站的
+        if(d.type === 'graderHeight'){
+          const h = Number(d.h) || 0;
+          if(h > 200 && h < 4000) cur.style.height = h + 'px';
+          return;
+        }
+        /* 評分完成：捲到結果，讓學生知道好了 */
+        if(d.type === 'graderDone'){
+          const bar = document.getElementById('grade-done');
+          /* 話要看星數講：三星才恭喜他離開，兩星要先講「還有 3 星可以拿」 */
+          const msg = document.getElementById('grade-done-msg');
+          if(msg){
+            const st = (d.star === null || d.star === undefined) ? null : Number(d.star);
+            if(st === 0){
+              msg.textContent = '⚠️ 還沒通關（要 75 分以上）。看上面「可以再加強的地方」，改完在上面再傳一次。';
+              msg.className = 'text-sm font-black text-rose-700 mb-2';
+            }else if(st !== null && st < 3){
+              msg.textContent = '✅ 已通關 ' + st + ' 星，星數已更新 —— 還可以挑戰 3 星！'
+                              + '改好程式在上面直接再傳一次就好，重測只會變好不會變差。';
+              msg.className = 'text-sm font-black text-orange-700 mb-2';
+            }else{
+              msg.textContent = '🏆 評分完成，星數已經更新';
+              msg.className = 'text-sm font-black text-emerald-800 mb-2';
+            }
+          }
+          if(bar) bar.classList.remove('hidden');
+          setTimeout(() => {
+            const f2 = document.getElementById('grader-frame');
+            if(f2) f2.scrollIntoView({ behavior:'smooth', block:'center' });
+          }, 350);
+          /* ★ 悄悄把進度重讀一次，星數才是新的。
+             ⚠️ **絕對不可以**跟著 render() —— 整頁重繪會把 iframe 換掉，
+                學生剛拿到的評分結果就不見了。 */
+          if(state.studentId){ loadProgress(state.studentId).catch(()=>{}); }
+        }
+      });
+    }
+
+    // 選件頁提示：顯示 10 秒後自動收起（每關只有一次機會）
+    // 用 state.hintLeft 記錄剩餘秒數，即使中途重繪（例如點選元件）也不會中斷
+    function paintHint(){
+      const box = document.getElementById('hint-box');
+      const btn = document.getElementById('hint-btn');
+      if(!box || !btn) return;
+      if(state.hintLeft > 0){
+        box.classList.remove('hidden');
+        btn.textContent = `💡 提示顯示中…${state.hintLeft} 秒`;
+      }else{
+        box.classList.add('hidden');
+        btn.textContent = state.hintUsed ? '📖 回上一步重新閱讀' : '💡 提示（只有 1 次，顯示 10 秒）';
+      }
+    }
+    function showHint(){
+      state.hintUsed = true;
+      state.hintLeft = HINT_SECONDS;
+      paintHint();
+      if(hintTimer) clearInterval(hintTimer);
+      hintTimer = setInterval(() => {
+        state.hintLeft--;
+        if(state.hintLeft <= 0){ state.hintLeft = 0; clearInterval(hintTimer); hintTimer = null; }
+        paintHint();
+      }, 1000);
+    }
+    const LEAD = { href:'whatislist.html', title:'Scratch 清單學習機', note:'寫程式前先搞懂「清單（陣列）」怎麼存放一整排資料。' };
+
+    // 內嵌參考教材面板（用 iframe 直接把教材放進本關頁面）
+    function refPanel(u){
+      if(!u.ref) return '';
+      return `
+        <div class="border border-rose-200 rounded-xl overflow-hidden mt-4">
+          <button id="toggle-ref" class="w-full flex items-center justify-between gap-2 bg-rose-50 hover:bg-rose-100 px-3 py-2.5 text-left transition">
+            <span class="flex items-center gap-2"><span class="text-lg">🎵</span><span><span class="text-sm font-bold text-rose-700">參考教材：${u.ref.title}</span><span class="block text-xs text-rose-500 leading-snug">${u.ref.note||''}</span></span></span>
+            <span class="text-rose-500 font-black flex-shrink-0">${state.refOpen?'▾ 收合':'▸ 展開'}</span>
+          </button>
+          ${state.refOpen?`<iframe src="${u.ref.href}" class="w-full block bg-white" style="height:72vh;border:0" title="${u.ref.title}" loading="lazy"></iframe><div class="text-[11px] text-slate-400 px-3 py-1.5 text-center bg-rose-50">教材已嵌在此，看完往上滑繼續</div>`:''}
+        </div>`;
+    }
+
+    // ===== 認證與登入 =====
+    // AUTH.attachSession()：已經有身分（例如剛在闖關基地用學校 Google 帳號登入）
+    //    就不要再匿名登入，否則會把 Google 身分蓋掉，安全規則的 isOwner() 失效。
+    AUTH.attachSession(auth, signInAnonymously, onAuthStateChanged);
+    onAuthStateChanged(auth, user=>{
+      if(user && state.status==='loading'){
+        const saved = sessionStorage.getItem(SAVED_KEY);
+        if(saved && window.CONFIG.isSid(saved)) autoLogin(saved);
+        /* ⚠️ guard.js 已經擋掉沒登入的人，走到這裡幾乎只會是時序問題。
+           不論如何都不該畫那個沒有功能的登入頁 —— 回闖關基地重登。 */
+        else {
+          const hub = (window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html';
+          location.replace(hub + '?next=' + encodeURIComponent('flowchart.html'));
+        }
+      }
+    });
+    /* 連線慢（autoLogin 要讀名冊＋進度兩次）：只補一行提示，不換畫面 */
+    setTimeout(()=>{ if(state.status==='loading'){ state.slowNote='連線比較慢，請再等一下…'; render(); } }, 2500);
+    /* ⚠️ 但也不能讓學生停在一個永遠不會變的畫面。十秒還沒進來
+       代表身分真的有問題（guard.js 擋得住沒登入的人，走到這裡通常是
+       Firebase 連不上），導回闖關基地重新登入。 */
+    setTimeout(()=>{
+      if(state.status==='loading'){
+        const hub = (window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html';
+        location.replace(hub + '?next=' + encodeURIComponent('flowchart.html'));
+      }
+    }, 10000);
+
+    async function loadProgress(sid){
+      try{
+        const snap = await getDoc(doc(db, COLLECTION, sid));
+        const mods = (snap.exists() && snap.data().modules) || {};
+        const units = (mods.flowchart && mods.flowchart.units) || [];
+        state.done = {}; units.forEach(u=>state.done[u]=true);
+
+        // 各單元的程式星數（由 Apps Script 評分寫入）→ 有星數就代表這關的程式完成了
+        state.progStars = (mods.scratch && mods.scratch.unitStars) || {};
+        /* 老師審核給的加分星（交流程圖圖片）：讀進來，「逐關加總」才會和闖關基地那張卡一樣 */
+        state.imgUnits = (mods.flowchart && mods.flowchart.imgUnits) || {};
+        /* 退件原因：老師在「繳交審核」寫的，這一頁讀出來告訴學生要補件 */
+        state.imgReview = (mods.flowchart && mods.flowchart.imgReview) || {};
+        // 前導教材：hub 也讀同一個 modules.list
+        state.leadDone = !!(mods.list && mods.list.status === 'pass');
+      }catch(e){ console.error('讀進度失敗',e); }
+    }
+
+    /* 前導教材通過：由 whatislist.html（嵌在下面的 iframe）用 postMessage 通知。
+       那一頁刻意不碰 Firebase——它沒有學生身分，寫進度是這一頁的事。 */
+    window.addEventListener('message', async e=>{
+      if(e.origin !== location.origin) return;                 // 只收自己站台的訊息
+      const d = e.data;
+      if(!d || d.type !== 'lead-done' || d.module !== 'list') return;
+      if(!state.studentId || state.leadDone) return;
+      state.leadDone = true;                                   // 先更新畫面，不讓學生空等
+      state.leadMsg = '';
+      render();
+      try{
+        await setDoc(doc(db, COLLECTION, state.studentId), {
+          modules: { list: { status:'pass', at: new Date().toISOString() } }
+        }, { merge:true });
+      }catch(err){
+        console.error('前導完成寫入失敗', err);
+        state.leadDone = false;
+        state.leadMsg = '前導教材的完成紀錄沒存進去（可能是網路問題）。請重新整理再試一次，若還是不行請找老師。';
+        render();
+      }
+    });
+    async function autoLogin(sid){
+      state.studentId = sid;
+      try{
+        const r = await getDoc(doc(db, ROSTER, sid));
+        if(r.exists()) state.studentName = (r.data() || {}).name || '';
+      }catch(e){}
+      await loadProgress(sid);
+      state.status='menu'; render();
+    }
+    // 程式設計階段：測驗從題庫「5 選 3」，全對才算通過（通過才解鎖程式截圖）
+    const QUIZ_PICK = 3;
+    function newQuizSet(u){ return shuffle([...(PROG[u.id].quiz||[])]).slice(0, QUIZ_PICK); }
+    function startProgram(){
+      if(!state.unit) return;
+      state.quizSet = newQuizSet(state.unit);
+      state.qIdx=0; state.qPicked=null; state.qScore=0; state.quizPassed=false; state.qPulled=false;
+      state.status='program'; render();
+    }
+    /* 作答只重畫測驗那一塊（全對時再加畫截圖區）：整頁 render() 會讓教學影片從頭開始、
+       評分結果消失。找不到那一塊才退回整頁重繪。 */
+    function quizRedraw(){
+      const box = document.getElementById('quiz-box');
+      if(!box){ render(); return; }
+      box.innerHTML = quizAreaHTML();
+      const im = document.getElementById('prog-imgs');
+      if(im && state.unit && PROG[state.unit.id]) im.innerHTML = progImgsHTML(PROG[state.unit.id]);
+    }
+    function retryQuiz(){                      // 沒全對 → 重新抽 3 題再來
+      state.quizSet = newQuizSet(state.unit);
+      state.qIdx=0; state.qPicked=null; state.qScore=0; state.qPulled=false; quizRedraw();
+    }
+    function pickAns(i){
+      if(state.qPicked!=null) return;
+      state.qPicked=i;
+      const q=state.quizSet[state.qIdx];
+      if(i===q.a) state.qScore++;
+      quizRedraw();
+    }
+    function nextQ(){
+      state.qIdx++; state.qPicked=null;
+      if(state.qIdx>=state.quizSet.length && state.qScore===state.quizSet.length) state.quizPassed=true;
+      quizRedraw();
+    }
+    /* 程式截圖區（鎖住／已解鎖）。從 render 搬出來：測驗全對時只重畫這一塊。 */
+    function progImgsHTML(p){
+      return p.imgs&&p.imgs.length?(state.quizPassed
+                    ? `<div><div class="text-xs font-black text-orange-500 mb-2">🖼️ 程式截圖／範例　<span class="text-emerald-600">（已解鎖）</span><span class="text-slate-400 font-bold ml-1">・點圖可放大</span></div><div class="grid gap-2 ${p.imgs.length>1?'sm:grid-cols-2':''}" data-zoomgroup>${p.imgs.map(src=>`<img src="${src}" class="rounded-lg border border-slate-200 w-full zoomable" data-zoom loading="lazy" alt="程式截圖">`).join('')}</div></div>`
+                    : `<div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-5 text-center">
+                         <div class="text-3xl mb-1">🔒</div>
+                         <div class="text-sm font-black text-slate-600">程式截圖／範例尚未解鎖</div>
+                         <div class="text-xs text-slate-500 mt-1">先看完影片，完成下方的<b>自我檢核測驗（${QUIZ_PICK} 題全對）</b>就會顯示。</div>
+                       </div>`):'';
+    }
+    /* 自我檢核測驗的那一塊（從 render 搬出來，離開／回來時只重畫這一塊）。 */
+    function quizAreaHTML(){
+      const total=(state.quizSet||[]).length; const q=(state.quizSet||[])[state.qIdx];
+      if(state.qPulled && quizLive()){
+        return `<div id="quiz-pulled" class="cursor-pointer text-center py-8">
+                  <div class="text-3xl mb-2">👀</div>
+                  <p class="font-black text-slate-500">題目先收起來了</p>
+                  <p class="text-sm text-slate-400 mt-1">你切到別的視窗去了。回到這個畫面（或點一下這裡），會換一題新的給你。</p>
+                </div>`;
+      }
+      return state.qIdx>=total
+        ? (state.qScore===total
+          ? `<div class="text-center py-4">
+               <div class="text-4xl mb-2">🎉</div>
+               <p class="font-black text-emerald-700 text-lg">全對！${total} / ${total} 通過檢核</p>
+               <p class="text-sm text-slate-500 mt-1">已解鎖上方的<b>程式截圖／範例</b>，可以對照著實作了。</p>
+               <p class="text-sm font-bold text-emerald-700 mt-3 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">👉 寫好程式後，${!WORK ? '照<b>右邊「繳交你的作品」</b>的說明交出 .sb3' : '到<b>右邊的「程式評分」</b>上傳 .sb3 就能拿星星'}</p>
+             </div>`
+          : `<div class="text-center py-4">
+               <div class="text-4xl mb-2">🤔</div>
+               <p class="font-black text-amber-700 text-lg">答對 ${state.qScore} / ${total}，還要再加油！</p>
+               <p class="text-sm text-slate-500 mt-1">要<b>全部答對</b>才能解鎖程式截圖。回去看看影片，再挑戰一次吧！</p>
+               <button id="retry-quiz" class="mt-4 bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-3 rounded-xl transition">🔄 換 ${total} 題再挑戰</button>
+             </div>`)
+        : `<div class="text-xs text-slate-400 mb-2">第 ${state.qIdx+1} / ${total} 題</div>
+           <p class="font-bold text-slate-800 mb-3">${q.q}</p>
+           <div class="space-y-2">
+             ${q.o.map((opt,i)=>{
+               let cls='bg-white border-slate-200 hover:border-orange-300';
+               if(state.qPicked!=null){ if(i===q.a) cls='bg-emerald-50 border-emerald-400 text-emerald-700'; else if(i===state.qPicked) cls='bg-red-50 border-red-400 text-red-700'; else cls='bg-white border-slate-200 opacity-60'; }
+               return `<button data-ans="${i}" class="ans-btn w-full text-left border-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${cls}">${opt}</button>`;
+             }).join('')}
+           </div>
+           ${state.qPicked!=null?`<div class="mt-3 text-right"><button id="next-q" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 py-2 rounded-lg transition">${state.qIdx<total-1?'下一題 →':'看結果 →'}</button></div>`:''}`;
+    }
+    /* ── 作答中離開畫面 ⇒ 收題、回來換一題 ──
+       和章節測驗（quiz-engine.js 的 QUIZ_SWAP_ON_LEAVE）、記憶補給站同一個做法：
+       ‧ 離開（切分頁、切視窗、並列視窗焦點跑掉）⇒ **題目文字立刻從網頁裡拿掉**
+         （拿掉而不只是蓋住：瀏覽器的 AI「詢問這個網頁」讀的是網頁文字）。
+       ‧ 回來 ⇒ 換成這一輪沒有的題目，離開時查到的答案對新題目沒用。
+       ⚠️ 不扣分、不算答錯 —— 誤判（跳通知、切輸入法）的代價只是換一題。
+       ⚠️⚠️ 這一頁有兩個 iframe（教學影片、右邊的評分站）。點進去時視窗也會 blur，
+          但那不是離開 —— 影片本來就是要看的。⇒ blur 之後等一拍再看
+          document.activeElement：焦點跑進自己頁面的 iframe 時，它就是那個 iframe。
+          ⛔ 不用 hasFocus()：有些環境（內嵌瀏覽器、看板模式）它永遠回 false。
+       ⚠️⚠️ 只重畫測驗那一塊（paintQuizBox），**不可以 render()**：
+          整頁重繪會把評分站 iframe 一起換掉 —— 學生切去 Scratch 存檔、
+          回來時如果評分正在跑，結果就沒了。
+       ★ 只在「題目顯示中、還沒作答」時收：已經公布對錯的那一題、結果畫面都不收。 */
+    function quizLive(){
+      return state.status==='program' && state.qPicked==null
+          && state.qIdx < (state.quizSet||[]).length;
+    }
+    /** 換題：先從題庫裡「這一輪沒有的」挑；都用過了才退而求其次挑「不是這一題」的。 */
+    function swapPick(bank, set, cur){
+      let c = (bank||[]).filter(x => (set||[]).indexOf(x) < 0);
+      if(!c.length) c = (bank||[]).filter(x => x !== cur);
+      return c.length ? c[Math.floor(Math.random()*c.length)] : cur;
+    }
+    function paintQuizBox(){
+      const box = document.getElementById('quiz-box');
+      if(box) box.innerHTML = quizAreaHTML();
+    }
+    function pullQuiz(){
+      if(state.qPulled || !quizLive()) return;
+      state.qPulled = true;
+      paintQuizBox();
+    }
+    function backQuiz(){
+      if(!state.qPulled) return;
+      state.qPulled = false;
+      if(quizLive() && state.unit && PROG[state.unit.id]){
+        const cur = state.quizSet[state.qIdx];
+        state.quizSet[state.qIdx] = swapPick(PROG[state.unit.id].quiz, state.quizSet, cur);
+      }
+      paintQuizBox();
+    }
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden) pullQuiz(); else backQuiz(); });
+    window.addEventListener('blur', ()=>{
+      setTimeout(()=>{
+        const a = document.activeElement;
+        if(a && a.tagName === 'IFRAME') return;       // 點進影片／評分站，不是離開
+        pullQuiz();
+      }, 0);
+    });
+    window.addEventListener('focus', backQuiz);
+    /* 登出：清掉登入紀錄、回闖關基地（整頁重載，上一個人的狀態自然歸零） */
+    function logout(){
+      sessionStorage.removeItem(SAVED_KEY);
+      const hub = (window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html';
+      location.replace(hub);
+    }
+
+    // ===== 遊戲邏輯 =====
+    function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+    function startUnit(u){
+      if(!u) return;
+      clearTimers();
+      state.unit=u; state.status='read'; state.refOpen=false; state.graderOpen=false;
+      state.readLeft=readSecondsFor(u); state.hintUsed=false;   // 每關重新計時、提示機會重置
+      render();
+    }
+    /* 停計時器一律走 clearTimers()，不要在各處自己動內部變數 */
+    function beginSelect(){ clearTimers(); const u=state.unit; state.candidates=buildCandidates(u); state.selected={}; state.selMsg=''; state.status='select'; render(); }
+    function toggleSelect(step){ state.selected[step]=!state.selected[step]; state.selMsg=''; render(); }
+    function confirmSelect(){
+      const chosen = Object.keys(state.selected).filter(s=>state.selected[s]);
+      const need = state.unit.steps;
+      const missing = need.filter(s=>!state.selected[s]).length;
+      const extra = chosen.filter(s=>!need.includes(s)).length;
+      if(missing===0 && extra===0){ state.placed=[]; state.pool=shuffle(need); state.mistakes=0; state.status='play'; render(); return; }
+
+      // 選錯：用掉一次機會，三次用完就退回重新閱讀
+      state.selTries++;
+      const left = SELECT_TRIES - state.selTries;
+      if(left <= 0){
+        clearTimers();
+        state.status='read'; state.readLeft=readSecondsFor(state.unit); state.hintUsed=false; state.hintLeft=0; state.selTries=0;
+        state.selMsg='';
+        render();
+        setTimeout(()=>alert('三次都沒挑對，先回去把步驟再讀一次，我們再來一次！'), 50);
+        return;
+      }
+      state.selMsg = `再想想～${missing?`還少了 ${missing} 個需要的步驟`:''}${missing&&extra?'、':''}${extra?`多選了 ${extra} 個用不到的`:''}。還有 ${left} 次機會，用完要回去重讀喔！`;
+      render();
+    }
+    function pickStep(idx){
+      const step = state.pool[idx];
+      const nextCorrect = state.unit.steps[state.placed.length];
+      if(step === nextCorrect){
+        state.placed.push(step);
+        state.pool.splice(idx,1);
+        if(state.placed.length === state.unit.steps.length) finishUnit();
+        else render();
+      } else {
+        state.mistakes++;
+        // 錯誤次數超過待排積木總數 → 退回重新閱讀
+        if(state.mistakes > state.unit.steps.length){
+          clearTimers();
+          state.status='read'; state.readLeft=readSecondsFor(state.unit); state.hintUsed=false; state.hintLeft=0;
+          state.selTries=0; state.selMsg=''; state.mistakes=0;
+          render();
+          setTimeout(()=>alert('排錯太多次了，先回去把流程再讀一次，等一下就會順很多！'), 50);
+          return;
+        }
+        render();
+        setTimeout(()=>{ const el=document.getElementById('pool'); if(el){ el.classList.add('shake'); setTimeout(()=>el.classList.remove('shake'),300);} }, 0);
+      }
+    }
+    async function finishUnit(){
+      const already = !!state.done[state.unit.id];
+      state.done[state.unit.id]=true;
+      state.status='clear'; render();
+      if(!already){
+        const count = Object.keys(state.done).length;
+        const now = Date.now();
+        try{
+          await setDoc(doc(db, COLLECTION, state.studentId), {
+            studentId: state.studentId,
+            modules: { flowchart: { status: count>=UNITS.length?'pass':'in-progress', level: count, stars: window.GRADING.flowchartStars(count), source:'auto', units: arrayUnion(state.unit.id), updatedAt: now } },
+            history: arrayUnion({ module:'flowchart', unit: state.unit.id, at: now, stars: STARS_PER_UNIT }),
+            updatedAt: now
+          }, { merge:true });
+        }catch(e){ console.error('回報失敗',e); }
+      }
+    }
+
+    /* ── 🌟 晨星勇者（十關都通關之後開放的獎勵遊戲）──────────
+       ★ 開放條件：GRADING.GATE.cleared（流程圖排對；有接評分服務再加上作品 ≥ 2⭐），
+         判斷寫在 shared/gamesave.js 的 GAMESAVE.unlocked —— 遊戲頁自己也用同一支再查一次，
+         直接貼網址進去一樣擋得住。
+       ★ 不算星：遊戲紀錄存在 games.morningstar，不在 modules 底下。 */
+    function morningstarCard(){
+      const G = window.GAMESAVE;
+      if(!G) return '';
+      const g = G.unlocked(UNITS, state.done, state.progStars, GATE);
+      if(g.ok){
+        return `<a id="go-morningstar" href="morningstar.html" class="block mt-6 rounded-2xl p-5 pop no-underline"
+             style="background:linear-gradient(135deg,#1e1b4b,#312e81);border:2px solid #facc15;color:#fef3c7">
+          <div class="flex items-center gap-4">
+            <div class="text-4xl flex-shrink-0">🌟</div>
+            <div class="flex-1">
+              <div class="text-xs font-black tracking-widest text-amber-300">十關全部完成 · 獎勵關卡</div>
+              <div class="text-xl font-black">晨星勇者</div>
+              <div class="text-sm opacity-90 leading-relaxed">一趟約二十分鐘的冒險。背包是一份清單、怪物會分身 ——
+                你學過的程式觀念全都藏在裡面。不計星，進度存在你自己的帳號。</div>
+            </div>
+            <div class="font-black text-amber-300 flex-shrink-0">出發 →</div>
+          </div>
+        </a>`;
+      }
+      return `<div id="morningstar-locked" class="mt-6 rounded-2xl p-5 border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500">
+          <div class="flex items-center gap-4">
+            <div class="text-4xl flex-shrink-0">🔒</div>
+            <div class="flex-1">
+              <div class="text-xs font-black tracking-widest">獎勵關卡</div>
+              <div class="text-lg font-black text-slate-600">🌟 晨星勇者</div>
+              <div class="text-sm leading-relaxed">十關都通關（${!WORK ? '流程圖都排對' : '流程圖排對、程式拿到 2⭐ 以上'}）就會開放。目前 <b>${g.done} / ${g.total}</b> 關。</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ===== 畫面 =====
+    /* render() 用 innerHTML 換掉整個畫面：換狀態時要捲回頂端，不然看到的是新畫面的中段。
+       ⚠️ 只有**換狀態**時才捲。同一個畫面內的重繪（答一題、開合教材面板）
+          也捲回頂端的話會更煩 —— 學生每答一題就被拉回最上面。
+       ⚠️ 用 instant 不用 smooth：畫面才剛被 innerHTML 整個換掉，
+          再疊一段平滑捲動，看起來是兩件事在打架。 */
+    let _lastStatus = null;
+    function render(){
+      paintView();
+      if(state.status !== _lastStatus){
+        _lastStatus = state.status;
+        try{ window.scrollTo({ top:0, behavior:'auto' }); }catch(e){ window.scrollTo(0,0); }
+      }
+    }
+
+    function paintView(){
+      const el=document.getElementById('app');
+      /* ⚠️ 逾時不再換成登入畫面，只補一行「比較慢」的提示。
+         換畫面會讓學生以為要重新登入，而那個登入頁根本沒有功能。 */
+      if(state.status==='loading'){ el.innerHTML=`<div class="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-500 font-bold text-lg"><div>系統連線中…</div>${state.slowNote?`<div class="text-sm text-slate-400 font-normal">${state.slowNote}</div>`:''}</div>`; return; }
+
+
+      if(state.status==='menu'){
+        const doneCount = Object.keys(state.done).length;
+        // 程式設計：由評分星數認定（0 星不算通關）
+        const progStarTotal = Object.values(state.progStars||{}).reduce((a,b)=>a+(Number(b)||0),0);
+        const progDoneCount = Object.values(state.progStars||{}).filter(v=>Number(v)>0).length;
+        /* 加分星要一起顯示，否則交過作業的學生會看到
+           「闖關基地 55⭐、點進來 45⭐」——同一份成績兩個數字。
+           ★ 算法走 GRADING.bonusStars（和 hub、教師端同一支）。 */
+        const bonusAll = (window.GRADING ? window.GRADING.bonusStars(state.imgUnits,'img') : 0);
+        const grand = doneCount*STARS_PER_UNIT + progStarTotal + bonusAll;
+        /* ── 關卡小卡 ─────────────────────────────────────────
+              ① 標籤列：第 N 關 · 代號
+              ② 標題 ＋ 完整說明（desc，不截斷）
+              ③ 右側兩軌星星，各自一列（🧩 流程圖／🐱 程式）
+              ④ 底部一句「現在該做什麼」
+              ⑤ 流程圖排完之後的捷徑：「直接去程式設計」「流程圖代碼」 */
+        const cards = UNITS.map(u=>{
+          const done = !!state.done[u.id];
+          const c = COLORS[u.color] || COLORS.purple;
+          const st = Number((state.progStars||{})[u.id]||0);
+          const both = WORK ? (done && st >= 2) : done;   // 兩軌都完成（程式要 2⭐ 以上；沒有作品星就只看流程圖）
+          /* 外框：完成的關卡給綠框＋光暈 */
+          const shell = both
+              ? 'bg-white border-emerald-300 ring-2 ring-emerald-100 shadow-sm hover:shadow-lg hover:-translate-y-1'
+              : 'bg-white border-slate-200 shadow-sm hover:border-purple-300 hover:shadow-lg hover:-translate-y-1';
+          /* 兩軌各一列。★ 右對齊成一欄，一眼看得出「這一關拿了幾顆」。 */
+          const track = (icon, label, on, txt, cls) =>
+            `<span class="block text-sm font-black whitespace-nowrap ${on?cls:'text-slate-300'}" title="${label}">${icon} ${txt}</span>`;
+          /* 星數一律由實際星數產生（排對 2 顆＋交圖加分 1 顆），「逐關加總 ＝ 闖關基地卡片上的數字」 */
+          const bar = (n, cap) => '★'.repeat(Math.max(0,n)) + '☆'.repeat(Math.max(0,cap-n));
+          const imgOn = !!(state.imgUnits||{})[u.id];
+          /* 退件（已經給分的就不算退件 —— 老師給分時會一併清掉，這裡再保險一次） */
+          const imgRej = !imgOn && (state.imgReview||{})[u.id];
+          const flowSt = done ? STARS_PER_UNIT + (imgOn?B_IMG:0) : 0;
+          const flowTxt = bar(flowSt, STARS_PER_UNIT + B_IMG);
+          /* 底部那一句：講「現在該做什麼」，不是講狀態。
+             ⚠️ 三種狀態三句話 —— 學生看的是下一步，不是形容詞。 */
+          /* 話要講「還差什麼」；2⭐ 也算兩軌完成，但「直接去程式設計」按鈕要一直在，讓他能挑戰 3⭐ */
+          const nextLine = (WORK && both && st < 3) ? '✅ 兩軌都完成了 —— 程式還有 3⭐ 可以拿，再傳一次就好'
+            : (!WORK && both) ? '✅ 流程圖完成了 —— 記得把程式作品交給老師'
+            : both ? '✅ 兩軌都完成了，點進去可以重做'
+            : done ? '🐱 流程圖排好了 —— 接著去寫程式'
+                   : '👉 點進去排流程圖';
+          return `
+            <button data-unit="${u.no}" class="unit-btn c-${u.color} text-left rounded-2xl border-2 ${shell} transition p-4 relative overflow-hidden">
+              <span class="absolute right-3 top-2 text-5xl font-black text-slate-900/5 select-none pointer-events-none">${String(u.no).padStart(2,'0')}</span>
+              <div class="flex items-start gap-3">
+                <div class="w-12 h-12 rounded-2xl ${c.split(' ').slice(0,2).join(' ')} flex items-center justify-center text-2xl flex-shrink-0 border ${c.split(' ')[2]}">${u.icon}</div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-[11px] text-slate-400 font-mono">第 ${u.no} 關 · ${u.id}</div>
+                  <div class="font-black text-lg leading-tight">${u.title}</div>
+                </div>
+                <div class="text-right flex-shrink-0 relative">
+                  ${track('🧩','流程圖：排對 +'+STARS_PER_UNIT+'⭐'+(imgOn?'，交圖加分 +'+B_IMG+'⭐':'，最後一顆是交圖加分'),done,flowTxt,'text-emerald-500')}
+                  ${!WORK ? '' : track('🐱','程式設計：和範例比對，最多 3⭐',st>0,bar(st,3),'text-amber-500')}
+                </div>
+              </div>
+              <p class="mt-2 text-sm leading-relaxed text-slate-600">${u.desc || u.subtitle || ''}</p>
+              <p class="mt-3 text-xs font-bold ${both?'text-emerald-600':'text-purple-600'}">${nextLine}</p>
+              ${[imgRej ? ['🖼️ 流程圖圖片', imgRej] : null].filter(Boolean).map(([lab, r]) =>
+                `<div class="mt-2 text-xs leading-relaxed bg-rose-50 border border-rose-300 text-rose-800 rounded-lg px-2.5 py-1.5">
+                   ↩️ <b>老師看過你的${lab}，還差一點：</b>${esc(r.reason||'')}
+                   <span class="block text-rose-600">改好之後到 Google Classroom${r.work?'「'+esc(r.work)+'」':'的這份作業'}重新繳交，老師會再看一次。</span>
+                   <span class="block text-rose-500 text-[11px] mt-0.5">（已經重新繳交了嗎？這段話要等老師再看過、給分之後才會消失，不用重複上傳。）</span>
+                 </div>`).join('')}
+              ${done?`<span data-prog="${u.no}" class="go-prog inline-block mt-2 text-[11px] font-black ${st>=3?'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300':'bg-orange-500 hover:bg-orange-600 text-white'} px-2.5 py-1 rounded-full transition">${
+                st===0 ? '🐱 直接去程式設計 →'
+                : st<3 ? '🐱 再傳一次，挑戰 '+(st+1)+' 星 →'
+                       : '🐱 再去程式設計'}</span>`:''}
+              ${done?`<span data-mmd="${u.no}" class="go-mmd inline-block mt-2 ml-2 text-[11px] font-black bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-300 px-2.5 py-1 rounded-full transition" title="排對過就隨時看得到，不用重排">🧜 流程圖代碼</span>`:''}
+            </button>`;
+        }).join('');
+        el.innerHTML = `
+          <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+            <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6 relative pop">
+              <span class="tape"></span>
+              <!-- 登出由「闖關基地」統一處理，這裡不再提供 -->
+              <div class="text-sm text-purple-600 font-bold mb-1">🧩 流程圖與程式設計${state.studentName?`　${state.studentName}`:''}</div>
+              <h1 class="text-xl sm:text-2xl font-black leading-relaxed">
+                <span class="block sm:inline text-emerald-600">🧩 流程圖完成 ${doneCount} / ${UNITS.length} 關　<span class="text-amber-500 text-lg">共 ${doneCount*STARS_PER_UNIT}⭐</span></span>
+                <span class="text-slate-300 mx-1 hidden sm:inline">|</span>
+                <span class="block sm:inline text-orange-600">🐱 程式設計完成 ${progDoneCount} / ${UNITS.length} 關　<span class="text-amber-500 text-lg">共 ${progStarTotal}⭐</span></span>
+              </h1>
+              <p class="text-sm font-bold mt-1">
+                🎁 老師審核加分 <span class="text-amber-500">${bonusAll}⭐</span>
+                <span class="text-slate-400 font-normal">（交流程圖圖片 +${B_IMG}，每關一次）</span>
+                　｜　合計 <span class="text-amber-500 text-lg">${grand}⭐</span>
+                <span class="text-slate-400 font-normal">＝ 闖關基地那張卡的數字</span>
+              </p>
+              <p class="text-slate-500 text-sm mt-1"><b class="text-purple-600">十關全部開放</b>，順序自己決定：排流程圖(+${STARS_PER_UNIT}⭐) → ${WORK ? '寫 Scratch 上傳評分（最多 3⭐）' : '寫 Scratch，作品交給老師'}。看不懂先讀 <a href="reference.html" class="text-purple-600 underline font-bold">參考說明</a>。</p>
+            </header>
+            ${(()=>{ /* 有退件就在最上面講，不要讓他一關一關翻才發現 */
+              const n = UNITS.filter(u => !(state.imgUnits||{})[u.id] && (state.imgReview||{})[u.id]).length;
+              return n ? `<div class="bg-rose-50 border-2 border-rose-300 rounded-2xl px-4 py-3 mb-4 flex items-start gap-3">
+                <span class="text-2xl flex-shrink-0">↩️</span>
+                <div class="flex-1 text-sm text-rose-800 leading-relaxed"><b>老師已經看過你交的作業，有 ${n} 關需要補件。</b>
+                  下面標了「還差一點」的關卡寫著原因，改好之後到 Google Classroom 重新繳交就可以拿到加分⭐。</div>
+              </div>` : ''; })()}
+            ${state.leadMsg?`<div class="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3 mb-4 text-sm text-amber-800 leading-relaxed pop">⚠️ ${state.leadMsg}</div>`:''}
+            <div class="border-2 ${state.leadDone?'border-teal-200':'border-teal-400 ring-4 ring-teal-100'} rounded-2xl overflow-hidden mb-6 shadow-sm">
+              <button id="toggle-lead" class="w-full flex items-center justify-between gap-2 bg-teal-50 hover:bg-teal-100 px-4 py-3 text-left transition">
+                <span class="flex items-center gap-3"><span class="text-2xl">${state.leadDone?'✅':'🔰'}</span><span>
+                  <span class="text-sm font-black text-teal-700">前導教材：${LEAD.title}　${state.leadDone?'<span class="text-emerald-600">已通過</span>':'<span class="text-rose-600">建議先完成</span>'}</span>
+                  <span class="block text-xs text-teal-600 leading-snug">${state.leadDone?'隨時可以回來複習清單積木。':'十關都會用到清單積木：先走完清單特訓、考過結業測驗（3 題全對）再開始闖關。'}</span>
+                </span></span>
+                <span class="text-teal-600 font-black flex-shrink-0 whitespace-nowrap">${state.leadOpen?'▾ 收合':'▸ 展開'}</span>
+              </button>
+              ${state.leadOpen?`<iframe src="${LEAD.href}${state.leadDone?'?done=1':''}" class="w-full block bg-white" style="height:72vh;border:0" title="${LEAD.title}" loading="lazy"></iframe><div class="text-[11px] text-slate-400 px-3 py-1.5 text-center bg-teal-50">前導教材已嵌在此，${state.leadDone?'看完往下繼續闖關':'考過結業測驗就會自動記錄完成'}</div>`:''}
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${cards}</div>
+            ${morningstarCard()}
+          </div>`;
+        return;
+      }
+
+      if(state.status==='read'){
+        const u=state.unit; const c=COLORS[u.color]||COLORS.purple;
+        el.innerHTML = `
+          <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+            <div class="flex items-center justify-between mb-4">
+              <button id="back-menu" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs text-slate-400">第 ${u.no} 關 · 先閱讀資料</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden pop">
+              <div class="p-5 flex items-center gap-4 border-b border-slate-100">
+                <div class="w-16 h-16 rounded-2xl ${c.split(' ').slice(0,2).join(' ')} flex items-center justify-center text-3xl flex-shrink-0 border ${c.split(' ')[2]}">${u.icon}</div>
+                <div>
+                  <div class="text-xs text-slate-400 font-mono">${u.id}</div>
+                  <h2 class="text-2xl font-black leading-tight">${u.title}</h2>
+                  <div class="text-sm text-slate-500">${u.subtitle}</div>
+                </div>
+              </div>
+              <div class="p-6 sm:p-8">
+                <div class="text-sm font-black text-indigo-500 mb-2">📖 情境說明</div>
+                <p class="text-lg sm:text-xl text-slate-800 leading-loose mb-6 bg-indigo-50/60 border-l-4 border-indigo-300 rounded-r-xl px-4 py-3">${mark(u.desc)}</p>
+
+                <div class="text-sm font-black text-purple-500 mb-3">🧩 完成步驟（先讀懂，等一下要自己挑出來）</div>
+                <ol class="space-y-3">
+                  ${u.details.map((d,i)=>`<li class="flex gap-3 items-start text-lg sm:text-xl text-slate-800 bg-white border border-slate-100 rounded-xl px-3 py-2.5 shadow-sm"><span class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-700 text-base font-black flex items-center justify-center mt-0.5">${i+1}</span><span class="leading-loose">${mark(d)}</span></li>`).join('')}
+                </ol>
+                <p class="text-xs text-slate-400 mt-4">💡 <span class="hl">黃色</span>是關鍵動作、<span class="hl-b">藍色</span>是數量，等一下挑元件時就靠它們判斷。</p>
+                ${refPanel(u)}
+              </div>
+            </div>
+            ${state.readLeft > 0
+              ? `<button id="begin-sel" disabled class="mt-5 w-full bg-slate-300 text-white font-bold text-lg py-3 rounded-xl cursor-not-allowed transition">請先仔細閱讀…（還要 ${state.readLeft} 秒）</button>`
+              : `<button id="begin-sel" class="mt-5 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-lg py-3 rounded-xl active:scale-95 transition">我讀完了，開始闖關 →</button>
+                 ${state.done[u.id] ? `<p class="text-xs text-emerald-600 font-bold mt-2 text-center">✓ 這一關你已經排對過了，不用再等 ${READ_SECONDS} 秒</p>` : ''}`}
+            <p class="text-xs text-slate-400 mt-3 text-center">先把上面的步驟讀懂，等一下要自己挑出正確的元件　·　也可對照 <a href="reference.html" class="text-purple-600 underline">完整參考說明</a></p>
+          </div>`;
+        startReadCountdown();
+        return;
+      }
+
+      if(state.status==='select'){
+        const u=state.unit;
+        const chips = state.candidates.map((s,i)=>{
+          const on = !!state.selected[s];
+          return `<button data-sel="${i}" class="sel-chip text-left rounded-lg px-3 py-2.5 text-sm font-medium border-2 transition active:scale-95 ${on?'bg-purple-600 text-white border-purple-600':'bg-white border-slate-200 hover:border-purple-300'}">${on?'✓ ':''}${s}</button>`;
+        }).join('');
+        const chosenCount = Object.keys(state.selected).filter(s=>state.selected[s]).length;
+        el.innerHTML = `
+          <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+            <div class="flex items-center justify-between mb-4">
+              <button id="back-menu" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs text-slate-400">第 ${u.no} 關 · 步驟 1／2：選元件</div>
+            </div>
+            <div class="flex items-start gap-3 mb-5 pop">
+              <div class="text-3xl flex-shrink-0">🤖</div>
+              <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none shadow-sm p-4">
+                <p class="text-sm text-slate-700 leading-relaxed"><b>${u.title}</b>：${INTRO[u.id]||''}</p>
+                <p class="text-sm text-purple-700 font-bold mt-2">先想想：這個流程圖<u>需要哪些步驟</u>？把需要的選起來——裡面藏了幾個用不到的陷阱喔！</p>
+              </div>
+            </div>
+            <div class="flex items-center justify-end mb-2">
+              <button id="hint-btn" class="text-xs font-bold ${state.hintUsed?'bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300':'bg-amber-400 hover:bg-amber-500 text-white border-amber-500'} border px-3 py-1.5 rounded-full transition">${state.hintLeft>0?`💡 提示顯示中…${state.hintLeft} 秒`:(state.hintUsed?'📖 回上一步重新閱讀':'💡 提示（只有 1 次，顯示 10 秒）')}</button>
+            </div>
+            <div id="hint-box" class="${state.hintLeft>0?'':'hidden'} bg-amber-50 border-2 border-amber-300 rounded-xl p-4 mb-3">
+              <div class="text-xs font-black text-amber-700 mb-2">💡 這一關的完成步驟（10 秒後自動收起）</div>
+              <ol class="space-y-1.5">
+                ${u.details.map((d,i)=>`<li class="flex gap-2.5 items-start text-base sm:text-lg text-amber-900"><span class="flex-shrink-0 w-7 h-7 rounded-full bg-amber-200 text-amber-800 text-sm font-black flex items-center justify-center">${i+1}</span><span class="leading-relaxed">${mark(d)}</span></li>`).join('')}
+              </ol>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">${chips}</div>
+            ${state.selMsg?`<div class="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-3 py-2 mb-3">🤖 ${state.selMsg}</div>`:''}
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400">已選 ${chosenCount} 個　·　可確認 <b class="text-purple-600">${SELECT_TRIES - state.selTries}</b> / ${SELECT_TRIES} 次</span>
+              <button id="confirm-sel" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2.5 rounded-lg active:scale-95 transition">確認選擇，開始拼圖 →</button>
+            </div>
+            <p class="text-xs text-slate-400 mt-3 text-center">看不懂？先讀 <a href="reference.html" class="text-purple-600 underline">參考說明</a></p>
+          </div>`;
+        return;
+      }
+
+      if(state.status==='play'){
+        const u=state.unit;
+        /* 依「排到第幾步」給不同的一句話。
+           第一步最卡 —— 學生盯著十幾張卡片不知道從哪裡下手，
+           其實流程圖永遠從「開始」出發，那是規則不是答案。
+           之後就用「你已經排到 XXX 了」把注意力帶回前一步，
+           順序題真正要想的就是「做完這件事，接下來最合理的是什麼」。 */
+        const last = state.placed[state.placed.length-1];
+        const nudge = state.placed.length === 0
+          ? '👉 先找「開始」—— 每張流程圖都從它出發，最後以「結束」收尾。'
+          : (state.pool.length === 1
+              ? '👉 只剩最後一張了，把它放上去收尾吧。'
+              : `👉 已經排到「${last}」了。做完這一步之後，接下來最合理的是什麼？`);
+        const placedHtml = state.placed.map((s,i)=>`
+          <div class="pop">
+            <div class="flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 w-full">
+              <span class="w-5 h-5 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">${i+1}</span>
+              <span class="text-sm font-medium">${s}</span>
+            </div>
+            ${i<u.steps.length-1?'<div class="text-purple-300 text-center leading-none text-lg">↓</div>':''}
+          </div>`).join('');
+        /* 每張卡片附一句「這一步在做什麼」。
+           只有術語的話學生只能用猜的，猜錯還要扣次數 —— 那是考手氣不是考理解。
+           說明刻意不提順序，該想的還是要自己想。 */
+        const poolHtml = state.pool.map((s,i)=>{
+          const note = stepNote(s);
+          return `
+          <button data-pick="${i}" class="pick-btn text-left bg-white border-2 border-slate-200 hover:border-purple-400 rounded-lg px-3 py-2.5 shadow-sm active:scale-95 transition">
+            <div class="text-sm font-medium">${s}</div>
+            ${note?`<div class="text-xs text-slate-400 font-normal mt-1 leading-snug">${note}</div>`:''}
+          </button>`;
+        }).join('');
+        el.innerHTML = `
+          <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+            <div class="flex items-center justify-between mb-4">
+              <button id="back-menu" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs ${state.mistakes >= state.unit.steps.length ? 'text-red-500 font-bold' : 'text-slate-400'}">錯誤 ${state.mistakes} / ${state.unit.steps.length} 次（超過就要回去重讀）</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-5 pop">
+              <div class="text-xs text-purple-600 font-bold mb-1">第 ${u.no} 關</div>
+              <h2 class="text-xl font-black">${u.title} — 排出正確流程圖</h2>
+
+              <!-- ★ 這個程式到底要做什麼。
+                   原本這段只出現在前一頁的閱讀畫面，排列時就看不到了 ——
+                   等於要學生一邊回想目標一邊排順序。
+                   排序考的是「先後關係」，不是記憶力，所以目標一直放著。 -->
+              <div class="mt-3 bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+                <div class="text-xs font-black text-purple-700 mb-1">🎯 這個程式要做什麼</div>
+                <p class="text-sm text-purple-900/80 leading-relaxed">${u.desc}</p>
+              </div>
+
+              <!-- 排到哪裡就提示到哪裡。不說答案，只把「現在該想什麼」講清楚。 -->
+              <p class="text-slate-600 text-sm mt-3 font-medium">${nudge}</p>
+              <p class="text-slate-400 text-xs mt-1">每張卡片下面那行灰字，是這一步在做什麼 —— 看懂了再決定它該排在哪。</p>
+
+              <details class="mt-3">
+                <summary class="cursor-pointer text-xs font-bold text-slate-500 hover:text-purple-600">📖 再看一次這一關的重點</summary>
+                <ul class="mt-2 space-y-1 text-xs text-slate-500 leading-relaxed list-disc list-inside">
+                  ${(u.details||[]).map(d=>`<li>${d}</li>`).join('')}
+                </ul>
+              </details>
+            </div>
+            <div class="mb-2 text-xs font-black text-purple-500">🧩 流程圖（${state.placed.length}/${u.steps.length}）</div>
+            <div class="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-4 mb-6 min-h-[80px]">
+              ${state.placed.length?placedHtml:'<div class="text-slate-400 text-sm text-center py-4">點下方步驟開始排列…</div>'}
+            </div>
+            <div class="text-xs font-black text-slate-500 mb-2">👇 選出下一步</div>
+            <div id="pool" class="grid grid-cols-1 sm:grid-cols-2 gap-2">${poolHtml||'<div class="text-emerald-600 font-bold">全部排完了！</div>'}</div>
+          </div>`;
+        return;
+      }
+
+      /* 「再看一次流程圖代碼」——只給**排對過**的關卡，純檢視、不動進度。
+         ⚠️ 沒排過的關卡看不到：那等於直接給答案。 */
+      if(state.status==='mermaid'){
+        const u = state.mmdUnit;
+        el.innerHTML = `
+          <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 pop">
+              <div class="text-[11px] text-slate-400 font-mono">第 ${u.no} 關 · ${u.id}</div>
+              <h2 class="font-black text-2xl mb-1">${u.title}</h2>
+              <p class="text-sm text-slate-500 mb-4">
+                你已經排對過這一關的流程圖，程式碼隨時可以再拿 —— 不用重排。
+              </p>
+              ${mermaidPanel(u)}
+              <div class="flex flex-wrap gap-2">
+                <button id="back-menu2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-2.5 rounded-lg transition">回關卡列表</button>
+                <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-lg transition inline-flex items-center">🏠 回闖關基地</a>
+              </div>
+            </div>
+          </div>`;
+        return;
+      }
+      if(state.status==='clear'){
+        const u=state.unit;
+        const fc = u.steps.map((s,i)=>`<div class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">${i+1}</span><span class="text-sm">${s}</span></div>${i<u.steps.length-1?'<div class="text-purple-300 text-center leading-none">↓</div>':''}`).join('');
+        const doneCount = Object.keys(state.done).length;
+        el.innerHTML = `
+          <div class="max-w-xl mx-auto px-4 sm:px-6 py-10">
+            <div class="bg-white rounded-2xl border border-emerald-200 shadow-lg p-6 text-center pop">
+              <div class="text-5xl mb-2">🎉</div>
+              <h2 class="text-2xl font-black text-emerald-700 mb-1">流程圖完成！</h2>
+              <p class="text-slate-500 text-sm mb-4">${u.title}　獲得 <b class="text-amber-500">+${STARS_PER_UNIT}⭐</b>（累積 ${doneCount*STARS_PER_UNIT}⭐）</p>
+              <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 text-left space-y-1 mb-4">${fc}</div>
+
+              <!-- 把剛排好的流程圖變成 Mermaid 程式碼。
+                   排卡片排出來的是「順序」，但流程圖真正的重點是形狀有意義：
+                   圓角起訖、矩形處理、菱形判斷、平行四邊形輸入輸出。
+                   貼到 Mermaid 看到它長成正式的流程圖，那些形狀才會變成
+                   自己畫得出來的東西，而不只是課本上的圖。 -->
+              ${mermaidPanel(u)}
+              <div class="flex flex-wrap gap-2 justify-center">
+                <button id="to-program" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 py-2.5 rounded-lg transition">🐱 接著做程式設計 →</button>
+                <button id="back-menu2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-2.5 rounded-lg transition">回關卡列表</button>
+                <!-- 慶祝畫面的視線在正中央：出口放在他正在看的地方 -->
+                <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-lg transition inline-flex items-center">🏠 回闖關基地</a>
+              </div>
+            </div>
+          </div>`;
+        return;
+      }
+
+      if(state.status==='program'){
+        const u=state.unit; const p=PROG[u.id]; const c=COLORS[u.color]||COLORS.purple;
+        const total=(state.quizSet||[]).length; const q=(state.quizSet||[])[state.qIdx];
+        const quizArea = quizAreaHTML();
+        el.innerHTML = `
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+            <div class="flex items-center justify-between mb-4">
+              <!-- 這一頁的返回鍵同時會重讀進度，星數才會即時更新（不另設第二顆按鈕） -->
+              <button id="back-refresh" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs text-slate-400">第 ${u.no} 關 · 程式設計</div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+            <!-- 左：教材與檢核 -->
+            <div class="space-y-5">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden pop">
+              <div class="p-4 flex items-center gap-3 border-b border-slate-100">
+                <div class="w-12 h-12 rounded-xl ${c.split(' ').slice(0,2).join(' ')} flex items-center justify-center text-2xl flex-shrink-0 border ${c.split(' ')[2]}">${u.icon}</div>
+                <div><div class="text-[11px] text-emerald-600 font-bold">✓ 流程圖完成</div><h2 class="text-xl font-black leading-tight">${u.title} · 寫程式</h2></div>
+              </div>
+              <div class="p-4 space-y-4">
+                <div>
+                  <div class="text-xs font-black text-orange-500 mb-2">🎬 教學影片</div>
+                  ${videoHTML(u.id, p)}
+                </div>
+                <div id="prog-imgs">${progImgsHTML(p)}</div>
+                ${refPanel(u)}
+                <a href="https://scratch.mit.edu/projects/${p.project}" target="_blank" rel="noopener" class="block text-center bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition">🐱 打開 Scratch 專案，動手實作 →</a>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 pop">
+              <div class="text-xs font-black text-orange-500 mb-3">✅ 自我檢核測驗（從題庫抽 ${QUIZ_PICK} 題，<b class="text-emerald-600">全對</b>才解鎖程式截圖）</div>
+              <div class="text-[11px] text-slate-400 -mt-2 mb-3">作答中切到別的視窗，題目會先收起來，回來換一題（不扣分）。</div>
+              <div id="quiz-box">${quizArea}</div>
+            </div>
+            </div>
+
+            <!-- 右：程式評分（上傳 .sb3 → Apps Script 和範例比對給星；沒接評分服務就是「交給老師」） -->
+            ${GRADER_URL ? `
+            <div>
+              <div class="bg-white rounded-2xl border-2 border-orange-300 shadow-sm overflow-hidden pop">
+                <div class="bg-orange-50 px-4 py-3 border-b border-orange-200">
+                  <div class="text-sm font-black text-orange-800">🧪 程式評分（和範例比對）</div>
+                  <div class="text-[11px] text-orange-700 leading-snug mt-0.5">寫好之後在 Scratch 選「<b>檔案 → 下載到你的電腦</b>」，存成 <b>.sb3</b> 傳上來。<br>
+                    <b>90 分↑ 而且和範例一致 3⭐、75 分↑ 2⭐</b>；可以一直重傳，星數取最高、不會變低。</div>
+                </div>
+                <div class="p-4 space-y-3">
+                  <div class="text-sm">目前這一關：<b class="text-amber-600">${'★'.repeat(Number((state.progStars||{})[u.id])||0) || '還沒有星'}</b></div>
+                  <input id="work-file" type="file" accept=".sb3" class="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-orange-100 file:text-orange-800 file:font-bold">
+                  <button id="work-send" data-unit="${u.id}" data-no="${u.no}" class="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 text-white font-black py-2.5 rounded-lg transition">送出評分</button>
+                  <div id="work-result" class="text-sm leading-relaxed"></div>
+                </div>
+                <div class="p-3 border-t border-slate-100 flex flex-wrap gap-2 justify-center">
+                  <button id="back-refresh2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition">← 回關卡列表</button>
+                  <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition inline-flex items-center">🏠 回闖關基地</a>
+                </div>
+              </div>
+            </div>` : `
+            <div>
+              <div class="bg-white rounded-2xl border-2 border-orange-300 shadow-sm overflow-hidden pop">
+                <div class="bg-orange-50 px-4 py-3 border-b border-orange-200">
+                  <div class="text-sm font-black text-orange-800">📤 繳交你的作品</div>
+                  <div class="text-[11px] text-orange-700 leading-snug mt-0.5">寫好之後在 Scratch 選「<b>檔案 → 下載到你的電腦</b>」，存成 <b>.sb3</b>。</div>
+                </div>
+                <div class="p-4 text-sm text-slate-700 leading-relaxed space-y-3">
+                  <p>① 檔名請用 <b class="font-mono bg-slate-100 px-1 rounded">${String(window.CONFIG.unitNo(u.id)).padStart(2,'0')}_班級座號_姓名.sb3</b></p>
+                  <p>② 交到<b>老師指定的地方</b>（例如 Google Classroom 的這一關作業）。</p>
+                  <p class="text-[12px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">這個版本的程式作品由老師批改，不會在這裡自動評分。<br>十關都開著，可以照自己的順序做。</p>
+                </div>
+                <div class="p-3 border-t border-slate-100 flex flex-wrap gap-2 justify-center">
+                  <button id="back-refresh2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition">← 回關卡列表</button>
+                  <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition inline-flex items-center">🏠 回闖關基地</a>
+                </div>
+              </div>
+            </div>`}
+            </div>
+          </div>`;
+        wireGraderHeight();
+        return;
+      }
+
+      // （舊的獨立『評分』步驟已移除：評分改為程式設計頁右欄常駐）
+
+
+
+      /* 走到這裡＝state.status 是一個**沒有對應畫面**的值（不處理的話畫面會停住、按什麼都沒反應）。
+         ⇒ 一律退回關卡列表，並在主控台留一行。要防遞迴：已經是 menu 還走到這裡就停手。 */
+      if(state.status !== 'menu'){
+        console.warn('[flowchart] 認不得的畫面狀態：', state.status, '→ 退回關卡列表');
+        state.status = 'menu';
+        paintView();
+      }
+    }
+
+    // ===== 事件 =====
+    document.addEventListener('click', e=>{
+      if(e.target.closest('#logout')){ logout(); return; }
+      if(e.target.closest('#toggle-lead')){ state.leadOpen=!state.leadOpen; render(); return; }
+      if(e.target.closest('#toggle-ref')){ state.refOpen=!state.refOpen; render(); return; }
+      if(e.target.closest('#hint-btn')){
+        if(state.hintUsed){                    // 已用掉提示 → 退回上一步重新閱讀（重新計時 30 秒）
+          clearTimers();
+          state.status='read'; state.readLeft=readSecondsFor(state.unit); render();
+        }else{
+          showHint();                          // 第一次：顯示 10 秒
+        }
+        return;
+      }
+      // 流程圖已通關的關卡：點「直接去程式設計」跳過重排（必須放在 unit-btn 之前攔截）
+      /* 🧜 再看一次流程圖代碼 —— 純檢視，不碰進度也不重排。 */
+      const gm=e.target.closest('.go-mmd');
+      if(gm){
+        const no=+gm.dataset.mmd;
+        clearTimers(); state.mmdUnit=UNITS[no-1]; state.status='mermaid'; render(); return;
+      }
+      const gp=e.target.closest('.go-prog');
+      if(gp){
+        const no=+gp.dataset.prog;
+        clearTimers(); state.unit=UNITS[no-1]; state.refOpen=false; startProgram(); return;
+      }
+      const ub=e.target.closest('.unit-btn');
+      if(ub){
+        const no=+ub.dataset.unit;
+        startUnit(UNITS[no-1]); return;
+      }
+      if(e.target.closest('#begin-sel')){ beginSelect(); return; }
+      const sc=e.target.closest('.sel-chip'); if(sc){ toggleSelect(state.candidates[+sc.dataset.sel]); return; }
+      if(e.target.closest('#confirm-sel')){ confirmSelect(); return; }
+      const pk=e.target.closest('.pick-btn'); if(pk){ pickStep(+pk.dataset.pick); return; }
+      if(e.target.closest('#copy-mmd')){
+        const box = document.getElementById('mmd-code');
+        const btn = e.target.closest('#copy-mmd');
+        const txt = box ? box.textContent : '';
+        // 電腦教室的瀏覽器不一定給剪貼簿權限，失敗時退回「幫你選起來，自己按 Ctrl+C」
+        const ok = () => { btn.textContent = '✅ 複製好了，去貼上吧'; setTimeout(()=>{ btn.textContent='📋 複製程式碼'; }, 2500); };
+        const fallback = () => {
+          const r = document.createRange(); r.selectNodeContents(box);
+          const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+          btn.textContent = '已選取，請按 Ctrl+C';
+        };
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(txt).then(ok).catch(fallback);
+        } else { fallback(); }
+        return;
+      }
+      if(e.target.closest('#to-program')){ startProgram(); return; }
+      const ans=e.target.closest('.ans-btn'); if(ans){ pickAns(+ans.dataset.ans); return; }
+      if(e.target.closest('#next-q')){ nextQ(); return; }
+      if(e.target.closest('#quiz-pulled')){ backQuiz(); return; }
+      if(e.target.closest('#retry-quiz')){ retryQuiz(); return; }
+      if(e.target.closest('#back-refresh')){          // 從評分區回列表：先重讀進度，星數才會即時更新
+        clearTimers();
+        const btn=e.target.closest('#back-refresh'); if(btn){ btn.disabled=true; btn.textContent='更新中…'; }
+        loadProgress(state.studentId).finally(()=>{ state.status='menu'; render(); });
+        return;
+      }
+      if(e.target.closest('#back-menu')||e.target.closest('#back-menu2')||e.target.closest('#back-refresh2')){ clearTimers(); state.status='menu'; render(); return; }
+    });
+    document.addEventListener('input', e=>{
+    });
+
+
+    render();
+  </script>
+<!-- ── 程式截圖放大檢視 ────────────────────
+     ⚠️ 放在 body 最後、用事件委派 —— 卡片是 render() 用 innerHTML
+        重畫的，直接綁在 img 上的事件每次重畫都會不見。 -->
+<div id="imgBox" role="dialog" aria-modal="true" aria-label="放大檢視程式截圖">
+  <button id="zPrev" class="zBtn" aria-label="上一張">‹</button>
+  <img id="zImg" alt="程式截圖（放大）">
+  <button id="zNext" class="zBtn" aria-label="下一張">›</button>
+  <button id="zClose" class="zBtn" aria-label="關閉">×</button>
+  <div id="zHint"></div>
+</div>
+<script>
+/* 程式截圖的放大檢視。
+   ⚠️ 事件用**委派**：那些 img 是 render() 用 innerHTML 重畫出來的，
+      綁在元素上的事件每次重畫就沒了。
+   ⚠️ 不碰 localStorage（電腦教室有還原卡，而且這只是檢視狀態）。 */
+(function () {
+  'use strict';
+  var box = document.getElementById('imgBox');
+  var img = document.getElementById('zImg');
+  var hint = document.getElementById('zHint');
+  var btnPrev = document.getElementById('zPrev');
+  var btnNext = document.getElementById('zNext');
+  if (!box || !img) return;
+
+  var list = [], idx = 0, big = false, ox = 0, oy = 0, dragging = false, sx = 0, sy = 0;
+
+  function apply() {
+    img.classList.toggle('big', big);
+    img.style.transform = big
+      ? 'scale(2) translate(' + (ox / 2) + 'px,' + (oy / 2) + 'px)'
+      : 'none';
+  }
+  function show(i) {
+    if (!list.length) return;
+    /* ⚠️ 用取餘數而不是夾住邊界：兩張圖時按「下一張」要能繞回去，
+       不然學生會以為按鈕壞了。 */
+    idx = (i % list.length + list.length) % list.length;
+    img.src = list[idx];
+    big = false; ox = oy = 0; apply();
+    var many = list.length > 1;
+    btnPrev.style.display = many ? 'flex' : 'none';
+    btnNext.style.display = many ? 'flex' : 'none';
+    hint.textContent = (many ? (idx + 1) + ' / ' + list.length + '　' : '')
+      + '點圖片再放大一次　按 Esc 或點背景關閉';
+  }
+  function open(srcs, i) {
+    list = srcs; box.classList.add('on');
+    /* ⚠️ 開啟時鎖住背景捲動：手機上不鎖的話，手指一滑是整頁在動，
+       看起來像圖卡住了。關閉時一定要還原。 */
+    document.body.style.overflow = 'hidden';
+    show(i);
+  }
+  function close() {
+    box.classList.remove('on');
+    document.body.style.overflow = '';
+    img.removeAttribute('src');          // 放掉大圖，手機記憶體吃緊
+  }
+
+  /* 點縮圖 → 打開。⚠️ 同一組（同一關）的圖要一起帶進去才能左右切換。 */
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.matches || !t.matches('img[data-zoom]')) return;
+    var group = t.closest('[data-zoomgroup]');
+    var imgs = group ? Array.prototype.slice.call(group.querySelectorAll('img[data-zoom]')) : [t];
+    open(imgs.map(function (x) { return x.getAttribute('src'); }), imgs.indexOf(t));
+  });
+
+  btnPrev.addEventListener('click', function (e) { e.stopPropagation(); show(idx - 1); });
+  btnNext.addEventListener('click', function (e) { e.stopPropagation(); show(idx + 1); });
+  document.getElementById('zClose').addEventListener('click', close);
+
+  /* 點圖片本身 → 再放大一倍（積木上的字才看得清楚）；點背景 → 關閉。 */
+  img.addEventListener('click', function (e) {
+    e.stopPropagation();
+    big = !big; ox = oy = 0; apply();
+  });
+  box.addEventListener('click', function (e) { if (e.target === box) close(); });
+
+  /* 放大之後可以拖曳。⚠️ 滑鼠和觸控都要能用 —— 用 pointer 事件一次涵蓋。 */
+  img.addEventListener('pointerdown', function (e) {
+    if (!big) return;
+    dragging = true; sx = e.clientX - ox; sy = e.clientY - oy;
+    img.classList.add('dragging');
+    try { img.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  img.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    ox = e.clientX - sx; oy = e.clientY - sy; apply();
+  });
+  ['pointerup', 'pointercancel'].forEach(function (ev) {
+    img.addEventListener(ev, function () { dragging = false; img.classList.remove('dragging'); });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!box.classList.contains('on')) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') show(idx - 1);
+    else if (e.key === 'ArrowRight') show(idx + 1);
+  });
+})();
+</script>
+</body>
+</html>

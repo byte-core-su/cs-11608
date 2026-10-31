@@ -1,0 +1,1894 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧家居控制 微課程與互動模擬器｜NKNU 5016B</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Noto Sans TC"','system-ui','sans-serif'] },
+                    colors: {
+                        primary: '#10b981', // Emerald 500
+                        secondary: '#0ea5e9', // Sky 500
+                        accent: '#f59e0b', // Amber 500
+                        darkbg: '#0f172a', // Slate 900
+                        cardbg: '#1e293b'  // Slate 800
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- 螢光筆（.hl 黃＝結論／.hl-b 藍＝數量）的定義只在 shared/theme.css，
+         這一頁不要再寫一份 —— 兩份顏色遲早會不一樣。 -->
+    <link rel="stylesheet" href="../shared/theme.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            scroll-behavior: smooth;
+        }
+        /* 放大的拉桿（投影時看得見、滑鼠好抓）。
+           原生 range 只有約 4px 軌道，accent-color 也只能換顏色，所以自己畫。
+           顏色用 --thumb 變數，各節沿用自己的主題色。
+           -webkit- 與 -moz- 的 thumb 規則不能寫在同一條：瀏覽器看到不認識的選擇器會整條丟掉。 */
+        .big-range {
+            -webkit-appearance: none; appearance: none;
+            height: 16px; border-radius: 9999px;
+            background: #e2e8f0; cursor: pointer;
+            border: 1px solid #cbd5e1;
+        }
+        .big-range:focus-visible { outline: 3px solid var(--thumb, #10b981); outline-offset: 3px; }
+        .big-range::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--thumb, #10b981);
+            border: 4px solid #fff;
+            box-shadow: 0 2px 8px rgba(15,23,42,.35);
+            cursor: grab;
+        }
+        .big-range::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.06); }
+        .big-range::-moz-range-thumb {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--thumb, #10b981);
+            border: 4px solid #fff;
+            box-shadow: 0 2px 8px rgba(15,23,42,.35);
+            cursor: grab;
+        }
+        .unit-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        /* Custom scrollbar styles */
+        pre::-webkit-scrollbar, textarea::-webkit-scrollbar, body::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        pre::-webkit-scrollbar-track, textarea::-webkit-scrollbar-track, body::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        pre::-webkit-scrollbar-thumb, textarea::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        pre::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Animations */
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Motor Propeller Style */
+        .motor-prop {
+            transition: transform 0.1s linear;
+        }
+    </style>
+<style>
+/* === 全站紙膠帶手作風套件（以 hub 為準，勿重複注入） === */
+body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba(120,113,108,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(120,113,108,.06) 1px,transparent 1px) !important; background-size:26px 26px !important; }
+.tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08);background:rgba(250,204,21,.3);z-index:5}
+.underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
+</style>
+  <!-- 身分守門：未從闖關基地登入者導回入口 -->
+  <!-- config.js 要排在 guard 之前（guard 會讀 CONFIG.TERM） -->
+  <script src="config.js"></script>
+<script src="../shared/guard.js"></script>
+  <!-- 完成紀錄要靠 auth.js 把闖關基地的登入接過來（沒有它寫入會被安全規則擋掉） -->
+  <script src="../shared/auth.js"></script>
+  <!-- 第五節的成果卡要自動填「研發人員」（班級座號姓名），從 SSO 的快取拿 -->
+  <script src="../shared/sso.js"></script>
+  <!-- 超音波的暖身與模擬（第一、二節共用） -->
+  <script src="../shared/ultralab.js"></script>
+  <!-- 開放式作答的本機判定（「用你自己的話說」） -->
+  <script src="../shared/answer.js"></script>
+  <!-- 檢核關卡的共用骨架，要排在各 *lab.js 之前 -->
+  <script src="../shared/labkit.js"></script>
+  <script src="../shared/maplab.js"></script>
+  <script src="../shared/potlab.js"></script>
+  <script src="../shared/fanlab.js"></script>
+  <script src="../shared/rgblab.js"></script>
+  <script src="../shared/mixlab.js"></script>
+  <script src="../shared/planlab.js"></script>
+  <script src="../shared/projlab.js"></script>
+  <script src="../shared/doorlab.js"></script>
+  <script src="../shared/lightlab.js"></script>
+
+  <!-- ═══ 完成紀錄 ═══
+       寫的是 {TERM}-progress 的 modules.arduino.{單元}.{warm|checks|say}，不計星：
+       不可以碰 stars（arduino 卡的 maxStars 是 0），也不可以用 REPORT.unit()／pass()（那兩支會算 stars）。
+       寫不進雲端時要讓頁面看得見（顯示「只存在這台電腦」），不可以安靜降級。 -->
+  <script type="module">
+    import { initializeApp, getApps, getApp }
+      from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc }
+      from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    /* ★ auth 一定要一起載，而且要**等它接上**再讀寫。 */
+    import { getAuth, signInAnonymously, onAuthStateChanged }
+      from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+    const CFG  = window.CONFIG || {};
+    const COL  = (CFG.COLLECTIONS && CFG.COLLECTIONS.PROGRESS) || '11501-progress';
+    const TERM = CFG.TERM || '11501';
+    let sid = '';
+    try { sid = sessionStorage.getItem('sid' + TERM) || ''; } catch (e) {}
+
+    /* 目前的狀態：cloud＝存得進雲端；local＝只存在這台電腦（關掉就沒了）。
+       ★ 頁面會把 local 顯示出來，不要再讓它安靜。 */
+    let state = 'local', why = '';
+    const listeners = [];
+    function setState(s, r) {
+      state = s; why = r || '';
+      listeners.forEach(function (f) { try { f(s, why); } catch (e) {} });
+    }
+
+    /* 不在這裡登入 —— 學生已經在闖關基地登入過了，attachSession 只是把那個身分接過來
+       （自己再登入一次會把它蓋掉，安全規則的 isOwner() 就失效了）。 */
+    const ready = (async () => {
+      if (!CFG.FIREBASE) { setState('local', '這一頁沒有 Firebase 設定'); return null; }
+      if (!sid)          { setState('local', '讀不到學號'); return null; }
+      try {
+        const app  = getApps().length ? getApp() : initializeApp(CFG.FIREBASE);
+        const auth = getAuth(app);
+        if (window.AUTH && window.AUTH.attachSession) {
+          await window.AUTH.attachSession(auth, signInAnonymously, onAuthStateChanged);
+        } else {
+          /* ⚠️ auth.js 沒載到就不要硬闖 —— 寫進去也會被規則擋，
+             而且會擋得很安靜。講清楚比較好查。 */
+          setState('local', '沒有載入 shared/auth.js');
+          return null;
+        }
+        if (!auth.currentUser) { setState('local', '還沒登入'); return null; }
+        setState('cloud', '');
+        return getFirestore(app);
+      } catch (e) {
+        setState('local', '連不上雲端：' + (e && e.message || e));
+        return null;
+      }
+    })();
+
+    const localKey = 'lab' + TERM;
+    function localAll() {
+      try { return JSON.parse(sessionStorage.getItem(localKey) || '{}'); } catch (e) { return {}; }
+    }
+
+    /* 讀名冊：SSO.me() 讀的是快取，直接開網址或新分頁進來時是空的，
+       讓 SSO.resolve() 有東西可以問。 */
+    window.LABROSTER = async function (id) {
+      const db = await ready;
+      if (!db) return null;
+      const ROS = (CFG.COLLECTIONS && CFG.COLLECTIONS.ROSTER) || (TERM + '-roster');
+      const snap = await getDoc(doc(db, ROS, id));
+      return snap.exists() ? snap.data() : null;
+    };
+
+    window.LABSAVE = {
+      /** 現在是存得進雲端還是只存本機。頁面用它決定要不要顯示警告。 */
+      onState(fn) { listeners.push(fn); fn(state, why); },
+      /** 讀這個單元做到哪 —— 回傳 { warm:{at,tries}, checks:{...}, say:{...} } */
+      async load(unit) {
+        const mine = localAll()[unit] || {};
+        const db = await ready;
+        if (!db) return mine;
+        try {
+          const snap = await getDoc(doc(db, COL, sid));
+          const m = (snap.exists() && snap.data().modules) || {};
+          return Object.assign({}, mine, ((m.arduino || {})[unit]) || {});
+        } catch (e) {
+          setState('local', '讀取失敗：' + (e && e.code || e));
+          return mine;
+        }
+      },
+      /** 記一段完成。part 是 'warm'／'checks'／'say'。 */
+      async save(unit, part, info) {
+        const rec = Object.assign({ at: Date.now() }, info || {});
+        const all = localAll();
+        all[unit] = Object.assign({}, all[unit], { [part]: rec });
+        try { sessionStorage.setItem(localKey, JSON.stringify(all)); } catch (e) {}
+        const db = await ready;
+        if (!db) return;
+        try {
+          /* ⚠️ 只寫這一格。沒有 stars、沒有 status —— 這一頁不計星。 */
+          await setDoc(doc(db, COL, sid), {
+            studentId: sid,
+            modules: { arduino: { [unit]: { [part]: rec } } },
+            updatedAt: Date.now()
+          }, { merge: true });
+          setState('cloud', '');
+        } catch (e) {
+          /* 失敗要讓頁面看得見，不可以只寫 console */
+          setState('local', '寫入被拒：' + (e && e.code || e));
+        }
+      }
+    };
+  </script>
+</head>
+<body class="text-slate-800">
+
+    <nav class="bg-white/90 backdrop-blur-md shadow-sm fixed w-full z-50 top-0 border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <div class="bg-primary p-2 rounded-lg">
+                        <i data-lucide="home" class="text-white w-6 h-6"></i>
+                    </div>
+                    <span class="font-bold text-xl text-slate-800 tracking-wider">智慧家居機電專題</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <section id="about" class="pt-24 pb-12 md:pt-32 md:pb-24 text-slate-800 relative overflow-hidden">
+        <!-- Background Decorations -->
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="absolute -top-24 -right-24 w-96 h-96 bg-indigo-200/40 rounded-full blur-3xl"></div>
+            <div class="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-white/60 to-transparent"></div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center gap-10 relative z-10">
+            <div class="md:w-1/2 space-y-6">
+                <div class="inline-block bg-primary/20 text-emerald-400 border border-primary/30 px-3 py-1 rounded-full text-sm font-bold mb-2">
+                    NKNU 5016B 系統整合專題
+                </div>
+                <h1 class="text-4xl md:text-5xl font-black leading-tight">
+                    <span class="underline-doodle">打造自動化智慧家居</span> <br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">五節課微型課程</span>
+                </h1>
+                <p class="text-lg text-slate-500 leading-relaxed">
+                    本課程使用 <b>NKNU 5016B 教具模組</b>，運用超音波距離感測器與可變電阻（旋鈕），結合直流馬達與 RGB 全彩燈條，學習自動感應與手動微調的機電邏輯，打造專屬的「智慧家庭控制系統」。
+                </p>
+                <div class="flex gap-4 pt-4">
+                    <button onclick="scrollToCurriculum()" class="bg-primary text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-emerald-600 hover:shadow-xl transition flex items-center gap-2">
+                        <i data-lucide="arrow-down-circle" class="w-5 h-5"></i> 展開五節課綱與實作
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Hero Right Side visualization -->
+            <div class="md:w-1/2 flex justify-center w-full">
+                <div class="relative w-full max-w-sm bg-white p-8 rounded-2xl shadow-2xl border border-slate-200">
+                    <div class="flex justify-between items-center mb-6 border-b border-slate-300 pb-4">
+                        <span class="text-slate-600 font-mono">SmartHome_Hub_v1</span>
+                        <div class="flex gap-2">
+                            <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-teal-500"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-center gap-6 mb-6">
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-16 h-16 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                                <i data-lucide="waves" class="w-8 h-8"></i>
+                            </div>
+                            <span class="text-xs text-slate-500">環境感測</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-16 h-16 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                                <i data-lucide="settings" class="w-8 h-8"></i>
+                            </div>
+                            <span class="text-xs text-slate-500">實體驅動</span>
+                        </div>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                        <div class="w-1/2 h-full bg-emerald-500"></div>
+                        <div class="w-1/2 h-full bg-teal-500"></div>
+                    </div>
+                    <p class="text-center text-sm text-slate-500 mt-4 font-mono">System Online...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="curriculum" class="py-20 bg-slate-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">微課程單元規劃</h2>
+                <p class="text-slate-500 max-w-2xl mx-auto text-lg">前四節一節學一樣：感應、換算、調速、混色；第五節換你自己出題做專題。點任一節開啟【互動學習包】。</p>
+            </div>
+
+            <!-- Time Grid / Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                
+                <!-- Unit 1 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-emerald-300" onclick="openCourseDetail(1)">
+                    <div class="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-emerald-500 transition-colors">
+                        <i data-lucide="door-open" class="w-7 h-7 text-emerald-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full">第一節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">感應大門：超音波與馬達</h3>
+                    <p class="text-slate-600 mb-4 h-16">有人靠近就開門。學會讀超音波的距離、設一個門檻，並記住「門開了沒」—— 少了它，門會一直重複開。</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-emerald-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含距離感測模擬器</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-emerald-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- Unit 2 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-sky-300" onclick="openCourseDetail(2)">
+                    <div class="w-14 h-14 bg-sky-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-500 transition-colors">
+                        <i data-lucide="lightbulb" class="w-7 h-7 text-sky-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-sky-600 bg-sky-100 px-3 py-1 rounded-full">第二節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">迎賓走廊：超音波與燈條</h3>
+                    <p class="text-slate-600 mb-4 h-16">客人越靠近，燈條就亮到越前面 —— 學會把「距離」換算成「第幾顆燈」，做一條會迎賓的走廊燈。</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-sky-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含燈條位置模擬器</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-sky-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- Unit 3 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-amber-300" onclick="openCourseDetail(3)">
+                    <div class="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-amber-500 transition-colors">
+                        <i data-lucide="fan" class="w-7 h-7 text-amber-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">第三節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">無段風扇：可變電阻與馬達</h3>
+                    <p class="text-slate-600 mb-4 h-16">轉旋鈕就能無段調速。學會把旋鈕的位置用「類比對應」換算成馬達轉速，還要弄懂那個負號代表什麼。</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-amber-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含馬達轉速模擬器</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-amber-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- Unit 4 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-purple-300" onclick="openCourseDetail(4)">
+                    <div class="w-14 h-14 bg-purple-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-purple-500 transition-colors">
+                        <i data-lucide="sliders-horizontal" class="w-7 h-7 text-purple-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-purple-600 bg-purple-100 px-3 py-1 rounded-full">第四節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">情境照明：可變電阻與燈條</h3>
+                    <p class="text-slate-600 mb-4 h-16">一顆旋鈕，兩種玩法：讓亮的那一顆跑起來，或讓整條變色。重點是<b>紅、綠、藍三盞燈疊起來會混出什麼顏色</b>。</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-purple-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含三原色混色模擬器</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-purple-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- Unit 5 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group lg:col-span-2 cursor-pointer hover:shadow-xl hover:border-primary" onclick="openCourseDetail(5)">
+                    <div class="flex flex-col md:flex-row gap-6 items-start md:items-center h-full">
+                        <div class="w-14 h-14 bg-emerald-50 rounded-xl flex shrink-0 items-center justify-center group-hover:bg-primary transition-colors">
+                            <i data-lucide="lightbulb" class="w-7 h-7 text-primary group-hover:text-white transition-colors"></i>
+                        </div>
+                        <div class="flex-1 flex flex-col h-full">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-bold text-primary bg-emerald-100 px-3 py-1 rounded-full">第五節課 (總結)</span>
+                            </div>
+                            <h3 class="text-xl md:text-2xl font-bold text-slate-800 mb-2">自己的專案：從想法到成果</h3>
+                            <p class="text-slate-600 mb-4">換你出題！想一個家裡真的會遇到的麻煩，用學過的四樣元件把它解決掉。三張任務卡從「先讓它動」開始，最後做出一張帶得走的成果卡。</p>
+                            <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                                <span class="text-xs text-primary font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含專題設計單與成果卡</span>
+                                <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Detailed Unit View (Initially Hidden) -->
+    <section id="detail-view" class="hidden pt-24 pb-20 min-h-screen text-slate-800 animate-fade-in">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <button onclick="closeCourseDetail()" class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition mb-8 font-medium">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i> 返回課程總覽
+            </button>
+            
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                <!-- Header Block -->
+                <div id="detail-header-bg" class="bg-gradient-to-r from-indigo-50 to-white p-8 border-b border-slate-200 relative overflow-hidden">
+                    <!-- Decorating Icon -->
+                    <i id="detail-bg-icon" class="absolute -right-10 -top-10 w-48 h-48 text-indigo-200/50"></i>
+                    
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span id="detail-badge" class="text-sm font-bold bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full border border-indigo-200">單元 X</span>
+                        </div>
+                        <h2 id="detail-title" class="text-3xl md:text-4xl font-black text-slate-800 mb-4">單元標題</h2>
+                        <p id="detail-desc" class="text-lg text-slate-600 leading-relaxed max-w-3xl">單元描述內容...</p>
+
+                        <!-- 🏠 生活應用：放在課程說明正下方、學習目標之前 —— 先有「這是在做什麼」，再談要學什麼。
+                             沒有 apps 資料的單元整塊不畫。 -->
+                        <div id="detail-apps" class="mt-6 hidden">
+                            <h3 class="text-sm font-black text-slate-500 tracking-widest mb-3">🏠 生活中你看過的</h3>
+                            <!-- 欄數跟著資料量走（兩張卡用三欄會空一格） -->
+                            <div id="detail-apps-list" class="grid gap-3 max-w-3xl"></div>
+                            <p id="detail-apps-note" class="text-sm text-slate-600 mt-3 max-w-3xl leading-relaxed"></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Goals and Materials -->
+                <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 border-b border-slate-200">
+                    <div class="bg-slate-50/50 p-6 rounded-xl border border-slate-200/50">
+                        <h3 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <i data-lucide="target" class="w-6 h-6 text-primary"></i> 學習目標
+                        </h3>
+                        <ul id="detail-objectives" class="space-y-3 text-slate-600">
+                            <!-- JS Dyn Load -->
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-slate-50/50 p-6 rounded-xl border border-slate-200/50">
+                        <h3 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <i data-lucide="package" class="w-6 h-6 text-accent"></i> 使用硬體模組
+                        </h3>
+                        <ul id="detail-materials" class="space-y-3 text-slate-600">
+                            <!-- JS Dyn Load -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 🔥 暖身關卡：放在教材之前 —— 這一節後面全都建立在「那個距離數字」上，學生得先知道它怎麼來的 -->
+                <div id="detail-warm" class="hidden p-8 border-b border-slate-200 bg-cyan-50/40">
+                    <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+                        <h3 class="text-2xl font-bold text-slate-800" id="warm-title">🔥 暖身關卡</h3>
+                        <span id="warm-seed" class="text-xs text-slate-400 font-mono"></span>
+                    </div>
+                    <p class="text-slate-500 text-sm mb-4" id="warm-note">
+                        三個小步驟，做完才開始這一節課 ——
+                        <b>先弄懂那個「距離」是怎麼來的</b>，後面的門檻和秒數才有意義。
+                    </p>
+                    <div id="warm-box" class="bg-white p-5 rounded-2xl border-2 border-cyan-200"></div>
+                </div>
+
+                <!-- 模擬在上、解析在下：解析有程式碼＋三張說明卡，左右並排的話兩欄會被拉成一樣高、版面擠成細長條 -->
+                <div class="p-8 space-y-8 bg-slate-100">
+
+                    <!-- 硬體行為模擬 -->
+                    <div class="space-y-4">
+                        <div>
+                            <span class="text-xs font-bold tracking-widest text-primary uppercase bg-primary/10 px-3 py-1 rounded-full">動態實作體驗區</span>
+                            <h3 class="text-2xl font-bold text-slate-800 mt-3 mb-2">硬體行為模擬</h3>
+                            <p class="text-slate-500 text-sm">操作下方模擬元件，觀察數值變化 —— 和 NKNU 5016B 模組上跑起來的行為一致。</p>
+                        </div>
+
+                        <div id="interactive-playground" class="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col justify-center items-center min-h-[300px] relative">
+                            <!-- Dynamic Simulation Loaded Here -->
+                        </div>
+                    </div>
+
+                    <!-- 邏輯解析：整個寬度 -->
+                    <div id="detail-demo-container">
+                        <!-- Code Displayed Here -->
+                    </div>
+
+                    <!-- 🎯 三個檢核（暖身過了才出現；沒有 lab 的單元整塊隱藏）。
+                         放在最後：學生要先讀完模擬與虛擬碼，才有東西可以被檢核。 -->
+                    <div id="detail-lab" class="hidden">
+                        <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+                            <h3 class="text-2xl font-bold text-slate-800" id="lab-title">🎯 動手檢核</h3>
+                            <span id="lab-seed" class="text-xs text-slate-400 font-mono"></span>
+                        </div>
+                        <p class="text-slate-500 text-sm mb-4" id="lab-note">
+                            每一關都要<b>先講你認為會怎樣，再執行</b> ——
+                            說對了才算過。答錯會換一組數字重來，不限次數。
+                        </p>
+                        <div id="lab-checks" class="bg-white p-5 rounded-2xl border-2 border-slate-200"></div>
+                        <div id="lab-locked" class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center text-slate-500 font-bold">
+                            🔒 先完成上面的<b>暖身關卡</b>，這裡才會打開。
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-slate-100 text-slate-500 py-12 text-center border-t border-slate-800">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-center items-center gap-2 mb-4">
+                <i data-lucide="home" class="w-6 h-6 text-primary"></i>
+                <span class="text-xl font-bold text-slate-500 tracking-wider">智慧家居機電專題課程</span>
+            </div>
+            <p class="mb-2">機電整合微課程暨軟硬體線上模擬器（NKNU 5016B 教具模組）</p>
+            <p class="text-sm"><script>document.write((window.CONFIG.SCHOOL||{}).NAME||"")</script> · 改編自 SuYungSheng 的課程系統（CC BY-NC-SA 4.0）</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global variables for animations
+        let animationRequests = [];
+        
+        function clearAnimations() {
+            animationRequests.forEach(req => cancelAnimationFrame(req));
+            animationRequests = [];
+        }
+
+        function scrollToCurriculum() {
+            const curriculumSection = document.getElementById('curriculum');
+            window.scrollTo({
+                top: curriculumSection.offsetTop - 64,
+                behavior: 'smooth'
+            });
+        }
+
+        // --- Core curriculum database ---
+        /* ═══ 各節資料 ═══════════════════════════════════════
+           每一節：title／badge／desc／apps（生活應用）／objectives／materials（器材，腳位只是對照）／
+                   initPlayground（模擬器）／demoHTML（邏輯解析）／lab（暖身與檢核用哪一支 *lab.js）
+           檢核共用的骨架：**先講你認為會怎樣 → 再執行 → 說對了才算**。
+           隨機出題：預設每人每次都不一樣；網址加 ?seed=1234 全班同一組題（方便帶著對答案）。
+           這一頁不計星，只記完成（見上面的 LABSAVE）。 */
+
+        const courseData = {
+            1: {
+                title: "感應大門：超音波與馬達",
+                badge: "第一節課",
+                colorText: "text-emerald-400",
+                colorBg: "bg-emerald-500",
+                icon: "door-open",
+                desc: "用超音波量出「人離門多遠」，再決定馬達要不要轉、往哪邊轉、以及<span class=\"hl\">轉多久</span>。馬達沒有感測器告訴它門開到底了沒 —— 這節課的核心，就是<span class=\"hl\">用時間把「轉動」變成「開門」</span>這個動作。",
+                /* 生活應用選鐵捲門和感應垃圾桶：都是直流馬達「轉一段時間再停」，
+                   和本節核心一致（停車場閘門用伺服馬達，不必算時間，所以不舉）。
+                   lab 的暖身與檢核分開指定（第五節的「暖身」是設計單、「檢核」放成果發表）。 */
+                lab: { unit: 'u1', warm: 'ULTRALAB', checks: 'DOORLAB',
+                       warmTitle: '🔥 暖身關卡：超音波怎麼量距離' },
+                apps: [
+                    { icon: "🚪", name: "感應式鐵捲門",
+                      how: "車子靠近就往上捲（或往旁邊拉開），開到定位就停；車走了再關回去。" },
+                    { icon: "🗑️", name: "感應垃圾桶",
+                      how: "手一靠近蓋子就打開，手移開幾秒後自動蓋上。" }
+                ],
+                appsNote: '這兩個東西的做法<span class="hl">一模一樣</span>：先量出「東西離我多遠」，' +
+                          '再決定馬達<b>要不要轉、往哪邊轉、轉多久</b>。' +
+                          '⚠️ 它們都<span class="hl">沒有眼睛</span> —— 鐵捲門不知道自己捲到頂了沒有，' +
+                          '靠的是<span class="hl-b">時間</span>。這一節課要做的就是這件事。',
+                objectives: [
+                    "認識超音波距離感測器 (Trig 發射 / Echo 接收) 的測距原理",
+                    "用「正轉 / 反轉 / 停」三個狀態控制直流馬達",
+                    "用『等待幾秒』決定<span class=\"hl\">馬達轉多久</span> —— 並實測出自己這組的秒數",
+                    "用一個變數記住『門現在開著還是關著』，避免重複開門",
+                    "認識門檻的『中間地帶』(10～20cm)：避免門一直開開關關"
+                ],
+                /* 器材寫「教具模組」：感測器與馬達都已固定在模組上，不必接線、也不需要馬達驅動板；
+                   腳位保留當作看程式時的對照。 */
+                materials: [
+                    "NKNU 5016B 教具模組",
+                    "超音波距離感測器（HC-SR04，Trig = A2、Echo = A3）",
+                    "直流馬達（腳位對照：馬達 腳位 2、3）"
+                ],
+                initPlayground: function(container) {
+                    /* 拉桿的值是「物體的位置」，距離 = 65 − 位置：往右＝靠近（最右 5cm、最左 60cm）。
+                       判斷和下面的虛擬碼一致：10／20 兩個門檻、轉 1.3 秒就停、記住門的狀態。 */
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center gap-6 w-full">
+                            <!-- Display Values -->
+                            <div class="flex justify-center gap-4 w-full flex-wrap">
+                                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 text-center w-32">
+                                    <div class="text-[10px] text-slate-500 mb-1">測量距離 (cm)</div>
+                                    <div id="ultra-dist-val" class="text-emerald-500 font-bold text-xl font-mono">60</div>
+                                </div>
+                                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 text-center w-32">
+                                    <div class="text-[10px] text-slate-500 mb-1">門的狀態</div>
+                                    <div id="door-state-val" class="text-slate-500 font-bold text-xl font-mono">關</div>
+                                </div>
+                                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 text-center w-32">
+                                    <div class="text-[10px] text-slate-500 mb-1">馬達狀態</div>
+                                    <div id="motor-status-val" class="text-slate-500 font-bold text-xl font-mono">停止</div>
+                                </div>
+                            </div>
+
+                            <!-- Visuals -->
+                            <div class="flex flex-col sm:flex-row items-center justify-around w-full mt-4 gap-8">
+                                <!-- 刻度那一列和拉桿用同一個寬度，兩端的字才對得到頭尾 -->
+                                <div class="flex flex-col items-center w-full max-w-md">
+                                    <i data-lucide="waves" class="w-10 h-10 text-emerald-500 mb-2"></i>
+                                    <input type="range" id="ultra-slider" min="5" max="60" value="5" class="w-full big-range" style="--thumb:#10b981">
+                                    <div class="flex justify-between w-full text-xs text-slate-500 mt-2">
+                                        <span>← 遠 (60cm)</span><span>近 (5cm) →</span>
+                                    </div>
+                                    <span class="text-sm text-slate-600 mt-2">拖動：<b>往右＝人走近</b></span>
+                                </div>
+
+                                <div class="flex flex-col items-center">
+                                    <div class="w-20 h-20 bg-white rounded-full border-4 border-slate-300 flex items-center justify-center shadow-lg relative">
+                                        <div id="motor-blade" class="w-2 h-16 bg-amber-500 rounded-full motor-prop absolute"></div>
+                                        <div class="w-4 h-4 bg-slate-300 rounded-full z-10"></div>
+                                    </div>
+                                    <span class="text-xs text-slate-500 mt-3">直流馬達</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 text-center max-w-md leading-relaxed">
+                                走近到 <span class="hl-b">10cm</span> 以內門會開；退到 <span class="hl-b">20cm</span> 以外門才關。
+                                中間那段刻意不動作 —— <span class="hl">馬達每次只轉 1.3 秒就停</span>。
+                            </p>
+                        </div>
+                    `;
+
+                    const slider = document.getElementById('ultra-slider');
+                    const distVal = document.getElementById('ultra-dist-val');
+                    const doorVal = document.getElementById('door-state-val');
+                    const statusVal = document.getElementById('motor-status-val');
+                    const blade = document.getElementById('motor-blade');
+
+                    const RUN_MS = 1300;          // 馬達轉多久（＝虛擬碼裡的 1.3 秒）
+                    const NEAR = 10, FAR = 20;    // 門檻：中間 10～20 不動作
+                    let rotation = 0;
+                    let doorOpen = false;         // 門的狀態
+                    let dir = 0;                  // 0 停、1 正轉、-1 反轉
+                    let until = 0;                // 轉到這個時間點為止
+
+                    function paint() {
+                        doorVal.textContent = doorOpen ? '開' : '關';
+                        doorVal.className = (doorOpen ? 'text-emerald-600' : 'text-slate-500') + ' font-bold text-xl font-mono';
+                        statusVal.textContent = dir === 0 ? '停止' : (dir > 0 ? '正轉' : '反轉');
+                        statusVal.className = (dir === 0 ? 'text-slate-500' : 'text-amber-500') + ' font-bold text-xl font-mono';
+                    }
+
+                    /* 不用 setTimeout：切換單元時只會 cancelAnimationFrame（clearAnimations），
+                       所以在動畫迴圈裡比對時間，切走就一起停。 */
+                    function tick(now) {
+                        if (dir !== 0) {
+                            if (now >= until) {          // 時間到 → 停，並記住門的狀態
+                                dir = 0;
+                                doorOpen = !doorOpen;
+                                paint();
+                            } else {
+                                rotation += (dir > 0 ? 9 : -9);
+                                blade.style.transform = `rotate(${rotation}deg)`;
+                            }
+                        }
+                        animationRequests.push(requestAnimationFrame(tick));
+                    }
+
+                    slider.addEventListener('input', (e) => {
+                        // 往右（值大）＝ 靠近，所以距離要反過來算
+                        const dist = 65 - parseInt(e.target.value);
+                        distVal.textContent = dist;
+                        if (dir !== 0) return;           // 門正在動：不重新判斷
+                        if (dist < NEAR && !doorOpen)      { dir = 1;  until = performance.now() + RUN_MS; paint(); }
+                        else if (dist > FAR && doorOpen)   { dir = -1; until = performance.now() + RUN_MS; paint(); }
+                    });
+
+                    paint();
+                    animationRequests.push(requestAnimationFrame(tick));
+                    lucide.createIcons();
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="code-2" class="w-8 h-8 text-emerald-400"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">邏輯解析：超音波觸發馬達</h3>
+                    </div>
+                    <div class="bg-[#1e1e1e] rounded-xl border border-slate-200 overflow-hidden shadow-2xl">
+                        <div class="bg-[#2d2d2d] px-4 py-3 flex items-center gap-2 border-b border-slate-200">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-500 font-mono">auto_door.block</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-600">
+<pre class="whitespace-pre-wrap"><code class="grid grid-cols-[max-content_1fr] gap-x-4 sm:gap-x-6 gap-y-2">
+<span class="col-span-2 text-emerald-600">// ① 先記住門現在是開的還是關的</span>
+<span class="col-span-2"><span class="text-sky-600">變數</span> 門的狀態 <span class="text-rose-600">設為</span> <span class="text-indigo-600">「關」</span></span>
+<span class="col-span-2">&nbsp;</span>
+<span class="col-span-2"><span class="text-rose-600">無限重複執行</span></span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 距離 <span class="text-rose-600">設為</span> <span class="text-amber-600">讀取超音波距離感測器 (公分)</span></span>
+<span class="col-span-2">&nbsp;</span>
+<span class="col-span-2 text-emerald-600">  // ② 有人靠近，而且門還關著 → 開門</span>
+<span class="col-span-2">  <span class="text-rose-600">如果</span> <span class="text-sky-600">距離</span> &lt; <span class="text-indigo-600">10</span> <span class="text-rose-600">而且</span> <span class="text-sky-600">門的狀態</span> = <span class="text-indigo-600">「關」</span> <span class="text-rose-600">則</span></span>
+<span>    <span class="text-amber-600">設定 馬達</span> <span class="text-indigo-600">250</span></span><span class="text-emerald-600">// 正轉</span>
+<span>    <span class="text-rose-600">等待</span> <span class="text-indigo-600">1.3</span> 秒</span><span class="text-emerald-600">// ★ 門開到底要多久</span>
+<span>    <span class="text-amber-600">設定 馬達</span> <span class="text-indigo-600">0</span></span><span class="text-emerald-600">// 停</span>
+<span>    <span class="text-sky-600">門的狀態</span> <span class="text-rose-600">設為</span> <span class="text-indigo-600">「開」</span></span><span class="text-emerald-600">// 記起來</span>
+<span class="col-span-2">&nbsp;</span>
+<span class="col-span-2 text-emerald-600">  // ③ 人走遠了，而且門還開著 → 關門（馬達反轉）</span>
+<span class="col-span-2">  <span class="text-rose-600">如果</span> <span class="text-sky-600">距離</span> &gt; <span class="text-indigo-600">20</span> <span class="text-rose-600">而且</span> <span class="text-sky-600">門的狀態</span> = <span class="text-indigo-600">「開」</span> <span class="text-rose-600">則</span></span>
+<span>    <span class="text-amber-600">設定 馬達</span> <span class="text-indigo-600">−250</span></span><span class="text-emerald-600">// 反轉</span>
+<span>    <span class="text-rose-600">等待</span> <span class="text-indigo-600">1.3</span> 秒</span><span class="text-emerald-600">// 和開門一樣久</span>
+<span>    <span class="text-amber-600">設定 馬達</span> <span class="text-indigo-600">0</span></span><span class="text-emerald-600">// 停</span>
+<span>    <span class="text-sky-600">門的狀態</span> <span class="text-rose-600">設為</span> <span class="text-indigo-600">「關」</span></span>
+</code></pre>
+                        </div>
+                    </div>
+                    <!-- 這三點就是這一節真正要學的：轉多久、門的狀態、兩個門檻 -->
+                    <div class="grid sm:grid-cols-3 gap-3 mt-5">
+                      <div class="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+                        <div class="font-black text-amber-800 mb-1">⏱️ 為什麼要「等 1.3 秒」？</div>
+                        <p class="text-sm text-amber-900 leading-relaxed"><span class="hl">馬達不知道門開到底了沒有</span> —— 它沒有眼睛。我們只能用<b>時間</b>來決定它轉多久。太短門開不完，太長<span class="hl">馬達會一直推著門硬轉</span>。</p>
+                      </div>
+                      <div class="bg-sky-50 border-2 border-sky-200 rounded-xl p-4">
+                        <div class="font-black text-sky-800 mb-1">🚪 為什麼要記「門的狀態」？</div>
+                        <p class="text-sm text-sky-900 leading-relaxed">人站在門口不動，距離一直小於 <span class="hl-b">10</span>。沒有這個變數的話，程式會<span class="hl">一直重複開門</span>，馬達就一直轉。記住「已經開了」，它才知道不用再開一次。</p>
+                      </div>
+                      <div class="bg-violet-50 border-2 border-violet-200 rounded-xl p-4">
+                        <div class="font-black text-violet-800 mb-1">↔️ 為什麼開門看 10、關門看 20？</div>
+                        <p class="text-sm text-violet-900 leading-relaxed">中間那段 <span class="hl-b">10～20</span> 公分<span class="hl">故意什麼都不做</span>。不然人在 10 公分附近晃一下，門就會開開關關 —— 就像冷氣不會到 26.0 度就立刻停一樣。</p>
+                      </div>
+                    </div>
+                `
+            },
+            2: {
+                title: "迎賓走廊：超音波與燈條",
+                badge: "第二節課",
+                colorText: "text-sky-400",
+                colorBg: "bg-sky-500",
+                icon: "lightbulb",
+                desc: "一樣是量距離，但這一次答案不再只有「開」和「關」。我們用「對應」把距離換算成燈條的表現：一種是<b>亮度</b>（整條一起變亮變暗），一種是<b>位置</b>（只亮一顆，位置會跟著跑）。同一個距離，換到不同的範圍，就是完全不同的效果。",
+                /* 這一節的暖身是「換算」：超音波原理第一節教過了，距離在這裡只是輸入來源。
+                   三個檢核在 shared/lightlab.js。 */
+                lab: { unit: 'u2', warm: 'MAPLAB', checks: 'LIGHTLAB',
+                       warmTitle: '🔥 暖身關卡：距離怎麼換成亮度' },
+                apps: [
+                    { icon: "✨", name: "迎賓燈",
+                      how: "客人從走廊那一頭走過來，燈就跟著亮起來迎接他 —— 越靠近，亮的位置越往門口推。" },
+                    { icon: "🌙", name: "走廊感應夜燈",
+                      how: "人越靠近燈越亮，走遠了就慢慢暗下來，不會整夜全亮。" }
+                ],
+                appsNote: '這兩個東西<span class="hl">用的是同一個距離</span>，' +
+                          '只是把它<b>換算成不同的東西</b>：一個換成「第幾顆」，一個換成「多亮」。' +
+                          '⚠️ 第一節的門只有<span class="hl-b">開和關</span>兩種答案；' +
+                          '這一節的答案是<span class="hl">連續的</span> —— ' +
+                          '所以需要一塊新積木：<b>對應</b>。',
+                objectives: [
+                    "認識 WS2812B 的「定址」特性：一條線就能分別控制每一顆燈珠",
+                    "應用<span class=\"hl\">對應</span>積木：把距離數值（例如 10～100 公分）換算成燈珠數量（1～8 顆）",
+                    "撰寫迴圈 (For-Loop) 來動態更新燈條的點亮與熄滅狀態"
+                ],
+                materials: [
+                    "NKNU 5016B 教具模組",
+                    "超音波距離感測器（HC-SR04，Trig = A2、Echo = A3）",
+                    "RGB 全彩燈條（WS2812B，8 顆燈珠）"
+                ],
+                initPlayground: function(container) {
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center gap-6 w-full">
+                            <div class="text-center w-full max-w-sm">
+                                <div class="flex justify-between text-xs text-slate-500 font-mono mb-2">
+                                    <span>超音波偵測距離: <span id="u-led-dist-text" class="text-sky-400 font-bold text-lg">100</span> cm</span>
+                                    <span>亮燈數: <span id="u-led-count-text" class="text-sky-400 font-bold text-lg">0</span> 顆</span>
+                                </div>
+                                <input type="range" id="u-led-slider" min="10" max="150" value="150" class="w-full big-range" style="--thumb:#0ea5e9">
+                            </div>
+                            
+                            <!-- LED Strip Display -->
+                            <div class="bg-[#0f172a] p-6 rounded-2xl border-2 border-slate-200 w-full flex justify-center shadow-inner mt-4">
+                                <div class="flex gap-3 justify-center items-center" id="u-led-strip">
+                                    <!-- LEDs generated via JS -->
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    const slider = document.getElementById('u-led-slider');
+                    const distText = document.getElementById('u-led-dist-text');
+                    const countText = document.getElementById('u-led-count-text');
+                    const strip = document.getElementById('u-led-strip');
+
+                    // Spawn 8 LEDs
+                    for(let i=0; i<8; i++) {
+                        const led = document.createElement('div');
+                        led.className = 'w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white shadow-inner border border-slate-200/50 transition-all duration-300';
+                        led.id = `u-pixel-${i}`;
+                        strip.appendChild(led);
+                    }
+
+                    slider.addEventListener('input', (e) => {
+                        const dist = parseInt(e.target.value);
+                        distText.textContent = dist;
+                        
+                        // Map distance (10 to 100 cm) to LEDs (8 to 0)
+                        let activeLeds = 0;
+                        if (dist <= 100) {
+                            activeLeds = Math.floor(((100 - dist) / 90) * 8) + 1; 
+                            if (activeLeds > 8) activeLeds = 8;
+                        }
+
+                        countText.textContent = activeLeds;
+
+                        for(let i=0; i<8; i++) {
+                            const led = document.getElementById(`u-pixel-${i}`);
+                            if (i < activeLeds) {
+                                led.style.backgroundColor = '#0ea5e9'; // Sky blue
+                                led.style.boxShadow = '0 0 15px #0ea5e9';
+                            } else {
+                                led.style.backgroundColor = '#1e293b';
+                                led.style.boxShadow = 'none';
+                            }
+                        }
+                    });
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="code-2" class="w-8 h-8 text-sky-400"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">邏輯解析：同一個距離，兩種用法</h3>
+                    </div>
+                    <p class="text-slate-600 mb-6 leading-relaxed">
+                        兩段程式<span class="hl">前兩行一模一樣</span> —— 都是量距離、都用「對應」換算。
+                        <br>不一樣的只有<span class="hl-b">換到哪個範圍</span>，以及<span class="hl-b">換出來的數字拿去做什麼</span>。
+                    </p>
+
+                    <!-- ══ 模式一：亮度 ══ -->
+                    <div class="bg-[#1e1e1e] rounded-xl border border-slate-200 overflow-hidden shadow-2xl mb-6">
+                        <div class="bg-[#2d2d2d] px-4 py-3 flex items-center gap-2 border-b border-slate-200">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-500 font-mono">模式一：亮度（按 1）— 整條一起變亮變暗</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-600">
+<pre class="whitespace-pre-wrap"><code class="grid grid-cols-[max-content_1fr] gap-x-4 sm:gap-x-6 gap-y-2">
+<span class="col-span-2"><span class="text-rose-600">當按下按鍵</span> <span class="text-indigo-600">1</span></span>
+<span class="col-span-2"><span class="text-rose-600">無限重複執行</span></span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 距離 <span class="text-rose-600">設為</span> <span class="text-amber-600">讀取超音波</span> (Trig <span class="text-indigo-600">A2</span>, Echo <span class="text-indigo-600">A3</span>)</span>
+<span class="col-span-2 text-emerald-600">  // 距離 55 對到 1（最暗）、距離 1 對到 200（最亮）→ 越近越亮</span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 亮度 <span class="text-rose-600">設為</span> <span class="text-amber-600">對應</span> (<span class="text-sky-600">距離</span>, <span class="text-indigo-600">55</span> → <span class="text-indigo-600">1</span>, <span class="text-indigo-600">1</span> → <span class="text-indigo-600">200</span>)</span>
+<span class="col-span-2">  <span class="text-amber-600">設定燈條</span> <span class="text-indigo-600">全部</span> <span class="text-amber-600">顏色</span> = (<span class="text-sky-600">亮度</span>, <span class="text-sky-600">亮度</span>, <span class="text-sky-600">亮度</span>)</span>
+<span class="col-span-2 text-emerald-600">  // 紅綠藍都填同一個數 → 白光，數字越大就越亮</span>
+<span class="col-span-2">  <span class="text-rose-600">等待</span> <span class="text-indigo-600">0.4</span> <span class="text-rose-600">秒</span></span>
+</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- ══ 模式二：位置 ══ -->
+                    <div class="bg-[#1e1e1e] rounded-xl border border-slate-200 overflow-hidden shadow-2xl">
+                        <div class="bg-[#2d2d2d] px-4 py-3 flex items-center gap-2 border-b border-slate-200">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-500 font-mono">模式二：位置（按 2）— 只亮一顆，位置會跑</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-600">
+<pre class="whitespace-pre-wrap"><code class="grid grid-cols-[max-content_1fr] gap-x-4 sm:gap-x-6 gap-y-2">
+<span class="col-span-2"><span class="text-rose-600">當按下按鍵</span> <span class="text-indigo-600">2</span></span>
+<span class="col-span-2"><span class="text-rose-600">無限重複執行</span></span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 距離 <span class="text-rose-600">設為</span> <span class="text-amber-600">讀取超音波</span> (Trig <span class="text-indigo-600">A2</span>, Echo <span class="text-indigo-600">A3</span>)</span>
+<span class="col-span-2 text-emerald-600">  // 一樣是 55 → 1，但這次換到「第幾顆」：1 → 8</span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 燈號 <span class="text-rose-600">設為</span> <span class="text-amber-600">對應</span> (<span class="text-sky-600">距離</span>, <span class="text-indigo-600">55</span> → <span class="text-indigo-600">1</span>, <span class="text-indigo-600">1</span> → <span class="text-indigo-600">8</span>)</span>
+<span class="col-span-2">  <span class="text-amber-600">設定燈條</span> 第 <span class="text-sky-600">燈號</span> <span class="text-amber-600">顆 顏色</span> = (<span class="text-indigo-600">50</span>, <span class="text-indigo-600">50</span>, <span class="text-indigo-600">50</span>)</span>
+<span class="col-span-2">  <span class="text-rose-600">等待</span> <span class="text-indigo-600">0.4</span> <span class="text-rose-600">秒</span></span>
+<span class="col-span-2">  <span class="text-amber-600">設定燈條</span> 第 <span class="text-sky-600">燈號</span> <span class="text-amber-600">顆 顏色</span> = (<span class="text-indigo-600">0</span>, <span class="text-indigo-600">0</span>, <span class="text-indigo-600">0</span>)</span>
+<span class="col-span-2 text-emerald-600">  // ⚠️ 最後這一行是關鍵：不關掉的話，走過的燈會全部留著</span>
+</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid md:grid-cols-3 gap-4">
+                        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+                            <div class="font-black text-amber-900 mb-1">為什麼是 55 → 1？</div>
+                            <p class="text-sm text-amber-900 leading-relaxed">
+                                <span class="hl">箭頭是倒過來的</span>：距離大（遠）對到小的數字、距離小（近）對到大的數字。
+                                寫成 1 → 55 的話就變成<b>越遠越亮</b> ——
+                                ⚠️ 而且<span class="hl">燈照樣會亮</span>，要把手靠近才看得出整個反了。
+                            </p>
+                        </div>
+                        <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4">
+                            <div class="font-black text-sky-900 mb-1">為什麼三個顏色填同一個數？</div>
+                            <p class="text-sm text-sky-900 leading-relaxed">
+                                紅、綠、藍一樣大就是<span class="hl">白光</span>。
+                                所以「調亮度」在這裡就是<b>三個數字一起變大變小</b>，不必去管顏色。
+                            </p>
+                        </div>
+                        <div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4">
+                            <div class="font-black text-rose-900 mb-1">為什麼要設回 (0,0,0)？</div>
+                            <p class="text-sm text-rose-900 leading-relaxed">
+                                因為程式<span class="hl">不記得上一顆是哪一顆</span>。
+                                不主動關掉，走過的就一顆一顆留著 ——
+                                那就變成「亮幾顆」而不是<span class="hl-b">亮哪一顆</span>了。
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- ══ 兩種效果，讓學生自己比 ══
+                         把上一顆留著不是壞掉，那是另一種做法；兩種都對，差別在想表達什麼。 -->
+                    <div class="mt-8 bg-slate-50 border-2 border-slate-300 rounded-2xl p-5">
+                        <div class="font-black text-slate-800 text-lg mb-1">🔍 同一段程式，兩種效果</div>
+                        <p class="text-sm text-slate-600 mb-4 leading-relaxed">
+                            上面那段位置模式，<span class="hl">只差最後一行</span>，
+                            做出來就是完全不同的東西。兩種都是對的 ——
+                            差別在你想讓人看到<span class="hl-b">什麼資訊</span>。
+                        </p>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div class="bg-white border-2 border-cyan-300 rounded-xl p-4">
+                                <div class="font-black text-cyan-800 mb-2">① 只亮一顆（位置）</div>
+                                <div class="flex gap-1 justify-center bg-slate-900 rounded-lg p-3 mb-3">
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-amber-300 shadow-[0_0_10px_3px_rgba(251,191,36,.6)]"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                </div>
+                                <p class="text-sm text-slate-700 leading-relaxed">
+                                    亮完<b>把它關掉</b>（就是上面那段程式）。<br>
+                                    看得出來的是<span class="hl">現在在哪裡</span>。
+                                </p>
+                            </div>
+                            <div class="bg-white border-2 border-amber-300 rounded-xl p-4">
+                                <div class="font-black text-amber-800 mb-2">② 亮到第 N 顆（長度）</div>
+                                <div class="flex gap-1 justify-center bg-slate-900 rounded-lg p-3 mb-3">
+                                    <span class="w-6 h-6 rounded-full bg-amber-300 shadow-[0_0_10px_3px_rgba(251,191,36,.6)]"></span>
+                                    <span class="w-6 h-6 rounded-full bg-amber-300 shadow-[0_0_10px_3px_rgba(251,191,36,.6)]"></span>
+                                    <span class="w-6 h-6 rounded-full bg-amber-300 shadow-[0_0_10px_3px_rgba(251,191,36,.6)]"></span>
+                                    <span class="w-6 h-6 rounded-full bg-amber-300 shadow-[0_0_10px_3px_rgba(251,191,36,.6)]"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                    <span class="w-6 h-6 rounded-full bg-slate-700"></span>
+                                </div>
+                                <p class="text-sm text-slate-700 leading-relaxed">
+                                    <b>不要關掉</b>（或用迴圈從第 1 顆亮到第 N 顆）。<br>
+                                    看得出來的是<span class="hl">有多近</span>。
+                                </p>
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-700 mt-4 leading-relaxed">
+                            ⚠️ 所以「走過的燈都留著」<span class="hl">不一定是壞掉</span> ——
+                            要看你做的是哪一種。做<b>迎賓燈</b>時，
+                            ② 反而更有「客人越走越近、燈一路亮起來」的感覺；
+                            但如果你要的是<b>倒車還剩多少空間</b>那種指示，
+                            ① 才看得出「現在到哪一格」。<br>
+                            ★ <span class="hl-b">兩種都試一次</span>，再決定你的迎賓走廊要哪一種。
+                        </p>
+                    </div>
+                `
+            },
+            3: {
+                title: "無段風扇：可變電阻與馬達",
+                badge: "第三節課",
+                colorText: "text-amber-400",
+                colorBg: "bg-amber-500",
+                icon: "fan",
+                desc: "自動控制很方便，但我們也需要手動微調的能力！本單元引入「可變電阻（旋鈕）」，讀取其類比電壓值，並透過 PWM 脈衝寬度調變技術，精準控制直流馬達的轉速（如同家中的無段風扇）。",
+                /* 第三節的暖身：可變電阻原理＋接線練習（開發板上沒有可變電阻，要自己接到 A7）——
+                   五節課裡第一次要學生自己接線。三個檢核在 shared/fanlab.js。 */
+                lab: { unit: 'u3', warm: 'POTLAB', checks: 'FANLAB',
+                       warmTitle: '🔥 暖身關卡：可變電阻怎麼接、怎麼讀' },
+                apps: [
+                    { icon: "🌀", name: "DC 變頻電扇",
+                      how: "旋鈕轉一點點，風就大一點點，中間任何位置都停得住。⚠️ 傳統電扇不是這樣 —— 它是「一檔二檔三檔」的三段開關，裡面沒有可變電阻。" },
+                    { icon: "🎮", name: "遙控車的油門扳機",
+                      how: "扳機推多少，車就跑多快。彎道要收油門、直線再推到底 —— 扳機裡面就是一顆可變電阻。" }
+                ],
+                appsNote: '前兩節的輸入是<span class="hl-b">感測器自己量的</span>（距離）；' +
+                          '這一節換成<span class="hl">人自己轉的</span>。' +
+                          '⚠️ 但後面完全一樣：讀到一個數字 → <b>對應</b> → 拿去控制東西。' +
+                          '★ 可變電阻就是一把 <span class="hl-b">0～1023 的尺</span>，' +
+                          '這一節要把它換算成馬達的 <span class="hl-b">−250～250</span> —— ' + '⚠️ 下限是<b>負的</b>，因為馬達會反轉。' +
+                          '<br>⚠️ 這兩個的共同點是<span class="hl">無段</span> —— ' +
+                          '「一檔二檔三檔」用一個<b>開關</b>就做得到，' +
+                          '要做到<span class="hl-b">中間任何位置都停得住</span>，才需要可變電阻。',
+                objectives: [
+                    "了解可變電阻的<span class=\"hl\">分壓原理</span>：旋鈕轉到哪裡，就把電壓按比例切一段出來（A7 讀到 0～1023）",
+                    "會自己<span class=\"hl\">接三條線</span>：G→腳1、P→腳3、<span class=\"hl-b\">S→腳2（中間那支刷片）</span>",
+                    "學會用「<span class=\"hl\">類比對應</span>」積木 —— 只填<b>下限與上限</b>兩個數字，換算它幫你做",
+                    "實作<span class=\"hl-b\">中間停、兩邊反轉</span>的無段風扇，並說得出<span class=\"hl\">為什麼下限要寫成負的</span>（−250～250）"
+                ],
+                materials: [
+                    "NKNU 5016B 教具模組",
+                    "可變電阻（旋鈕，10K）＋ 麵包板、杜邦線三條",
+                    "⚠️ 這一顆<b>不在模組上</b>，要自己接：開發板 <b>G→腳1</b>、<b>P→腳3</b>、<b>S→腳2</b>（訊號進 <b>A7</b>）",
+                    "直流馬達（腳位對照：馬達 腳位 2、3）"
+                ],
+                initPlayground: function(container) {
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center gap-6 w-full">
+                            <div class="flex justify-center gap-6 w-full">
+                                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 text-center w-36">
+                                    <div class="text-[10px] text-slate-500 mb-1">類比讀取 (A0)</div>
+                                    <div id="pot-val" class="text-amber-400 font-bold text-xl font-mono">0</div>
+                                </div>
+                                <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 text-center w-36">
+                                    <div class="text-[10px] text-slate-500 mb-1">PWM 輸出 (~腳位)</div>
+                                    <div id="pwm-val" class="text-red-400 font-bold text-xl font-mono">0</div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col sm:flex-row items-center justify-around w-full mt-6 gap-12">
+                                <!-- Potentiometer Input -->
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-16 h-16 rounded-full bg-slate-100 border-4 border-slate-500 flex items-center justify-center relative">
+                                        <div id="pot-knob-indicator" class="w-1 h-6 bg-amber-400 absolute top-2 rounded-full transform origin-bottom transition-transform duration-75"></div>
+                                        <div class="w-6 h-6 bg-slate-50 rounded-full z-10"></div>
+                                    </div>
+                                    <input type="range" id="pot-slider" min="0" max="1023" value="0" class="w-full max-w-xs big-range" style="--thumb:#f59e0b">
+                                    <span class="text-xs text-slate-500 font-bold">轉動可變電阻</span>
+                                </div>
+
+                                <!-- Motor Visual -->
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-24 h-24 bg-white rounded-full border-4 border-slate-300 flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.5)] relative">
+                                        <div id="pwm-motor-blade" class="w-2 h-20 bg-emerald-400 rounded-full motor-prop absolute"></div>
+                                        <div id="pwm-motor-blade2" class="w-20 h-2 bg-emerald-400 rounded-full motor-prop absolute"></div>
+                                        <div class="w-6 h-6 bg-slate-300 rounded-full z-10"></div>
+                                    </div>
+                                    <span class="text-xs text-slate-500 font-bold">風扇轉速</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    const slider = document.getElementById('pot-slider');
+                    const potText = document.getElementById('pot-val');
+                    const pwmText = document.getElementById('pwm-val');
+                    const knob = document.getElementById('pot-knob-indicator');
+                    const blade1 = document.getElementById('pwm-motor-blade');
+                    const blade2 = document.getElementById('pwm-motor-blade2');
+
+                    let currentSpeed = 0;
+                    let mRotation = 0;
+
+                    function rotateMotor() {
+                        if (currentSpeed > 0) {
+                            mRotation += currentSpeed;
+                            blade1.style.transform = `rotate(${mRotation}deg)`;
+                            blade2.style.transform = `rotate(${mRotation}deg)`;
+                        }
+                        animationRequests.push(requestAnimationFrame(rotateMotor));
+                    }
+
+                    slider.addEventListener('input', (e) => {
+                        const val = parseInt(e.target.value);
+                        potText.textContent = val;
+                        
+                        // Map 0-1023 to 0-255
+                        const pwm = Math.floor((val / 1023) * 255);
+                        pwmText.textContent = pwm;
+                        
+                        // Map PWM to rotation speed for visual
+                        currentSpeed = (pwm / 255) * 20; 
+                        
+                        // Rotate knob visually (-135deg to 135deg roughly)
+                        const knobAngle = -135 + (val / 1023) * 270;
+                        knob.style.transform = `rotate(${knobAngle}deg)`;
+                    });
+
+                    rotateMotor();
+                    lucide.createIcons();
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="code-2" class="w-8 h-8 text-amber-400"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">邏輯解析：一個旋鈕，兩個角色一起動</h3>
+                    </div>
+                    <p class="text-slate-600 mb-6 leading-relaxed">
+                        兩段程式讀的是<span class="hl">同一支腳（A7）</span>，
+                        只是換算到<span class="hl-b">不同的範圍</span> ——
+                        一個換成「指針要指哪裡」，一個換成「馬達要轉多快」。
+                    </p>
+
+                    <div class="bg-[#1e1e1e] rounded-xl border border-slate-200 overflow-hidden shadow-2xl mb-6">
+                        <div class="bg-[#2d2d2d] px-4 py-3 flex items-center gap-2 border-b border-slate-200">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-500 font-mono">角色一：指針 — 轉到哪，指針就指到哪</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-600">
+<pre class="whitespace-pre-wrap"><code class="grid grid-cols-[max-content_1fr] gap-x-4 sm:gap-x-6 gap-y-2">
+<span class="col-span-2"><span class="text-rose-600">當綠旗被點擊</span></span>
+<span class="col-span-2"><span class="text-rose-600">無限重複執行</span></span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 角度 <span class="text-rose-600">設為</span> <span class="text-amber-600">類比對應</span> (<span class="text-indigo-600">A7</span>, <span class="text-indigo-600">0</span>, <span class="text-indigo-600">180</span>)</span>
+<span class="col-span-2">  <span class="text-amber-600">面向</span> <span class="text-sky-600">角度</span> <span class="text-amber-600">度</span></span>
+</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#1e1e1e] rounded-xl border border-slate-200 overflow-hidden shadow-2xl">
+                        <div class="bg-[#2d2d2d] px-4 py-3 flex items-center gap-2 border-b border-slate-200">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-500 font-mono">角色二：風扇 — 轉速可以是負的</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-600">
+<pre class="whitespace-pre-wrap"><code class="grid grid-cols-[max-content_1fr] gap-x-4 sm:gap-x-6 gap-y-2">
+<span class="col-span-2"><span class="text-rose-600">當綠旗被點擊</span></span>
+<span class="col-span-2"><span class="text-rose-600">無限重複執行</span></span>
+<span class="col-span-2 text-emerald-600">  // ⚠️ 下限是 −250，不是 0 —— 負數代表反轉</span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 轉速 <span class="text-rose-600">設為</span> <span class="text-amber-600">類比對應</span> (<span class="text-indigo-600">A7</span>, <span class="text-indigo-600">−250</span>, <span class="text-indigo-600">250</span>)</span>
+<span class="col-span-2">  <span class="text-amber-600">設定馬達</span> (<span class="text-indigo-600">腳位2、3</span>) <span class="text-rose-600">=</span> <span class="text-sky-600">轉速</span></span>
+<span class="col-span-2">  <span class="text-amber-600">右轉</span> (<span class="text-sky-600">轉速</span> ÷ <span class="text-indigo-600">5</span>) <span class="text-amber-600">度</span>　<span class="text-emerald-600">// 畫面上的風扇圖跟著轉</span></span>
+</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid md:grid-cols-3 gap-4">
+                        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+                            <div class="font-black text-amber-900 mb-1">為什麼是 −250 到 250？</div>
+                            <p class="text-sm text-amber-900 leading-relaxed">
+                                因為馬達的轉速<span class="hl">可以是負的</span> ——
+                                負數就是<b>反轉</b>。所以旋鈕轉到
+                                <span class="hl-b">正中間會得到 0，也就是停止</span>；
+                                往一邊轉是正轉，往另一邊轉是反轉。
+                            </p>
+                        </div>
+                        <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4">
+                            <div class="font-black text-sky-900 mb-1">「類比對應」幫你做了什麼？</div>
+                            <p class="text-sm text-sky-900 leading-relaxed">
+                                A7 實際讀到的是 <b>0～1023</b>，但你<span class="hl">不必自己算</span>：
+                                這塊積木只要填<b>下限和上限</b>兩個數字，它就幫你換算好。
+                                ⚠️ 上一節那塊「對應」要填四個數字，這一塊只要兩個。
+                            </p>
+                        </div>
+                        <div class="bg-slate-50 border-2 border-slate-300 rounded-2xl p-4">
+                            <div class="font-black text-slate-800 mb-1">為什麼要「÷ 5」？</div>
+                            <p class="text-sm text-slate-700 leading-relaxed">
+                                那一行只是讓<span class="hl">畫面上的風扇圖</span>轉起來，
+                                和真正的馬達<b>沒有關係</b>。
+                                不除以 5 的話圖會轉得太快，看起來像在閃。
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-white border-2 border-amber-300 rounded-2xl p-5">
+                        <div class="font-black text-amber-800 text-lg mb-3">🎚️ 旋鈕轉到哪，馬達就怎麼轉</div>
+                        <div class="grid grid-cols-5 gap-2 text-center text-sm">
+                            <div><div class="font-black text-slate-800">最左</div>
+                                 <div class="text-2xl font-black text-rose-600">−250</div>
+                                 <div class="text-slate-600">◀ 反轉最快</div></div>
+                            <div><div class="font-black text-slate-800">左半</div>
+                                 <div class="text-2xl font-black text-rose-500">−125</div>
+                                 <div class="text-slate-600">◀ 反轉</div></div>
+                            <div class="bg-slate-100 rounded-xl py-1"><div class="font-black text-slate-800">正中間</div>
+                                 <div class="text-2xl font-black text-slate-800">0</div>
+                                 <div class="text-slate-700 font-black">■ 停</div></div>
+                            <div><div class="font-black text-slate-800">右半</div>
+                                 <div class="text-2xl font-black text-emerald-600">125</div>
+                                 <div class="text-slate-600">正轉 ▶</div></div>
+                            <div><div class="font-black text-slate-800">最右</div>
+                                 <div class="text-2xl font-black text-emerald-700">250</div>
+                                 <div class="text-slate-600">正轉最快 ▶</div></div>
+                        </div>
+                        <p class="text-sm text-slate-700 mt-4 leading-relaxed">
+                            ⚠️ 如果把下限改成 <b>0</b>（寫成 0～250），
+                            風扇就<span class="hl">永遠不會反轉</span>，
+                            而且<span class="hl-b">旋鈕轉到最左邊才會停</span> ——
+                            中間那個「停」的位置就不見了。
+                        </p>
+                    </div>
+                `
+            },
+            4: {
+                title: "情境照明：可變電阻與燈條",
+                badge: "第四節課",
+                colorText: "text-indigo-600",
+                colorBg: "bg-purple-500",
+                icon: "sliders-horizontal",
+                desc: "用旋鈕控制整條燈條。按 1 是<b>燈號移動</b>（旋鈕轉到哪，亮的那一顆就跑到哪）；按 2 是<b>混色</b>（旋鈕轉一圈，走完整個色環）。★ 重點在<b>紅綠藍三盞燈疊在一起會混出什麼顏色</b>。",
+                /* 第四節：旋鈕控制燈條的「位置」與「顏色」，重點是 R G B 三原色混色。
+                   色相換算的那三行 sin 不解釋，暖身只練混色。三個檢核在 shared/mixlab.js。 */
+                lab: { unit: 'u4', warm: 'RGBLAB', checks: 'MIXLAB',
+                       warmTitle: '🔥 暖身關卡：紅綠藍三盞燈怎麼混色' },
+                apps: [
+                    { icon: "🏮", name: "氣氛燈／燈條",
+                      how: "同一條燈，轉個旋鈕就從暖黃換成冷藍 —— 裡面就是紅綠藍三盞燈用不同比例。" },
+                    { icon: "📺", name: "螢幕的每一個像素",
+                      how: "拿放大鏡看手機螢幕，會看到一格格的紅綠藍小點 —— 整片畫面都是它們疊出來的。" }
+                ],
+                appsNote: '⚠️ 這兩個東西<span class="hl">都沒有「黃色燈泡」</span>：' +
+                          '黃色是<b>紅光加綠光</b>疊出來的。' +
+                          '★ 只要三盞燈的比例調得夠細，' +
+                          '就能混出<span class="hl-b">幾乎任何顏色</span> —— ' +
+                          '這一節要做的就是這件事。',
+                objectives: [
+                    "★ 認識<span class=\"hl\">光的三原色</span>：燈條每一顆裡面有紅、綠、藍三盞小燈，疊在一起就混出顏色",
+                    "⚠️ 分得出<span class=\"hl-b\">光和顏料不一樣</span> —— 顏料越混越暗，光越混越亮（三盞全開是白光）",
+                    "複習<span class=\"hl\">類比對應</span>：同一塊積木，這次換算成「第幾顆」與「色環角度 0～359」",
+                    "用<b>一個輸入</b>控制<b>兩個輸出</b>：同一個判斷，讓燈條和風扇一起動"
+                ],
+                materials: [
+                    "NKNU 5016B 教具模組",
+                    "可變電阻（旋鈕，10K）—— 接法同第三節：G→腳1、P→腳3、S→腳2（訊號進 <b>A7</b>）",
+                    "RGB 全彩燈條（WS2812B）"
+                ],
+                /* 模擬器把「讀到什麼 → 哪一塊換算 → 換成什麼」三層都寫出來：
+                   A7 原始讀值（0～1023）→ 類比對應（A7，0，359）→ 色相（0～359）；燈條 8 顆。 */
+                initPlayground: function(container) {
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center gap-5 w-full">
+                            <div class="w-full max-w-md bg-slate-50 border-2 border-slate-200 rounded-2xl p-4">
+                                <div class="flex items-center justify-between gap-2 text-sm font-mono">
+                                    <span class="text-slate-600">A7 讀到</span>
+                                    <span><b id="color-pot-val" class="text-amber-600 text-lg">0</b>
+                                        <span class="text-xs text-slate-400">／ 1023</span></span>
+                                </div>
+                                <div class="text-center text-xs text-slate-400 my-1">
+                                    ↓　類比對應（A7，0，359）　↓
+                                </div>
+                                <div class="flex items-center justify-between gap-2 text-sm font-mono">
+                                    <span class="text-slate-600">色相</span>
+                                    <span><b id="hue-val" class="text-indigo-600 text-lg">0</b>
+                                        <span class="text-xs text-slate-400">／ 359</span></span>
+                                </div>
+                            </div>
+
+                            <div class="w-full max-w-md">
+                                <input type="range" id="color-slider" min="0" max="1023" value="0"
+                                    class="w-full big-range"
+                                    style="--thumb:#a855f7; background: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);">
+                                <div class="flex justify-between text-xs text-slate-400 font-mono mt-1">
+                                    <span>轉到最左</span><span>轉到最右</span>
+                                </div>
+                            </div>
+
+                            <div id="hue-strip" class="flex gap-2 sm:gap-3 justify-center items-center bg-slate-900 p-5 rounded-2xl w-full"></div>
+
+                            <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md">
+                                ⚠️ 上面那個 <b>0～1023</b> 是 <b>A7 原本讀到的數字</b>
+                                （第三節那把尺，旋鈕轉到哪就讀到多少）。<br>
+                                你<span class="hl">不必自己除</span> ——
+                                「類比對應」那塊積木會直接把它換成 <b>0～359</b> 的色相。
+                            </p>
+                        </div>
+                    `;
+
+                    const slider = document.getElementById('color-slider');
+                    const potText = document.getElementById('color-pot-val');
+                    const hueText = document.getElementById('hue-val');
+                    const strip = document.getElementById('hue-strip');
+                    /* 燈條是 8 顆 */
+                    const leds = [];
+                    for (let i = 0; i < 8; i++) {
+                        const d = document.createElement('div');
+                        d.className = 'w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-colors';
+                        strip.appendChild(d);
+                        leds.push(d);
+                    }
+
+                    function paint(val) {
+                        potText.textContent = val;
+                        /* 上限是 359，和積木裡那一組一樣（不是 360） */
+                        const hue = Math.round((val / 1023) * 359);
+                        hueText.textContent = hue;
+                        const colorString = `hsl(${hue}, 100%, 50%)`;
+                        leds.forEach(led => {
+                            led.style.backgroundColor = colorString;
+                            led.style.boxShadow = `0 0 18px ${colorString}`;
+                        });
+                    }
+                    slider.addEventListener('input', (e) => paint(parseInt(e.target.value)));
+                    paint(0);
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="code-2" class="w-8 h-8 text-fuchsia-400"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">邏輯解析：同一個旋鈕，兩種玩法</h3>
+                    </div>
+                    <p class="text-slate-600 mb-6 leading-relaxed">
+                        兩段程式都用<span class="hl">同一塊「類比對應」</span>讀 A7 ——
+                        差別只在<span class="hl-b">換算到哪個範圍</span>，以及換出來拿去做什麼。
+                    </p>
+
+                    <div class="bg-[#1e1e1e] rounded-xl border border-slate-200 overflow-hidden shadow-2xl mb-6">
+                        <div class="bg-[#2d2d2d] px-4 py-3 flex items-center gap-2 border-b border-slate-200">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-500 font-mono">模式一：燈號移動（按 1）— 旋鈕轉到哪，亮的就跑到哪</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-600">
+<pre class="whitespace-pre-wrap"><code class="grid grid-cols-[max-content_1fr] gap-x-4 sm:gap-x-6 gap-y-2">
+<span class="col-span-2"><span class="text-rose-600">當按下按鍵</span> <span class="text-indigo-600">1</span></span>
+<span class="col-span-2"><span class="text-rose-600">無限重複執行</span></span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 燈號 <span class="text-rose-600">設為</span> <span class="text-amber-600">類比對應</span> (<span class="text-indigo-600">A7</span>, <span class="text-indigo-600">1</span>, <span class="text-indigo-600">8</span>)</span>
+<span class="col-span-2">  <span class="text-amber-600">設定燈條</span> 第 <span class="text-sky-600">燈號</span> <span class="text-amber-600">顆</span> = (<span class="text-indigo-600">50</span>,<span class="text-indigo-600">50</span>,<span class="text-indigo-600">50</span>)</span>
+<span class="col-span-2">  <span class="text-rose-600">等待</span> <span class="text-indigo-600">0.4</span> <span class="text-rose-600">秒</span></span>
+<span class="col-span-2">  <span class="text-amber-600">設定燈條</span> <span class="text-indigo-600">全部</span> = (<span class="text-indigo-600">0</span>,<span class="text-indigo-600">0</span>,<span class="text-indigo-600">0</span>)　<span class="text-emerald-600">// 先清整條，再亮下一顆</span></span>
+</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#1e1e1e] rounded-xl border border-slate-200 overflow-hidden shadow-2xl">
+                        <div class="bg-[#2d2d2d] px-4 py-3 flex items-center gap-2 border-b border-slate-200">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-500 font-mono">模式二：混色（按 2）— 旋鈕轉一圈，走完整個色環</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-600">
+<pre class="whitespace-pre-wrap"><code class="grid grid-cols-[max-content_1fr] gap-x-4 sm:gap-x-6 gap-y-2">
+<span class="col-span-2"><span class="text-rose-600">當按下按鍵</span> <span class="text-indigo-600">2</span></span>
+<span class="col-span-2"><span class="text-rose-600">無限重複執行</span></span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 顏色 <span class="text-rose-600">設為</span> <span class="text-amber-600">類比對應</span> (<span class="text-indigo-600">A7</span>, <span class="text-indigo-600">0</span>, <span class="text-indigo-600">359</span>)</span>
+<span class="col-span-2 text-emerald-600">  // ⚠️ 下面三行是把角度換成一組紅綠藍。公式不必看懂，會用就好。</span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 紅 <span class="text-rose-600">設為</span> 無條件捨去( sin(<span class="text-sky-600">顏色</span>) × 127 + 128 )</span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 綠 <span class="text-rose-600">設為</span> 無條件捨去( sin(<span class="text-sky-600">顏色</span>+120) × 127 + 128 )</span>
+<span class="col-span-2">  <span class="text-sky-600">變數</span> 藍 <span class="text-rose-600">設為</span> 無條件捨去( sin(<span class="text-sky-600">顏色</span>+240) × 127 + 128 )</span>
+<span class="col-span-2">  <span class="text-amber-600">設定燈條</span> <span class="text-indigo-600">全部</span> = (<span class="text-sky-600">紅</span>, <span class="text-sky-600">綠</span>, <span class="text-sky-600">藍</span>)　<span class="text-emerald-600">// ★ 這一行才是重點</span></span>
+</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid md:grid-cols-3 gap-4">
+                        <div class="bg-fuchsia-50 border-2 border-fuchsia-200 rounded-2xl p-4">
+                            <div class="font-black text-fuchsia-900 mb-1">★ 這一節的重點只有一句</div>
+                            <p class="text-sm text-fuchsia-900 leading-relaxed">
+                                燈條的每一顆裡面有<span class="hl">紅、綠、藍三盞小燈</span>，
+                                <b>疊在一起</b>就混出顏色。<br>
+                                ⚠️ 那三行 sin <span class="hl-b">不必看懂</span> ——
+                                它只是幫你把角度換成一組紅綠藍。
+                            </p>
+                        </div>
+                        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+                            <div class="font-black text-amber-900 mb-1">⚠️ 光不是顏料</div>
+                            <p class="text-sm text-amber-900 leading-relaxed">
+                                美術課的顏料<span class="hl">越混越暗</span>；
+                                光是<span class="hl-b">越混越亮</span>。<br>
+                                紅光＋綠光＝<b>黃光</b>，三盞全開＝<b>白光</b>。
+                            </p>
+                        </div>
+                        <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4">
+                            <div class="font-black text-sky-900 mb-1">同一塊積木，換個用途</div>
+                            <p class="text-sm text-sky-900 leading-relaxed">
+                                「類比對應」還是那一塊 ——
+                                只是這次把旋鈕換成<span class="hl">第幾顆</span>
+                                或<span class="hl-b">色環角度</span>。<br>
+                                換算的道理一樣，換的只是<b>要換成什麼</b>。
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-white border-2 border-fuchsia-300 rounded-2xl p-5">
+                        <div class="font-black text-fuchsia-800 text-lg mb-3">🎨 三盞燈疊出來的顏色</div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">
+                            <div><div class="h-12 rounded-xl mb-1" style="background:#ffff00"></div>
+                                 <b>紅 ＋ 綠</b><br>＝ 黃</div>
+                            <div><div class="h-12 rounded-xl mb-1" style="background:#00ffff"></div>
+                                 <b>綠 ＋ 藍</b><br>＝ 青</div>
+                            <div><div class="h-12 rounded-xl mb-1" style="background:#ff00ff"></div>
+                                 <b>紅 ＋ 藍</b><br>＝ 洋紅</div>
+                            <div><div class="h-12 rounded-xl mb-1 border-2 border-slate-200" style="background:#ffffff"></div>
+                                 <b>三盞全開</b><br>＝ 白</div>
+                        </div>
+                        <p class="text-sm text-slate-700 mt-4 leading-relaxed">
+                            ⚠️ 那<b>黑色</b>呢？黑色不是一種光，是<span class="hl">沒有光</span> ——
+                            三盞都填 0 就是黑的。
+                        </p>
+                    </div>
+                `
+            },
+            5: {
+                title: "自己的專案：從想法到成果",
+                badge: "第五節課",
+                colorText: "text-primary",
+                colorBg: "bg-primary",
+                icon: "lightbulb",
+                desc: "前面四節都是我出題、你照著做。這一節<b>換你出題</b>：想一個家裡真的會遇到的麻煩，用學過的元件把它解決掉。★ 三張任務卡<b>每組都從基礎關開始</b> —— 先讓它動，再讓它更聰明，最後讓它真的解決問題。",
+                /* 第五節：專題。電腦看不到硬體，所以任務卡不判定「做出來了沒」，
+                   只判定「你有沒有寫出證據」。三關任務與發表三句的文字不要改。 */
+                apps: [
+                    { icon: "🚪", name: "玄關迎賓燈", how: "手上提滿東西的時候，最不想做的就是摸黑找開關。" },
+                    { icon: "🌱", name: "植物缺水提醒", how: "不是每天都記得澆水 —— 讓它自己提醒你。" },
+                    { icon: "🔔", name: "冰箱門沒關", how: "門沒關緊常常整晚才發現，電費和食物一起壞掉。" }
+                ],
+                appsNote: "⚠️ 這三個只是<b>起頭</b>。最好的題目通常來自「我家真的有這個困擾」 —— 想不到的話，回想一下這禮拜有什麼事讓你覺得麻煩。",
+                objectives: [
+                    "把一個生活問題，翻成<span class=\"hl\">一句「如果…那麼…」</span>（設計單）",
+                    "用 1 個輸入＋1 個輸出<span class=\"hl-b\">先讓它動起來</span>，而且能現場操作驗證",
+                    "調整<span class=\"hl\">判斷的數值或條件</span>，再加入<b>第二個輸出</b>（輸入不換）",
+                    "加上自訂功能並<span class=\"hl-b\">說得出為什麼要這樣改</span>",
+                    "用固定的三句話完成成果發表，並產出一張可帶走的成果卡"
+                ],
+                materials: [
+                    "NKNU 5016B 教具模組",
+                    "前四節用過的元件：超音波距離感測器、可變電阻（旋鈕）、RGB 全彩燈條、直流馬達",
+                    "專題設計單（就在下面，先把要做什麼講清楚）"
+                ],
+                initPlayground: function(container) {
+                    /* 🧠 靈感牆：輸入 × 輸出 的配對盤。教具上只有四樣
+                       （超音波、可變電阻、RGB 燈條、直流馬達），2×2 四種組合各給一個點子。 */
+                    const INS = [
+                        { k: 'us',  t: '超音波距離感測器', d: '給你「幾公分」', from: '第一、二節' },
+                        { k: 'pot', t: '可變電阻（旋鈕）', d: '給你「轉到幾 %」', from: '第三、四節' }
+                    ];
+                    const OUTS = [
+                        { k: 'strip', t: 'RGB 全彩燈條', d: '顏色、亮第幾顆', from: '第二、四節' },
+                        { k: 'moto',  t: '直流馬達', d: '轉／停／快慢', from: '第三節' }
+                    ];
+                    const IDEA = {
+                        'us|strip': '有人靠近就亮的玄關燈；或越近亮越多顆，變成停車距離指示。',
+                        'us|moto': '手一靠近就吹風的感應風扇；也可以反過來 —— 太近就停下來保護手指。',
+                        'pot|strip': '旋鈕轉一圈換一輪顏色，自己調出喜歡的氣氛燈。',
+                        'pot|moto': '旋鈕調風速，像真的電風扇一樣。'
+                    };
+                    container.innerHTML = `
+                        <div class="w-full flex flex-col gap-4">
+                            <div class="text-sm font-bold text-slate-600">
+                                🧠 <b>靈感牆</b>：各挑一個，看看能組出什麼。
+                                <span class="text-slate-400">（這裡只是發想，決定寫在下面的設計單）</span>
+                            </div>
+                            <div class="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="text-xs font-black text-slate-400 mb-2">輸入（它怎麼知道）</div>
+                                    <div id="idea-in" class="flex flex-col gap-2"></div>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-black text-slate-400 mb-2">輸出（它做什麼）</div>
+                                    <div id="idea-out" class="flex flex-col gap-2"></div>
+                                </div>
+                            </div>
+                            <div id="idea-out-box" class="bg-slate-900 text-slate-100 rounded-2xl p-5 font-bold leading-relaxed text-sm sm:text-base min-h-[86px] flex items-center">
+                                各選一個，這裡會給你一個點子。
+                            </div>
+                            <p class="text-xs text-slate-500 leading-relaxed">
+                                ⚠️ 教具上就這 <b>四樣</b>。<b>輸入挑一個就好</b> ——
+                                做自動的用超音波、做手動的用旋鈕，整節課都不換。<br>
+                                ★ 挑戰關要加的是<b>第二個輸出</b>：同一個判斷，
+                                讓燈條和風扇<b>一起動</b>。
+                            </p>
+                        </div>
+                    `;
+                    let pick = { in: '', out: '' };
+                    function btn(x, kind) {
+                        const b = document.createElement('button');
+                        b.className = 'text-left px-4 py-3 rounded-xl border-2 border-slate-200 bg-white font-black text-slate-800 hover:border-primary hover:bg-indigo-50 transition';
+                        b.innerHTML = `${x.t}<span class="block text-xs font-bold text-slate-500">${x.d}　·　${x.from}用過</span>`;
+                        b.addEventListener('click', () => {
+                            pick[kind] = x.k;
+                            [...container.querySelectorAll(`[data-kind="${kind}"]`)].forEach(o => {
+                                const on = o.getAttribute('data-k') === x.k;
+                                o.classList.toggle('border-primary', on);
+                                o.classList.toggle('bg-indigo-50', on);
+                            });
+                            const box = document.getElementById('idea-out-box');
+                            box.textContent = (pick.in && pick.out)
+                                ? '💡 ' + (IDEA[pick.in + '|' + pick.out] || '想想看這個組合能解決什麼？')
+                                : '各選一個，這裡會給你一個點子。';
+                        });
+                        b.setAttribute('data-kind', kind);
+                        b.setAttribute('data-k', x.k);
+                        return b;
+                    }
+                    INS.forEach(x => document.getElementById('idea-in').appendChild(btn(x, 'in')));
+                    OUTS.forEach(x => document.getElementById('idea-out').appendChild(btn(x, 'out')));
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-2">
+                        <i data-lucide="layers" class="w-8 h-8 text-fuchsia-400"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">分層任務卡：每組都從基礎關開始</h3>
+                    </div>
+                    <p class="text-slate-600 mb-4 text-sm sm:text-base leading-relaxed">
+                        ⚠️ 不要一次想做到最完整 —— <span class="hl">先讓它動</span>，
+                        再一層一層加上去。每一關都要<b>現場操作給人看</b>。
+                    </p>
+
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <div class="bg-white border-2 border-emerald-300 rounded-2xl p-5">
+                            <div class="text-xs font-black text-emerald-600 mb-1">① 基礎關</div>
+                            <div class="font-black text-slate-800 text-lg mb-2">先讓它動</div>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                選 <b>1 個輸入</b>＋<b>1 個輸出</b>，
+                                完成一個「<span class="hl">如果…那麼…</span>」功能，
+                                並能<b>現場操作驗證</b>。
+                            </p>
+                        </div>
+                        <div class="bg-white border-2 border-amber-300 rounded-2xl p-5">
+                            <div class="text-xs font-black text-amber-600 mb-1">② 挑戰關</div>
+                            <div class="font-black text-slate-800 text-lg mb-2">讓它更聰明</div>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                調整<span class="hl">判斷數值或條件</span>，
+                                再加入<b>第二個輸出</b>。<br>
+                                <span class="text-xs text-slate-500">
+                                ★ 輸入<b>不換</b>：做自動的一路用超音波、做手動的一路用旋鈕。<br>
+                                ⇒ 整個專案就是 <b>一個輸入 ＋ 兩個輸出</b>。</span>
+                            </p>
+                        </div>
+                        <div class="bg-white border-2 border-fuchsia-300 rounded-2xl p-5">
+                            <div class="text-xs font-black text-fuchsia-600 mb-1">③ 創意關</div>
+                            <div class="font-black text-slate-800 text-lg mb-2">讓它解決問題</div>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                加入<b>自訂功能</b>，完成一段<span class="hl">測試情境</span>，
+                                並<b>說明你修改的原因</b>。
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-slate-900 rounded-2xl overflow-hidden shadow-xl">
+                        <div class="flex items-center gap-2 px-4 py-3 bg-slate-800/50">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-400 font-mono">基礎關的骨架 — 把方框換成你自己的東西</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-300">
+<pre class="whitespace-pre"><code><span class="text-rose-400">重複無限次</span>
+  <span class="text-sky-400">讀值</span> ← <span class="text-amber-400">［你的輸入］</span>
+  <span class="text-rose-400">如果</span> <span class="text-sky-400">讀值</span> <span class="text-amber-400">［大於／小於］</span> <span class="text-amber-400">［門檻］</span> <span class="text-rose-400">那麼</span>
+      <span class="text-amber-400">［你的輸出］</span> <span class="text-amber-400">［動作］</span>
+  <span class="text-rose-400">否則</span>
+      <span class="text-amber-400">［你的輸出］</span> <span class="text-amber-400">［恢復原狀］</span>
+</code></pre>
+                        </div>
+                        <div class="px-4 sm:px-6 pb-5 text-xs sm:text-sm text-slate-400 leading-relaxed">
+                            ⚠️ <b>「否則」不要省略</b> —— 少了它，燈亮起來就再也不會暗。
+                            這是第一節那個「門開了沒」的老問題。<br>
+                            ★ 挑戰關就是在這個骨架上<b>多掛一個輸出</b>：
+                            同一個判斷，兩樣東西一起動。
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-slate-900 rounded-2xl overflow-hidden shadow-xl">
+                        <div class="flex items-center gap-2 px-4 py-3 bg-slate-800/50">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="ml-4 text-xs text-slate-400 font-mono">挑戰關的骨架 — 一個輸入、兩個輸出</span>
+                        </div>
+                        <div class="p-4 sm:p-6 overflow-x-auto text-sm sm:text-base font-mono leading-relaxed text-slate-300">
+<pre class="whitespace-pre"><code><span class="text-rose-400">重複無限次</span>
+  <span class="text-sky-400">讀值</span> ← <span class="text-amber-400">［你的輸入］</span>　<span class="text-slate-500">// 只有這一個，不再換</span>
+  <span class="text-rose-400">如果</span> <span class="text-sky-400">讀值</span> <span class="text-amber-400">［判斷］</span> <span class="text-amber-400">［門檻］</span> <span class="text-rose-400">那麼</span>
+      <span class="text-amber-400">［輸出一］</span> <span class="text-amber-400">［動作］</span>　<span class="text-slate-500">// 例：燈條亮起來</span>
+      <span class="text-amber-400">［輸出二］</span> <span class="text-amber-400">［動作］</span>　<span class="text-slate-500">// 例：風扇開始轉</span>
+  <span class="text-rose-400">否則</span>
+      <span class="text-amber-400">［輸出一］</span> <span class="text-amber-400">［恢復］</span>
+      <span class="text-amber-400">［輸出二］</span> <span class="text-amber-400">［恢復］</span>
+</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid gap-4 md:grid-cols-2">
+                        <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4">
+                            <div class="font-black text-sky-900 mb-1">🎤 成果發表：固定講這三句就好</div>
+                            <ol class="text-sm text-sky-900 leading-relaxed list-decimal pl-5 space-y-1 mt-2">
+                                <li>我要解決的問題是：＿＿＿＿。</li>
+                                <li>當＿＿＿＿時，系統會＿＿＿＿；<b>否則</b>＿＿＿＿。</li>
+                                <li>我遇到＿＿＿＿，最後用＿＿＿＿解決，<b>我學到</b>＿＿＿＿。</li>
+                            </ol>
+                            <p class="text-xs text-sky-800 mt-3 leading-relaxed">
+                                ★ 填完會產生一張<b>成果卡</b>，可以<b>下載成圖片</b>；
+                                檔名會自動取成「成果發表-班級_座號_姓名.png」。
+                            </p>
+                        </div>
+                        <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4">
+                            <div class="font-black text-amber-900 mb-1">⚠️ 第三句最容易寫壞</div>
+                            <p class="text-sm text-amber-900 leading-relaxed">
+                                「我沒有遇到問題」<b>不算</b> ——
+                                那一格是整段發表<span class="hl-b">最值錢</span>的地方。<br>
+                                第一次燒錄成功了嗎？數字第一次就抓對了嗎？線有沒有插錯過？
+                                <b>那些都算。</b>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-white border-2 border-slate-300 rounded-2xl p-5">
+                        <div class="font-black text-slate-800 mb-2">🧯 卡住的時候，照這個順序檢查</div>
+                        <ol class="text-sm text-slate-600 leading-relaxed list-decimal pl-5 space-y-1">
+                            <li><b>線</b>：三支腳有沒有接對？（第三節：G→腳1、P→腳3、S→腳2）</li>
+                            <li><b>數字</b>：門檻填在感測器讀得到的範圍裡嗎？（超音波約 2～200 公分）</li>
+                            <li><b>範圍別搞混</b>：<span class="hl">1023</span> 是讀到的、<span class="hl">255</span> 是每盞燈的亮度、<span class="hl">359</span> 是色環一圈。</li>
+                            <li><b>「否則」寫了沒</b>：只寫「如果」的話，動作做了就回不去。</li>
+                            <li>還是不動 → 把「如果…那麼…」<b>唸出來給同學聽</b>，通常唸到一半自己就發現了。</li>
+                        </ol>
+                    </div>
+                `,
+                /* 第五節沒有動手檢核：下面那一塊是「兩種模式的展示＋成果發表」，而且不上鎖 */
+                lab: { unit: 'u5', warm: 'PLANLAB', checks: 'PROJLAB', gate: false,
+                       warmTitle: '📋 專題設計單',
+                       warmNote: '三個步驟，把你想做的東西講清楚 —— ' +
+                                 '⚠️ 隨時可以回來改，改主意是正常的。',
+                       checkTitle: '🎛️ 兩種模式 ＋ 成果發表',
+                       checkNote: '先玩玩看<b>自動</b>和<b>手動</b>兩種模式（複習前四節）—— ' +
+                                  '你的作品挑一種來做就好。最後把成果整理成一張帶得走的卡片。' }
+            }
+
+        };
+
+        function openCourseDetail(unitId) {
+            const data = courseData[unitId];
+            if (!data) return;
+
+            // Clear any lingering animations from previous unit
+            clearAnimations();
+
+            // Hide Main Landing sections
+            document.getElementById('about').classList.add('hidden');
+            document.getElementById('curriculum').classList.add('hidden');
+            
+            // Show detail panel
+            const detailView = document.getElementById('detail-view');
+            detailView.classList.remove('hidden');
+            
+            // Setup meta text and theme indicators
+            document.getElementById('detail-badge').textContent = data.badge;
+            document.getElementById('detail-title').textContent = data.title;
+            /* desc 是我們自己寫的內容（沒有使用者輸入），用 innerHTML 才能畫重點 */
+            document.getElementById('detail-desc').innerHTML = data.desc;
+
+            /* 🏠 生活應用。沒有資料就整塊隱藏（留一個空標題比沒有還糟） */
+            const appsBox = document.getElementById('detail-apps');
+            if (data.apps && data.apps.length) {
+                const appsList = document.getElementById('detail-apps-list');
+                appsList.className = 'grid gap-3 max-w-3xl sm:grid-cols-' + Math.min(3, data.apps.length);
+                appsList.innerHTML = data.apps.map(a =>
+                    `<div class="bg-white/70 border-2 border-slate-200 rounded-xl p-3">
+                        <div class="text-2xl mb-1">${a.icon}</div>
+                        <div class="font-black text-slate-800 text-sm">${a.name}</div>
+                        <div class="text-xs text-slate-600 leading-relaxed mt-1">${a.how}</div>
+                     </div>`).join('');
+                document.getElementById('detail-apps-note').innerHTML = data.appsNote || '';
+                appsBox.classList.remove('hidden');
+            } else {
+                appsBox.classList.add('hidden');
+            }
+            
+            const bgIcon = document.getElementById('detail-bg-icon');
+            bgIcon.setAttribute('data-lucide', data.icon);
+            
+            // Update goals mapping
+            const objList = document.getElementById('detail-objectives');
+            objList.innerHTML = data.objectives.map(obj => 
+                `<li class="flex items-start gap-2"><i data-lucide="check-circle" class="w-5 h-5 ${data.colorText} shrink-0 mt-0.5"></i><span>${obj}</span></li>`
+            ).join('');
+            
+            // Update materials mapping
+            const matList = document.getElementById('detail-materials');
+            matList.innerHTML = data.materials.map(mat => 
+                `<li class="flex items-start gap-2"><i data-lucide="cpu" class="w-5 h-5 text-slate-500 shrink-0 mt-0.5"></i><span>${mat}</span></li>`
+            ).join('');
+            
+            // Render specific block logic codes
+            const demoContainer = document.getElementById('detail-demo-container');
+            demoContainer.innerHTML = typeof data.demoHTML === 'function' ? data.demoHTML() : data.demoHTML;
+            
+            /* 🎯 暖身與檢核：暖身過了才開三個檢核。
+               完成狀態寫進 modules.arduino（見 <head> 的 LABSAVE），不計星；
+               做完的人回來看到「✅ 已完成」＋可自願重做，不必從頭重開鎖。
+               先等讀取完再決定畫什麼（否則已完成的學生會先看到第一題）。
+               ?seed=1234 → 全班同題。 */
+            const warmBox = document.getElementById('detail-warm');
+            const labBox  = document.getElementById('detail-lab');
+            /* 哪一節掛哪一支寫在 courseData 的 lab 裡；暖身與檢核分開判斷 */
+            const labCfg  = data.lab || null;
+            const warmMod = labCfg && labCfg.warm   ? window[labCfg.warm]   : null;
+            const chkMod  = labCfg && labCfg.checks ? window[labCfg.checks] : null;
+            if (warmMod) {
+                const seed = new URLSearchParams(location.search).get('seed');
+                const seedTxt = seed ? ('全班同題　seed = ' + seed) : '每個人的數字都不一樣';
+                document.getElementById('warm-seed').textContent = seedTxt;
+                document.getElementById('lab-seed').textContent = seedTxt;
+
+                /* 標題跟著單元走，沒寫就用預設 */
+                const T = (id, v) => { if (v) document.getElementById(id).innerHTML = v; };
+                T('warm-title', labCfg.warmTitle);
+                T('warm-note', labCfg.warmNote);
+                T('lab-title', labCfg.checkTitle);
+                T('lab-note', labCfg.checkNote);
+
+                const UNIT   = labCfg.unit;
+                const wrap   = document.getElementById('warm-box');
+                const checks = document.getElementById('lab-checks');
+                const locked = document.getElementById('lab-locked');
+                const save   = window.LABSAVE || { load: () => Promise.resolve({}), save: () => {} };
+
+                warmBox.classList.remove('hidden');
+                labBox.classList.remove('hidden');
+
+                /* 存不進雲端要講出來：只存本機時掛一條橘色橫幅，明講「關掉瀏覽器就會不見」 */
+                if (save.onState) save.onState(function (st, reason) {
+                    let bar = document.getElementById('lab-cloud');
+                    if (st === 'cloud') { if (bar) bar.remove(); return; }
+                    if (!bar) {
+                        bar = document.createElement('div');
+                        bar.id = 'lab-cloud';
+                        bar.className = 'mb-4 bg-orange-50 border-2 border-orange-300 ' +
+                                        'rounded-2xl p-3 text-sm font-bold text-orange-900';
+                        warmBox.insertBefore(bar, warmBox.firstChild);
+                    }
+                    bar.innerHTML = '⚠️ 這次的紀錄<b>只存在這台電腦</b>，關掉瀏覽器就會不見。' +
+                                    '<span class="text-xs font-normal">（' +
+                                    (reason || '雲端沒接上') + '）</span>';
+                });
+                wrap.innerHTML = '<div class="text-slate-400 font-bold text-sm py-6 text-center">讀取上次的紀錄…</div>';
+
+                /* 已完成的樣子：一張綠卡 ＋「再玩一次」。
+                   重做不覆寫完成時間 —— 老師看到的是「第一次做完是什麼時候」。 */
+                function doneCard(box, at, label, redo) {
+                    const when = at ? new Date(at).toLocaleString('zh-TW',
+                        { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                    box.innerHTML =
+                      '<div class="flex flex-wrap items-center gap-3 bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4">' +
+                        '<span class="text-2xl">✅</span>' +
+                        '<div class="flex-1 min-w-[180px]"><div class="font-black text-emerald-800">' + label + '</div>' +
+                        (when ? '<div class="text-xs text-emerald-600 font-bold mt-0.5">完成於 ' + when + '</div>' : '') +
+                        '</div>' +
+                        '<button class="redo bg-white border-2 border-emerald-400 text-emerald-700 font-black text-sm px-4 py-2 rounded-xl hover:bg-emerald-100">再玩一次</button>' +
+                      '</div>';
+                    box.querySelector('.redo').addEventListener('click', redo);
+                }
+
+                function openChecks(rec) {
+                    locked.classList.add('hidden');
+                    checks.classList.remove('hidden');
+                    /* 這一節沒有檢核：說清楚，不要留一塊空白 */
+                    if (!chkMod) {
+                        checks.innerHTML =
+                          '<div class="bg-slate-50 border-2 border-dashed border-slate-300 ' +
+                          'rounded-2xl p-6 text-center text-slate-500 font-bold">' +
+                          '🚧 這一節的動手檢核還在準備中 —— 暖身完成就可以了。</div>';
+                        return;
+                    }
+                    if (rec && rec.checks) {
+                        doneCard(checks, rec.checks.at, '三個檢核都通過了', () => mountChecks(rec));
+                    } else {
+                        mountChecks(rec);
+                    }
+                }
+                /* 第五節：設計單要傳給成果發表。由頁面當中間人（projlab 不直接呼叫 PLANLAB）：
+                   暖身做完寫進紀錄，掛檢核時再讀出來。設計單每次都覆寫（學生改主意是正常的）。 */
+                let planRec = null;
+                /* 「801 班　13 號　王小明」，缺哪一段就跳過 */
+                function fmtWho(me) {
+                    if (!me) return '';
+                    const bits = [];
+                    if (me.cls) bits.push(me.cls + ' 班');
+                    if (me.no) bits.push(me.no + ' 號');
+                    if (me.name) bits.push(me.name);
+                    return bits.join('　');
+                }
+                function whoText() {
+                    return fmtWho((window.SSO && window.SSO.me && window.SSO.me()) || null);
+                }
+                /* 檔名用「班級_座號_姓名」，和畫面顯示的格式不同，另外給一份 */
+                function fmtFile(me) {
+                    if (!me) return '';
+                    return [me.cls, me.no, me.name].filter(Boolean).join('_');
+                }
+                function whoFile() {
+                    return fmtFile((window.SSO && window.SSO.me && window.SSO.me()) || null);
+                }
+                /* SSO 快取沒有（直接開網址、新分頁）就去問一次名冊，拿到再補進去 */
+                let chkApi = null;
+                function fillWhoLater(retry) {
+                    if (!retry && whoText()) return;          // 快取已經有了
+                    const tell = (t, fn) => {
+                        if (chkApi && chkApi.setWho) chkApi.setWho(t, fn);
+                    };
+                    if (!window.SSO || !window.SSO.resolve || !window.LABROSTER)
+                        return tell('');                      // 問不到也要回報，不可以卡在「正在讀」
+                    window.SSO.resolve(window.LABROSTER, { silent: true })
+                        .then(function (me) { tell(fmtWho(me), fmtFile(me)); })
+                        .catch(function () { tell(''); });
+                }
+                function planLine() {
+                    return (window.PLANLAB && planRec) ? window.PLANLAB.planLine(planRec) : '';
+                }
+                function mountChecks(rec) {
+                    if (!chkMod) return;
+                    checks.innerHTML = '';
+                    chkApi = chkMod.mount(checks, {
+                        seed: seed,
+                        plan: planRec,         // 第五節：設計單
+                        line: planLine(),      // 第五節：那一句「如果…那麼…」
+                        work: (rec && rec.work && rec.work.work) || null,
+                        /* 研發人員（班級座號姓名）：用 SSO 快取（同步），沒有就由 fillWhoLater 補 */
+                        who: whoText(),
+                        whoFile: whoFile(),
+                        /* 唯讀欄位問不到時，學生按「重新讀取」→ 再問一次名冊 */
+                        onRetryWho: function () { fillWhoLater(true); },
+                        /* B 那段「用自己的話說」存原文 —— 老師看得到全班怎麼說 */
+                        onSay: function (text, res) {
+                            save.save(UNIT, 'say', {
+                                text: String(text || '').slice(0, 500),
+                                got: (res && res.got) || []
+                            });
+                        },
+                        onDone: function (info) {
+                            if (!(rec && rec.checks)) save.save(UNIT, 'checks', { tries: info && info.tries });
+                            /* 第五節：成果發表的內容也存著（電腦教室關機會還原，不存的話下一節要重打） */
+                            if (info && info.work) save.save(UNIT, 'work', { work: info.work });
+                        }
+                    });
+                    fillWhoLater();      // 快取沒有就去問名冊
+                }
+                function mountWarm(rec) {
+                    wrap.innerHTML = '';
+                    warmMod.mount(wrap, {
+                        mode: 'warmup',          // ultralab 才看這個；maplab 會忽略
+                        seed: seed,
+                        plan: planRec,           // 第五節：帶著上次的設計單回來
+                        onDone: function (info) {
+                            if (!(rec && rec.warm)) save.save(UNIT, 'warm', { tries: info && info.tries });
+                            if (info && info.plan) {
+                                planRec = info.plan;
+                                save.save(UNIT, 'plan', { plan: info.plan });   // ★ 每次都覆寫
+                            }
+                            openChecks(rec);
+                            /* 不自動捲到檢核：暖身過了之後，學生應該往下讀模擬與虛擬碼 */
+                        }
+                    });
+                }
+
+                save.load(UNIT).then(function (rec) {
+                    rec = rec || {};
+                    planRec = (rec.plan && rec.plan.plan) || null;
+                    /* 第五節不上鎖：還沒填完設計單也要看得到「等一下要交什麼」 */
+                    if (labCfg.gate === false) {
+                        mountWarm(rec);
+                        openChecks(rec);
+                        return;
+                    }
+                    if (rec.warm) {
+                        doneCard(wrap, rec.warm.at, '暖身關卡已通過', () => mountWarm(rec));
+                        openChecks(rec);          // 暖身已經過了，直接開檢核
+                    } else {
+                        checks.innerHTML = '';
+                        checks.classList.add('hidden');
+                        locked.classList.remove('hidden');
+                        mountWarm(rec);
+                    }
+                    lucide.createIcons();
+                });
+            } else {
+                warmBox.classList.add('hidden');
+                labBox.classList.add('hidden');
+            }
+
+            // Load interactive workspace playground
+            const playground = document.getElementById('interactive-playground');
+            data.initPlayground(playground);
+            
+            // Re-render Lucide Icons for dynamic HTML
+            lucide.createIcons();
+            
+            // Scroll view back to top
+            window.scrollTo(0, 0);
+        }
+
+        function closeCourseDetail() {
+            clearAnimations();
+            
+            document.getElementById('detail-view').classList.add('hidden');
+            document.getElementById('about').classList.remove('hidden');
+            document.getElementById('curriculum').classList.remove('hidden');
+            
+            document.getElementById('interactive-playground').innerHTML = '';
+            document.getElementById('detail-demo-container').innerHTML = '';
+            
+            scrollToCurriculum();
+        }
+        
+        // Initial icon load
+        lucide.createIcons();
+    </script>
+
+<!-- 返回基地按鈕（自動加入） -->
+<a id="back-to-hub" href="hub.html" title="返回闖關基地"
+   style="position:fixed;top:14px;left:14px;z-index:99999;display:inline-flex;align-items:center;gap:6px;background:#1e293b;color:#fff;font-family:'Noto Sans TC',system-ui,sans-serif;font-weight:700;font-size:14px;padding:8px 14px;border-radius:9999px;text-decoration:none;box-shadow:0 4px 12px rgba(0,0,0,.25);transition:transform .15s;" onmouseover="this.style.transform='translateX(-2px)'" onmouseout="this.style.transform=''">← 返回基地</a>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ★ 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」與標頭 -->
+  <script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+  <style>.embedded [data-standalone] { display: none !important; }</style>
+  <title>通關截圖</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="../course/config.js"></script>
+  <script src="auth.js"></script>
+  <style>
+    body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
+    .pop { animation: pop .25s ease-out; } @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+    .cell { min-width: 2.6rem; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <!-- =====================================================================
+       🧠 通關截圖（老師專用）
+       ---------------------------------------------------------------------
+       運算思維過關時，學生頁在背景把通關截圖送給 Apps Script（gas/grader.gs 的 handleShot_），
+       存到評分服務的 DRIVE_FOLDER_ID / {TERM} / thinking / {班級} 底下，
+       連結和指紋寫在 {TERM}-progress/{學號} 的 modules.thinking.shots（學生改不到）。
+       這一頁讓老師：
+         ① 一眼看全班 10 關：📷 有截圖、✅ 有過關紀錄但沒截圖、— 還沒過
+         ② 點一格看截圖（縮圖要這台電腦的瀏覽器登入老師的 Google 帳號才看得到）
+         ③ 👯 相同截圖：打開這一頁時（下課後）比對全年級，同一張圖交了兩次以上的標出來
+            —— 同一個人拿同一張圖交兩關，或兩個人交同一張圖
+       ⚠️ 只認得「同一個檔案」：轉傳的截圖一模一樣，會被抓到；重新截一張（就算畫面一樣）指紋就不同。
+       ⚠️ 截圖是過關「之後」才送的，送不上去也不影響過關 ⇒ ✅ 沒截圖的格子不代表作弊，多半是網路斷了。
+       ===================================================================== -->
+  <div class="max-w-[1300px] mx-auto px-4 py-6">
+    <div data-standalone>
+      <a href="../course/teacher.html" class="text-sm font-bold text-slate-500 hover:text-slate-800">← 回教師端</a>
+    </div>
+    <p class="font-bold text-violet-600 text-sm">COMPUTATIONAL THINKING</p>
+    <h1 class="text-2xl font-black">🧠 通關截圖</h1>
+    <p class="text-sm text-slate-500 mt-1 leading-relaxed">每一格是一位學生在那一關交的通關截圖。點格子看截圖、打開雲端硬碟的原檔。</p>
+    <div id="app" class="mt-5"></div>
+  </div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserSessionPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const C = window.CONFIG || {};
+const ROSTER = (C.COLLECTIONS && C.COLLECTIONS.ROSTER) || 'roster';
+const PROGRESS = (C.COLLECTIONS && C.COLLECTIONS.PROGRESS) || (C.TERM + '-progress');
+const LEVELS = Array.from({ length: 10 }, (_, i) => i + 1);
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+setPersistence(auth, browserSessionPersistence).catch(() => {});
+const db = getFirestore(app);
+
+const el = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
+const when = t => { if (!t) return '—'; const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const state = { who: null, roster: [], shots: {}, done: {}, klass: '', open: null, busy: '', err: '', dupOpen: false };
+
+onAuthStateChanged(auth, async u => {
+  state.who = (u && u.email && AUTH.isTeacherEmail(u.email)) ? u : null;
+  if (state.who) await load();
+  draw();
+});
+
+async function load() {
+  state.busy = '讀取名冊與截圖…'; draw();
+  try {
+    const [rs, ps, cs] = await Promise.all([
+      getDocs(collection(db, ROSTER)), getDocs(collection(db, PROGRESS)),
+      getDocs(collection(db, 'artifacts', 'comp-think-app', 'public', 'data', 'progress'))]);
+    state.roster = rs.docs.map(d => ({ sid: d.id, ...(d.data() || {}) }))
+      .sort((a, b) => String(a.cls).localeCompare(String(b.cls)) || (Number(a.no) || 0) - (Number(b.no) || 0));
+    state.shots = {};
+    ps.forEach(d => { const s = ((((d.data() || {}).modules || {}).thinking || {}).shots) || {}; if (Object.keys(s).length) state.shots[d.id] = s; });
+    /* 過關紀錄在運算思維頁自己的集合（文件 id 是「班級_座號_姓名」，裡面有 sid） */
+    state.done = {};
+    cs.forEach(d => { const v = d.data() || {}; if (v.sid) state.done[v.sid] = new Set((v.completed || []).map(Number)); });
+    if (!state.klass && state.roster.length) state.klass = String(state.roster[0].cls || '');
+    state.err = '';
+  } catch (e) { state.err = '讀不到資料：' + (e.code || e.message); }
+  dupCache = null;
+  state.busy = '';
+}
+
+const who = sid => state.roster.find(r => r.sid === sid) || { sid, cls: '', no: '', name: '（不在名冊）' };
+const shotOf = (sid, lv) => (state.shots[sid] || {})[String(lv)] || null;
+const titleOf = lv => { for (const s of Object.values(state.shots)) { const t = (s[String(lv)] || {}).title; if (t) return t; } return ''; };
+
+/* ── 👯 相同截圖：打開這一頁時才比對（上課時不比對）── 指紋 → [{ sid, lv }] */
+let dupCache = null;
+function dups() {
+  if (dupCache) return dupCache;
+  const by = {};
+  Object.entries(state.shots).forEach(([sid, s]) => Object.entries(s).forEach(([lv, x]) => {
+    if (x && x.hash) (by[x.hash] = by[x.hash] || []).push({ sid, lv: Number(lv), at: x.at || 0 });
+  }));
+  dupCache = Object.values(by).filter(l => l.length > 1).map(l => l.sort((a, b) => a.at - b.at));
+  return dupCache;
+}
+const dupOf = (sid, lv) => dups().find(g => g.some(x => x.sid === sid && x.lv === lv)) || null;
+const thumb = s => s && s.fileId ? 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(s.fileId) + '&sz=w800' : '';
+
+function cellHtml(r, lv) {
+  const s = shotOf(r.sid, lv), passed = (state.done[r.sid] || new Set()).has(lv), dup = s && dupOf(r.sid, lv);
+  const color = s ? (dup ? 'bg-rose-100 text-rose-800' : 'bg-violet-100 text-violet-800') : passed ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-slate-300';
+  return `<button class="cell rounded-lg px-1 py-1 text-center text-xs font-black ${color} ${s || passed ? 'hover:ring-2 hover:ring-indigo-300' : 'cursor-default'}"
+    ${s || passed ? `data-cell="${esc(r.sid)}|${lv}"` : ''} title="第 ${lv} 關">${s ? '📷' + (dup ? '👯' : '') : passed ? '✅' : '—'}</button>`;
+}
+
+function detail() {
+  if (!state.open) return '';
+  const [sid, lvs] = state.open, lv = Number(lvs);
+  const r = who(sid), s = shotOf(sid, lv), g = s && dupOf(sid, lv);
+  const others = g ? g.filter(x => !(x.sid === sid && x.lv === lv)) : [];
+  return `<div class="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4" data-close="1">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 pop max-h-[92vh] overflow-y-auto" data-keep="1">
+      <div class="text-xs text-slate-400 font-mono">${esc(r.cls)} 班 ${esc(r.no)} 號　${esc(sid)}</div>
+      <h3 class="text-lg font-black">${esc(r.name)}　·　第 ${lv} 關 ${esc((s && s.title) || titleOf(lv))}</h3>
+      ${s ? `<p class="text-xs text-slate-500 mt-1">交出時間 ${when(s.at)}　·　${Math.round((s.size || 0) / 1024)} KB</p>
+        <a href="${esc(s.url)}" target="_blank" rel="noopener" class="block mt-3">
+          <img src="${esc(thumb(s))}" alt="通關截圖" class="w-full rounded-xl border border-slate-200 bg-slate-50 min-h-[120px]"
+               onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'text-xs text-slate-400 bg-slate-50 rounded-lg p-4',textContent:'縮圖顯示不出來（這台電腦的瀏覽器要登入老師的 Google 帳號）—— 點這裡在雲端硬碟打開。'}))">
+        </a>
+        <a href="${esc(s.url)}" target="_blank" rel="noopener" class="inline-block mt-2 text-indigo-600 underline font-bold text-sm">📂 在雲端硬碟打開原檔</a>`
+      : `<p class="mt-3 text-sm text-slate-500 bg-slate-50 rounded-lg px-3 py-2">有過關紀錄，但沒有截圖 —— 多半是當時網路斷了（截圖送不上去不影響過關），或評分服務還沒設定雲端硬碟資料夾。需要的話請學生打開通關畫面給你看。</p>`}
+      ${others.length ? `<div class="mt-3 text-xs bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-rose-800">👯 這張圖和下面這幾格是<b>同一個檔案</b>：
+        <div class="mt-1 font-bold">${others.map(x => { const o = who(x.sid); return esc(o.cls + ' 班 ' + o.no + ' 號 ' + o.name + '（第 ' + x.lv + ' 關，' + when(x.at) + '）'); }).join('、')}</div></div>` : ''}
+      <button data-close="1" class="mt-5 w-full rounded-lg border border-slate-300 py-2 font-bold text-slate-600">關閉</button>
+    </div></div>`;
+}
+
+function dupPanel() {
+  const g = dups();
+  if (!g.length) return `<p class="text-xs text-slate-400 mb-3">👯 相同截圖：全年級目前沒有找到（打開這一頁時比對，上課時不比對）。</p>`;
+  return `<div class="bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3 mb-3">
+    <button id="dup-toggle" class="w-full text-left font-black text-rose-800">👯 相同截圖：${g.length} 組　<span class="text-xs font-bold underline">${state.dupOpen ? '收起' : '展開'}</span></button>
+    ${state.dupOpen ? g.map(l => `<div class="mt-2 bg-white rounded-xl border border-rose-100 px-3 py-2 flex flex-wrap gap-1.5">
+        ${l.map(x => { const o = who(x.sid); return `<button data-cell="${esc(x.sid)}|${x.lv}" class="rounded-lg border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">${esc(o.cls)}-${esc(o.no)} ${esc(o.name)}　第 ${x.lv} 關　<span class="text-slate-400">${when(x.at)}</span></button>`; }).join('')}
+      </div>`).join('') + '<p class="text-[11px] text-rose-700/70 mt-2">同一個人交同一張圖給兩關、或兩個人交同一張圖都會列在這裡。時間只是參考 —— 先交的不一定是截圖的主人。</p>' : ''}
+  </div>`;
+}
+
+function draw() {
+  const box = el('app');
+  if (!state.who) {
+    box.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 shadow p-8 text-center pop">
+      <p class="font-black text-lg mb-1">請用教師帳號登入</p>
+      <button id="login" class="mt-4 px-6 py-3 bg-slate-800 text-white font-black rounded-xl">教師登入</button>
+      ${state.err ? `<p class="text-rose-600 text-sm mt-4">${esc(state.err)}</p>` : ''}</div>`;
+    el('login').onclick = async () => {
+      const c = await AUTH.askTeacherPassword(); if (!c) return;
+      try { await signInWithEmailAndPassword(auth, c.email, c.password); }
+      catch (e) { state.err = '登入失敗：' + (e.code || e.message); draw(); }
+    };
+    return;
+  }
+  const classes = [...new Set(state.roster.map(r => String(r.cls || '')))].filter(Boolean).sort();
+  const list = state.roster.filter(r => String(r.cls || '') === state.klass);
+  const none = !Object.keys(state.shots).length;
+  box.innerHTML = `
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      ${classes.map(c => `<button data-klass="${esc(c)}" class="px-4 py-1.5 rounded-full text-sm ${c === state.klass ? 'bg-violet-600 text-white font-bold' : 'bg-white border border-slate-200 text-slate-600'}">${esc(c)}</button>`).join('') || '<span class="text-sm text-slate-400">名冊是空的 —— 先到「👥 學生帳號」匯入。</span>'}
+      <span class="ml-auto"></span>
+      <button id="reload" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-600">重新整理</button>
+    </div>
+    ${state.busy ? `<p class="text-sm text-slate-500 mb-3">${esc(state.busy)}</p>` : ''}
+    ${state.err ? `<p class="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-3">${esc(state.err)}</p>` : ''}
+    ${none && !state.busy ? `<p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">還沒有任何截圖。截圖要存，評分服務（Apps Script）的指令碼屬性要設 <span class="font-mono">DRIVE_FOLDER_ID</span>，見 gas/README.md。</p>` : ''}
+    ${dupPanel()}
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto pop">
+      <table class="text-sm min-w-full">
+        <thead class="text-xs text-slate-500 bg-slate-50"><tr>
+          <th class="px-3 py-2 text-left sticky left-0 bg-slate-50">座號</th><th class="px-3 py-2 text-left sticky left-12 bg-slate-50">姓名</th>
+          ${LEVELS.map(lv => `<th class="px-1 py-2 text-center" title="${esc(titleOf(lv))}">${lv}<div class="font-normal text-[10px] text-slate-400">${list.filter(r => shotOf(r.sid, lv)).length}/${list.length}</div></th>`).join('')}
+        </tr></thead>
+        <tbody>${list.map(r => `<tr class="border-t border-slate-100">
+          <td class="px-3 py-1.5 sticky left-0 bg-white">${esc(r.no)}</td>
+          <td class="px-3 py-1.5 font-bold whitespace-nowrap sticky left-12 bg-white">${esc(r.name)}</td>
+          ${LEVELS.map(lv => `<td class="px-0.5 py-1">${cellHtml(r, lv)}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <p class="text-xs text-slate-400 mt-3 leading-relaxed">📷 有截圖　✅ 有過關紀錄、沒有截圖（多半是網路斷了，不代表作弊）　👯 和別格是同一張圖　— 還沒過。欄位下方是「交了截圖的人數」。</p>
+    ${detail()}`;
+}
+
+document.addEventListener('click', e => {
+  const k = e.target.closest('[data-klass]'); if (k) { state.klass = k.dataset.klass; state.err = ''; draw(); return; }
+  const c = e.target.closest('[data-cell]'); if (c) { state.open = c.dataset.cell.split('|'); draw(); return; }
+  if (e.target.closest('#dup-toggle')) { state.dupOpen = !state.dupOpen; draw(); return; }
+  if (e.target.closest('[data-keep]') && !e.target.closest('button[data-close]')) return;
+  if (e.target.closest('[data-close]')) { state.open = null; draw(); return; }
+  if (e.target.closest('#reload')) { state.err = ''; load().then(draw); }
+});
+
+draw();
+</script>
+</body>
+</html>

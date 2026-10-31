@@ -1,0 +1,117 @@
+/* =====================================================================
+   全站主題樣式 — 115 學年度第二學期 資訊科技課程網站
+   ---------------------------------------------------------------------
+   單一來源：改配色、改底紙、改卡片樣式，只要動這一支，全站跟著變。
+   引入方式（放在 Tailwind CDN 之後，才能蓋過工具類別）：
+
+     <script src="https://cdn.tailwindcss.com"></script>
+     <link rel="stylesheet" href="theme.css">
+
+   規範對照見 設計規範.md
+   ===================================================================== */
+
+/* ── 色票（要調整全站配色，改這裡就好）─────────────────── */
+:root{
+  --paper-bg:    #e7e5e4;          /* 方格紙底色 */
+  --paper-line:  rgba(120,113,108,.06);
+  --paper-size:  26px;
+  --ink:         #1e293b;          /* slate-800 主要文字 */
+  --ink-soft:    #64748b;          /* slate-500 次要文字 */
+  --card-bg:     #ffffff;
+  --card-line:   #e2e8f0;          /* slate-200 框線 */
+  --tape:        rgba(250,204,21,.30);
+  --marker:      rgba(250,204,21,.55);
+  --marker-blue: rgba(147,197,253,.70);
+}
+
+/* ── 字型：全站統一 Noto Sans TC ──────────────────────── */
+html, body, button, input, select, textarea, .font-sans, .font-mono {
+  font-family: 'Noto Sans TC', system-ui, -apple-system, sans-serif !important;
+}
+/* 例外：需要等寬對齊的數字／程式碼仍保留等寬 */
+code, pre, .keep-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+
+/* ── 方格紙底：全站識別 ───────────────────────────────── */
+body{
+  background-color: var(--paper-bg) !important;
+  background-image:
+    linear-gradient(var(--paper-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px) !important;
+  background-size: var(--paper-size) var(--paper-size) !important;
+  background-attachment: fixed !important;
+  color: var(--ink);
+  text-shadow: none !important;      /* 清掉遊戲風的文字陰影 */
+  animation: none !important;        /* 清掉漸層背景動畫 */
+}
+
+/* ── 手作風點綴 ───────────────────────────────────────── */
+.tape{
+  position:absolute; top:-14px; left:50%;
+  transform:translateX(-50%) rotate(-3deg);
+  width:76px; height:26px; border-radius:2px;
+  background:var(--tape);
+  box-shadow:0 1px 2px rgba(0,0,0,.08);
+  z-index:5;
+}
+.underline-doodle{ background:linear-gradient(transparent 62%, var(--marker) 62%); }
+.hl  { background:linear-gradient(transparent 52%, var(--marker) 52%);      font-weight:800; }
+.hl-b{ background:linear-gradient(transparent 52%, var(--marker-blue) 52%); font-weight:800; }
+
+@keyframes pop{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:translateY(0)} }
+.pop{ animation:pop .35s ease-out both; }
+
+/* ── 卡片與面板：把各頁自訂的容器統一成白卡 ──────────── */
+.card,
+.glass-card,        /* social.html 原本的玻璃卡 */
+.glass-panel,       /* sort.html 原本的磨砂面板 */
+.mc-gui,            /* logic.html 原本的麥塊介面 */
+.mc-gui-inset{
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-line) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05) !important;
+  color: var(--ink) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  image-rendering: auto !important;
+}
+/* 內凹面板改用淺灰底，維持層次感 */
+.mc-gui-inset{ background:#f8fafc !important; }
+
+/* 清掉遊戲風的像素邊框與文字陰影 */
+.text-shadow-mc, .text-shadow-light{ text-shadow:none !important; }
+
+/* ── 返回基地（每頁只放一顆，嵌入 iframe 時自動隱藏）──── */
+#back-to-hub{
+  position:fixed; top:1rem; left:1rem; z-index:9999;
+  display:inline-flex; align-items:center; gap:.35rem;
+  background:#1e293b; color:#fff;
+  font-weight:700; font-size:.875rem;
+  padding:.5rem .875rem; border-radius:9999px;
+  box-shadow:0 10px 15px -3px rgba(0,0,0,.2);
+  text-decoration:none; transition:background .15s;
+}
+#back-to-hub:hover{ background:#334155; }
+
+/* 有返回鈕的頁面，內容往下讓一點，避免被蓋住 */
+body:has(#back-to-hub) > *:first-of-type{ padding-top:.5rem; }
+
+/* ── 刻意的深色例外：模擬器／控制台 ───────────────────── */
+/* 規範第 5 節：情境需要時（電子電路、控制台）可局部深色。
+   用 .console 包起來，裡面的樣式不受淺色主題影響。            */
+.console{
+  background:#0f172a !important;
+  color:#e2e8f0 !important;
+  border-radius:1rem;
+}
+.console .text-white{ color:#fff !important; }
+
+/* 深色底的卡片覆寫不做全域處理，避免誤傷彩色按鈕與模擬器；
+   search / sort / logic 三頁已在各自檔案內改為淺色類別。      */
+
+/* ── 響應式：投影時字級不要太小 ───────────────────────── */
+@media (min-width:1280px){
+  body{ font-size:16px; }
+}

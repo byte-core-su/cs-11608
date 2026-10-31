@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ★ 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」與標頭 -->
+  <script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+  <style>.embedded [data-standalone] { display: none !important; }</style>
+  <title>評分範本</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="../course/config.js"></script>
+  <script src="auth.js"></script>
+  <style>
+    body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
+    .pop { animation: pop .25s ease-out; } @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <!-- =====================================================================
+       📗 評分範本（老師專用）
+       ---------------------------------------------------------------------
+       程式設計的自動評分（gas/grader.gs）拿每一關的
+         參考解答（你做好的完整作品）− 空白範本（發給學生的起始檔）
+       當成「學生該寫出來的部分」，逐塊比對學生交的 .sb3。
+
+       ★ 這一頁只是把檔案送給 Apps Script，由它轉成虛擬碼存進
+         Firestore 的 {TERM}-grader/criteria。已經上傳過的關卡會顯示「✅」。
+       ⚠️ 解答只存在資料庫（只有老師讀得到），不會出現在網站的任何檔案裡。
+       ===================================================================== -->
+  <div class="max-w-4xl mx-auto px-4 py-8">
+    <a href="../course/teacher.html" data-standalone class="text-sm font-bold text-slate-500 hover:text-slate-800">← 回教師端</a>
+    <h1 class="text-2xl sm:text-3xl font-black mt-2">📗 評分範本</h1>
+    <p class="text-sm text-slate-500 mt-1 leading-relaxed">
+      每一關上傳兩個 .sb3：<b>參考解答</b>（你做好的完整作品）和<b>空白範本</b>（發給學生的起始檔）。<br>
+      系統拿「解答比空白多出來的積木」當標準，比對學生的作品：積木 50 分、位置 30 分、設定值 20 分。</p>
+    <div id="app" class="mt-6"></div>
+  </div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserSessionPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const C = window.CONFIG || {};
+const URL_ = String(C.GRADER_URL || '').trim();
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+setPersistence(auth, browserSessionPersistence).catch(() => {});   // 老師的登入只留在這個分頁
+
+const el = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
+const UNITS = (C.UNITS || []).map((u, i) => ({ id: u[0], title: u[1], no: i + 1 }));
+const state = { who: null, units: {}, busy: '', msg: {}, err: '' };
+
+async function call(body) {
+  const idToken = await auth.currentUser.getIdToken();
+  const r = await fetch(URL_, { method: 'POST', body: JSON.stringify(Object.assign({ idToken }, body)) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.message || '失敗');
+  return j;
+}
+const fileB64 = f => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(String(r.result).split(',')[1] || '');
+  r.onerror = () => rej(new Error('讀不到檔案'));
+  r.readAsDataURL(f);
+});
+
+onAuthStateChanged(auth, async u => {
+  state.who = (u && u.email && AUTH.isTeacherEmail(u.email)) ? u : null;
+  if (state.who && URL_) await loadUnits();
+  draw();
+});
+
+async function loadUnits() {
+  state.busy = '讀取各關狀態…'; draw();
+  try { state.units = (await call({ kind: 'units' })).units || {}; state.err = ''; }
+  catch (e) { state.err = '讀不到評分服務：' + e.message + '（GRADER_URL 對嗎？Apps Script 部署了嗎？）'; }
+  state.busy = '';
+}
+
+function draw() {
+  const box = el('app');
+  if (!URL_) {
+    box.innerHTML = `<div class="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-sm text-amber-900 leading-relaxed">
+      還沒有接上評分服務 —— <span class="font-mono">course/config.js</span> 的 <span class="font-mono">GRADER_URL</span> 是空的。<br>
+      部署步驟見 <span class="font-mono">gas/README.md</span>（約 10 分鐘）。</div>`;
+    return;
+  }
+  if (!state.who) {
+    box.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 shadow p-8 text-center pop">
+      <p class="font-black text-lg mb-1">請用教師帳號登入</p>
+      <button id="login" class="mt-4 px-6 py-3 bg-slate-800 text-white font-black rounded-xl">教師登入</button>
+      ${state.err ? `<p class="text-rose-600 text-sm mt-4">${esc(state.err)}</p>` : ''}</div>`;
+    el('login').onclick = async () => {
+      const c = await AUTH.askTeacherPassword(); if (!c) return;
+      try { await signInWithEmailAndPassword(auth, c.email, c.password); }
+      catch (e) { state.err = '登入失敗：' + (e.code || e.message); draw(); }
+    };
+    return;
+  }
+  const ok = UNITS.filter(u => (state.units[u.id] || {}).example && (state.units[u.id] || {}).template).length;
+  box.innerHTML = `
+    <div class="flex items-center justify-between mb-3 text-sm text-slate-500">
+      <span>${ok} / ${UNITS.length} 關可以自動評分</span>
+      <button id="reload" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-600">重新整理</button>
+    </div>
+    ${state.busy ? `<p class="text-sm text-slate-500 mb-3">${esc(state.busy)}</p>` : ''}
+    ${state.err ? `<p class="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-3">${esc(state.err)}</p>` : ''}
+    <div class="space-y-3">${UNITS.map(card).join('')}</div>`;
+}
+
+function card(u) {
+  const s = state.units[u.id] || {};
+  const ready = s.example && s.template;
+  const m = state.msg[u.id];
+  const slot = (which, has, label) => `
+    <label class="flex-1 min-w-[200px] block border-2 border-dashed ${has ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-300'} rounded-xl px-3 py-2 cursor-pointer hover:bg-slate-50">
+      <div class="text-xs font-black ${has ? 'text-emerald-700' : 'text-slate-500'}">${has ? '✅' : '⬜'} ${label}</div>
+      <div class="text-[11px] text-slate-400 mt-0.5">${has ? '已上傳（選檔案可以覆蓋）' : '點這裡選 .sb3'}</div>
+      <input type="file" accept=".sb3" class="hidden" data-up="${which}" data-unit="${esc(u.id)}">
+    </label>`;
+  return `<div class="bg-white rounded-2xl border ${ready ? 'border-emerald-200' : 'border-slate-200'} shadow-sm p-4 pop">
+    <div class="flex items-baseline justify-between gap-2 mb-3">
+      <div class="font-black">第 ${u.no} 關　${esc(u.title)} <span class="text-xs text-slate-400 font-mono ml-1">${esc(u.id)}</span></div>
+      <div class="text-xs ${ready ? 'text-emerald-600' : 'text-slate-400'} font-bold">${ready ? `可以評分（學生要寫 ${s.need} 塊積木）` : '還不能評分'}</div>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      ${slot('example', s.example, '參考解答')}
+      ${slot('template', s.template, '空白範本')}
+      ${ready ? `<label class="flex-1 min-w-[200px] block border-2 border-dashed border-indigo-300 rounded-xl px-3 py-2 cursor-pointer hover:bg-indigo-50">
+        <div class="text-xs font-black text-indigo-700">🧪 試評一份作品</div>
+        <div class="text-[11px] text-slate-400 mt-0.5">看會拿幾分（不會記成績）</div>
+        <input type="file" accept=".sb3" class="hidden" data-test="1" data-unit="${esc(u.id)}"></label>` : ''}
+    </div>
+    ${m ? `<div class="mt-3 text-sm rounded-lg px-3 py-2 ${m.err ? 'bg-rose-50 text-rose-800' : 'bg-slate-50 text-slate-700'}">${m.html}</div>` : ''}
+  </div>`;
+}
+
+document.addEventListener('change', async e => {
+  const inp = e.target; const f = (inp.files || [])[0];
+  if (!f || !inp.dataset.unit) return;
+  const unit = inp.dataset.unit;
+  state.msg[unit] = { html: '處理中…' }; draw();
+  try {
+    const b64 = await fileB64(f);
+    if (inp.dataset.up) {
+      const r = await call({ kind: 'setRef', unit, which: inp.dataset.up, b64 });
+      state.msg[unit] = { html: esc(r.message) };
+      await loadUnits();
+    } else {
+      const r = await call({ kind: 'test', unit, b64 });
+      const lv = r.levels || {};
+      state.msg[unit] = { html: `<b>${esc(f.name)}</b>：${r.score} 分　${r.stars ? '⭐'.repeat(r.stars) : '0⭐'}
+        <span class="text-xs text-slate-500">（積木 ${lv.block}%／位置 ${lv.place}%／設定值 ${lv.value}%）</span><br>${esc(r.message)}` };
+    }
+  } catch (err) {
+    state.msg[unit] = { err: true, html: esc(err.message) };
+  }
+  draw();
+});
+document.addEventListener('click', e => { if (e.target.closest('#reload')) loadUnits().then(draw); });
+
+draw();
+</script>
+</body>
+</html>

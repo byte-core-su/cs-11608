@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>晨星勇者</title>
+<!-- =====================================================================
+     晨星勇者（程式設計：完成十關之後開放的獎勵遊戲）
+     ---------------------------------------------------------------------
+       ‧ 存檔、新手訓練完成、觀念卡收集、通關紀錄 → 學生自己的
+         {學期}-progress/{學號} 的 games.morningstar（shared/gamesave.js）。
+       ‧ 只存雲端，不用 localStorage 存進度。
+         ⚠️ 唯一還留在 localStorage 的是「程式觀念提示：開／關」——
+            那是這台電腦的顯示偏好，不是學生的紀錄。
+       ‧ 不算星、不進成績（games 不在 modules 底下）。
+       ‧ 開放條件：10 個單元都通關（GRADING.GATE.cleared），
+         直接貼網址進來也一樣擋（這一頁自己再查一次）。
+     ★ 刻意的設計：
+       背包是真正的清單（bagDel 刪除後面往前補、「插到第 1 格」＝插入）；
+       倒下時三件裝備掉在原地可撿回、金幣少一半撿不回來；
+       掉落的裝備沒撿就走向出口會先確認；觀念卡在玩法「發生之後」才出現，
+       單元 3 演奏小星星、單元 6 撲克發牌刻意沒做；用語照 whatislist.html
+       和 content/flowchart.js；升級經驗一級比一級多、打怪經驗倍率 3/(Lv+2)。
+     ===================================================================== -->
+<!-- 全站共用設定（要在 guard 之前載入）-->
+<script src="config.js"></script>
+<!-- 登入邏輯單一來源 -->
+<script src="../shared/auth.js"></script>
+<!-- 身分守門：未從闖關基地登入者導回入口 -->
+<script src="../shared/guard.js"></script>
+<!-- 開放條件要用的：通關規則、十個單元 -->
+<script src="../shared/grading.js"></script>
+<script src="content/flowchart.js"></script>
+<!-- 存檔（雲端） -->
+<script src="../shared/gamesave.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<script>
+/* 遊戲（一般 script）先跑、雲端連線（module）後跑 —— 中間用這個接起來。 */
+window.MS_BRIDGE = (function () { var r; var p = new Promise(function (x) { r = x; }); return { ready: p, resolve: r }; })();
+</script>
+<script type="module">
+  import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  const CFG = window.CONFIG || {};
+  const COL = (CFG.COLLECTIONS && CFG.COLLECTIONS.PROGRESS) || '11501-progress';
+  const TERM = CFG.TERM || '11501';
+  let sid = '';
+  try { sid = sessionStorage.getItem('sid' + TERM) || ''; } catch (e) {}
+  (async () => {
+    try {
+      if (!CFG.FIREBASE) throw new Error('這一頁沒有 Firebase 設定');
+      if (!window.CONFIG.isSid(sid)) throw new Error('讀不到學號');
+      if (!window.AUTH || !window.AUTH.attachSession) throw new Error('沒有載入 shared/auth.js');
+      const app = getApps().length ? getApp() : initializeApp(CFG.FIREBASE);
+      const auth = getAuth(app);
+      /* ⚠️ 不在這裡登入 —— 學生已經在闖關基地登入過了，這裡只把身分接過來。 */
+      await window.AUTH.attachSession(auth, signInAnonymously, onAuthStateChanged);
+      if (!auth.currentUser) throw new Error('還沒登入');
+      const ref = doc(getFirestore(app), COL, sid);
+      window.MS_BRIDGE.resolve({
+        sid,
+        readDoc: async () => { const snap = await getDoc(ref); return snap.exists() ? (snap.data() || {}) : {}; },
+        /* ⚠️ mergeFields：整欄覆寫 games.morningstar（見 shared/gamesave.js 開頭）。
+           只動這一欄 —— 不碰 modules，安全規則的「作品星不可以自己改」那幾條自然照過。 */
+        writeGame: rec => setDoc(ref, { studentId: sid, games: { morningstar: rec } },
+                                 { mergeFields: ['studentId', 'games.morningstar'] })
+      });
+    } catch (e) {
+      window.MS_BRIDGE.resolve({ error: (e && e.message) || String(e) });
+    }
+  })();
+</script>
+</head>
+<body>
+<style>
+/* 版面：整頁就是遊戲畫面；HUD 浮在畫布上，所有面板是「墨綠檀木＋黃銅框」，像一本冒險手札 */
+:root{
+  color-scheme: dark;
+  --ink:#0d1211;
+  --panel:#16201d;
+  --panel-2:#1e2b27;
+  --brass:#c39a57;
+  --brass-dim:#5e5137;
+  --text:#efe5cc;
+  --muted:#a69e88;
+  --hp:#d4544a;
+  --hp-bg:#3a1d1a;
+  --gold:#f0c35a;
+  --good:#86c98f;
+  --rune:#a184f2;
+  --display:"LXGW WenKai TC","Microsoft JhengHei","PingFang TC","Noto Sans TC",serif;
+  --ui:"LXGW WenKai TC","Microsoft JhengHei","PingFang TC","Noto Sans TC",system-ui,sans-serif;
+  --num:ui-monospace,"Cascadia Mono",Consolas,"SFMono-Regular",monospace;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--text);font-family:var(--ui);overflow:hidden}
+#app{position:relative;width:100%;height:100%;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#cv{display:block;width:100%;height:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---------- HUD ---------- */
+#hud{position:absolute;inset:0 0 auto 0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 16px;pointer-events:none;z-index:2}
+.hud-left{display:grid;gap:6px;min-width:0}
+.hprow{display:flex;align-items:center;gap:8px}
+.lv{font:700 13px var(--num);color:var(--gold);text-shadow:0 1px 2px #000;white-space:nowrap}
+.xpbar{width:min(220px,46vw);height:4px;margin:-3px 0 0 auto;background:rgba(0,0,0,.5);border-radius:2px;overflow:hidden}
+.xpbar i{display:block;height:100%;width:0;background:#7fb8f0;transition:width .3s}
+.hpbar{position:relative;width:min(220px,46vw);height:20px;background:var(--hp-bg);border:1px solid var(--brass);border-radius:3px;overflow:hidden;box-shadow:0 2px 0 rgba(0,0,0,.4)}
+.hpfill{position:absolute;inset:0 auto 0 0;width:100%;background:linear-gradient(var(--hp),#a63b33);transition:width .2s}
+.hpbar span{position:absolute;inset:0;display:grid;place-items:center;font:700 12px/1 var(--num);text-shadow:0 1px 0 #000;letter-spacing:.04em}
+.stats{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:14px;text-shadow:0 1px 2px #000}
+.stats b{font:700 14px var(--num);font-variant-numeric:tabular-nums}
+.stats .g b{color:var(--gold)}
+.stats .k b{color:#cfd6e0}
+.hud-mid{align-self:center;font-family:var(--display);font-size:15px;color:var(--muted);text-shadow:0 1px 2px #000;white-space:nowrap}
+.hud-right{display:flex;gap:6px;pointer-events:auto}
+.hud-right button{display:flex;align-items:center;gap:4px;height:34px;padding:0 10px;background:rgba(22,32,29,.85);border:1px solid var(--brass-dim);border-radius:4px;font-size:15px}
+.hud-right button:hover{border-color:var(--brass)}
+.hud-right .lbl{font-size:13px}
+#mini{position:absolute;right:16px;top:56px;z-index:2;border:1px solid var(--brass-dim);background:rgba(0,0,0,.55);border-radius:3px;pointer-events:none;image-rendering:pixelated}
+@media (max-width:640px){ .hud-mid{display:none} .hud-right .lbl{display:none} #mini{width:96px!important;height:auto!important} }
+
+#arenaTag,#bossBar{position:absolute;left:50%;transform:translateX(-50%);z-index:2;pointer-events:none}
+#arenaTag{top:58px;padding:5px 14px;background:rgba(40,25,70,.85);border:1px solid var(--rune);border-radius:3px;font-size:14px;white-space:nowrap}
+#arenaTag b{font-family:var(--num);color:#fff}
+#bossBar{top:58px;width:min(420px,calc(100% - 32px));display:grid;gap:4px;text-align:center;font-family:var(--display);font-size:15px;text-shadow:0 1px 2px #000}
+#bossBar div{height:12px;background:var(--hp-bg);border:1px solid var(--brass);border-radius:2px;overflow:hidden}
+#bossBar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#8e2a6a,#e0543f);transition:width .15s}
+
+#prompt{position:absolute;left:50%;bottom:calc(28px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:3;padding:6px 14px;background:rgba(22,32,29,.92);border:1px solid var(--brass);border-radius:3px;font-size:15px;white-space:nowrap;pointer-events:none}
+#prompt kbd{font:700 12px var(--num);padding:1px 6px;border:1px solid var(--brass);border-radius:3px;margin-right:6px;color:var(--gold)}
+#toasts{position:absolute;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:4;display:grid;justify-items:center;gap:6px;pointer-events:none;width:calc(100% - 32px)}
+.toast{padding:6px 14px;background:rgba(10,14,13,.88);border-left:3px solid var(--brass);font-size:15px;max-width:100%;animation:tin .2s ease-out,tout .4s ease-in 2.2s forwards}
+@keyframes tin{from{opacity:0;transform:translateY(6px)}}
+@keyframes tout{to{opacity:0;transform:translateY(-4px)}}
+
+#banner{position:absolute;left:0;right:0;top:30%;z-index:5;text-align:center;pointer-events:none;opacity:0}
+#banner.show{animation:ban 3.4s ease forwards}
+#banner small{display:block;font-size:14px;letter-spacing:.4em;color:var(--brass)}
+#banner h2{margin:6px 0;font-family:var(--display);font-size:clamp(30px,7vw,52px);font-weight:700;text-shadow:0 3px 12px #000}
+#banner p{margin:0;color:var(--muted);font-size:16px;text-shadow:0 1px 4px #000}
+@keyframes ban{0%{opacity:0;transform:translateY(8px)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0}}
+
+/* ---------- 觸控 ---------- */
+#touch{position:absolute;inset:0;z-index:3;pointer-events:none}
+#joy{position:absolute;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:2px solid rgba(239,229,204,.25);background:rgba(0,0,0,.18)}
+#joyKnob{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(239,229,204,.35);border:2px solid rgba(239,229,204,.5)}
+.tbtns{position:absolute;right:16px;bottom:calc(20px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;gap:10px;align-items:end;pointer-events:auto}
+.tbtns button{border-radius:50%;border:2px solid var(--brass);background:rgba(22,32,29,.8);display:grid;place-items:center;position:relative;touch-action:none}
+#tAtk{width:78px;height:78px;font-size:32px;grid-column:2;grid-row:1/3}
+#tAct{width:58px;height:58px;font-size:24px;grid-column:1;grid-row:2}
+#tPot{width:50px;height:50px;font-size:20px;grid-column:1;grid-row:1;justify-self:end}
+#tPot b{position:absolute;right:-4px;bottom:-4px;font:700 11px var(--num);background:var(--panel);border:1px solid var(--brass);border-radius:8px;padding:0 4px}
+#tAct.ready{border-color:var(--gold);box-shadow:0 0 12px rgba(240,195,90,.5)}
+#tAct:not(.ready){opacity:.45}
+.touching #prompt{bottom:calc(120px + env(safe-area-inset-bottom,0px))}
+.touching #toasts{bottom:calc(166px + env(safe-area-inset-bottom,0px))}
+
+/* ---------- 面板 ---------- */
+.modal{position:absolute;inset:0;z-index:10;display:grid;place-items:center;background:rgba(5,8,7,.62);padding:16px}
+.panel{width:min(430px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--brass);border-radius:4px;box-shadow:0 0 0 4px rgba(0,0,0,.35),0 18px 40px rgba(0,0,0,.6);padding:18px 18px 16px}
+.panel header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid var(--brass-dim);padding-bottom:10px;margin-bottom:14px}
+.panel h3{margin:0;font-family:var(--display);font-size:22px;font-weight:700}
+.panel header small{color:var(--muted);font-size:13px}
+.x{background:none;border:1px solid var(--brass-dim);border-radius:3px;padding:2px 10px;font-size:14px}
+.label{font-size:12px;letter-spacing:.2em;color:var(--brass);margin:0 0 6px}
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.slots.eq{margin-bottom:14px}
+.slot{position:relative;aspect-ratio:1;max-width:100%;background:var(--panel-2);border:1px solid var(--brass-dim);border-radius:3px;display:grid;place-items:center;font-size:clamp(22px,6vw,30px);padding:0}
+.slot[data-r="1"]{box-shadow:inset 0 0 0 2px #4f86b4}
+.slot[data-r="2"]{box-shadow:inset 0 0 0 2px #c9a043}
+.slot.sel{border-color:var(--gold);background:#2a3a34}
+.slot .cap{position:absolute;left:0;right:0;bottom:3px;font-size:11px;color:var(--muted);text-align:center}
+.slot.empty{color:var(--brass-dim);font-size:13px}
+.slot .no{position:absolute;left:5px;top:3px;font:11px var(--num);color:var(--muted)}
+.touching .slot .no{display:none}
+.detail{margin-top:14px;min-height:96px;padding:12px;background:rgba(0,0,0,.22);border-radius:3px}
+.detail h4{margin:0 0 4px;font-family:var(--display);font-size:18px}
+.detail p{margin:4px 0 10px;color:var(--muted);font-size:14px;line-height:1.6}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font:12px var(--num);padding:2px 7px;border:1px solid var(--brass-dim);border-radius:10px}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.btn{padding:7px 16px;background:var(--panel-2);border:1px solid var(--brass);border-radius:3px;font-size:15px}
+.btn:hover:not(:disabled){background:#2b3b35}
+.btn.primary{background:#6b5323;border-color:var(--gold)}
+.btn.primary:hover:not(:disabled){background:#806328}
+.btn:disabled{opacity:.4;cursor:default}
+.sum{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:12px;font-size:14px;color:var(--muted)}
+.sum b{color:var(--text);font-family:var(--num)}
+.shoprow{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(195,154,87,.18)}
+.shoprow .ic{font-size:28px;text-align:center}
+.shoprow h4{margin:0;font-size:16px}
+.shoprow p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.price{font:700 14px var(--num);color:var(--gold)}
+.tabs{display:flex;gap:6px;margin:-4px 0 6px}
+.tabs button{flex:1;padding:7px 0;background:transparent;border:1px solid var(--brass-dim);border-radius:3px;font-size:15px;color:var(--muted)}
+.tabs button.on{background:var(--panel-2);border-color:var(--brass);color:var(--text)}
+.cmp{margin:6px 0 10px;font-size:14px;color:var(--muted)}
+.cmp b{font-family:var(--num)}
+.up{color:var(--good)} .down{color:var(--hp)}
+.gear{display:flex;gap:4px;pointer-events:auto}
+.gear button{width:32px;height:32px;padding:0;display:grid;place-items:center;font-size:17px;background:rgba(22,32,29,.85);border:1px solid var(--brass-dim);border-radius:3px}
+.gear button.none{font-size:11px;color:var(--brass-dim)}
+.gear button:hover{border-color:var(--brass)}
+/* 程式觀念卡 */
+.ccard .eyebrow{margin:0;font-size:12px;letter-spacing:.2em;color:var(--rune)}
+.ccard h3{margin:4px 0 2px;font-family:var(--display);font-size:26px}
+.ccard .topic{margin:0 0 12px;color:var(--muted);font-size:14px}
+.ccard .what{margin:0 0 14px;font-size:16px;line-height:1.75}
+.blocks{display:grid;gap:5px;padding:12px;background:#f4f1ea;border-radius:4px;margin-bottom:16px;overflow-x:auto}
+.blocks .cap{font-size:12px;color:#6b6457;letter-spacing:.1em;margin-bottom:2px}
+.blk{justify-self:start;padding:6px 12px;border-radius:6px;color:#fff;font-size:15px;line-height:1.4;white-space:nowrap;box-shadow:inset 0 -2px 0 rgba(0,0,0,.22)}
+.blk.in{margin-left:22px}
+.blk.list{background:#e35b12}.blk.var{background:#e07b0e}.blk.ctrl{background:#c98a0b}.blk.sense{background:#3a93bf}.blk.op{background:#3e9a3e}
+.codex{display:grid;gap:10px;text-align:left;margin:16px 0 20px}
+.codex .unit{padding:10px 12px;border:1px solid var(--brass-dim);border-radius:3px;background:rgba(0,0,0,.25)}
+.codex h4{margin:0 0 8px;font-size:15px}
+.codex h4 small{color:var(--muted);font-weight:400;margin-left:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:4px 12px;border:1px solid var(--rune);border-radius:12px;background:rgba(161,132,242,.15);font-size:14px}
+.chip:disabled{border-color:var(--brass-dim);background:none;color:var(--brass-dim);cursor:default}
+.muted{color:var(--muted);font-size:13px;margin:0}
+.toggle{background:none;border:1px solid var(--brass-dim);border-radius:3px;padding:5px 12px;font-size:13px;color:var(--muted)}
+
+/* 對話框 */
+#dialog{position:absolute;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(640px,calc(100% - 32px));z-index:9;display:grid;grid-template-columns:56px 1fr;gap:14px;align-items:start;padding:16px 18px;background:var(--panel);border:1px solid var(--brass);border-radius:4px;box-shadow:0 10px 30px rgba(0,0,0,.6);cursor:pointer}
+#dialog .face{font-size:42px;line-height:56px;text-align:center;background:var(--panel-2);border-radius:3px}
+#dialog .who{font-family:var(--display);color:var(--brass);font-size:15px;margin-bottom:4px}
+#dialog .say{font-size:17px;line-height:1.7;min-height:3.4em;text-wrap:pretty}
+#dialog .next{font-size:12px;color:var(--muted);text-align:right;margin-top:4px}
+
+/* 標題與結算畫面 */
+#screen{position:absolute;inset:0;z-index:20;display:grid;place-items:center;padding:16px;background:radial-gradient(ellipse at 50% 35%,rgba(48,40,72,.55),rgba(8,10,10,.94) 70%);overflow:auto}
+.card{width:min(560px,100%);text-align:center}
+.card .eyebrow{font-size:13px;letter-spacing:.35em;color:var(--brass);margin:0}
+.card h1{margin:8px 0 6px;font-family:var(--display);font-weight:700;font-size:clamp(46px,12vw,84px);line-height:1;text-shadow:0 0 30px rgba(240,195,90,.35),0 4px 0 #000;letter-spacing:.06em}
+.card h1 .star{color:var(--gold)}
+.card h2{margin:6px 0;font-family:var(--display);font-size:clamp(30px,7vw,44px)}
+.card .lead{margin:12px auto 20px;max-width:30em;font-size:16px;line-height:1.8;color:var(--text);text-wrap:pretty}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 auto 22px;max-width:440px;font-size:13px;color:var(--muted)}
+.keys div{padding:8px 4px;border:1px solid var(--brass-dim);border-radius:3px;background:rgba(0,0,0,.25)}
+.keys kbd{display:block;font:700 13px var(--num);color:var(--text);margin-bottom:2px}
+.card .acts{justify-content:center}
+.card .btn{padding:10px 24px;font-size:17px}
+.result{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:18px auto 22px;max-width:360px}
+.result div{padding:10px;border:1px solid var(--brass-dim);border-radius:3px;background:rgba(0,0,0,.25);font-size:13px;color:var(--muted)}
+.result b{display:block;font:700 22px var(--num);color:var(--text);font-variant-numeric:tabular-nums}
+#fade{position:absolute;inset:0;z-index:30;background:#000;opacity:0;pointer-events:none;transition:opacity .45s}
+#fade.on{opacity:1}
+@media (prefers-reduced-motion:reduce){ #banner.show{animation:none;opacity:1} .toast{animation:none} }
+</style>
+
+<div id="app">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div class="hud-left">
+      <div class="hprow"><span class="lv" id="sLv">Lv 1</span><div class="hpbar" role="meter" aria-label="生命"><div class="hpfill" id="hpFill"></div><span id="hpText">12 / 12</span></div></div>
+      <div class="xpbar" title="經驗值"><i id="xpFill"></i></div>
+      <div class="stats">
+        <span>⚔️ <b id="sAtk">2</b></span>
+        <span>🛡️ <b id="sDef">0</b></span>
+        <span class="g">💰 <b id="sGold">0</b></span>
+        <span class="k">🗝️ <b id="sKey">0</b></span>
+      </div>
+      <div class="gear" id="gear" aria-label="身上的裝備，點一下打開背包"></div>
+    </div>
+    <div class="hud-mid" id="areaName"></div>
+    <div class="hud-right">
+      <button id="bBag" aria-label="背包">🎒<span class="lbl">背包</span></button>
+      <button id="bSound" aria-label="音效開關">🔊</button>
+      <button id="bPause" aria-label="暫停">⏸</button>
+    </div>
+  </div>
+  <canvas id="mini" width="120" height="84"></canvas>
+  <div id="arenaTag" hidden></div>
+  <div id="bossBar" hidden><span>魔王 · 奪星者</span><div><i id="bossFill"></i></div></div>
+  <div id="prompt" hidden></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="banner"><small id="banSmall"></small><h2 id="banTitle"></h2><p id="banText"></p></div>
+  <div id="touch" hidden>
+    <div id="joy" hidden><div id="joyKnob"></div></div>
+    <div class="tbtns">
+      <button id="tPot" aria-label="喝藥水">🧪<b id="potCount">0</b></button>
+      <button id="tAct" aria-label="互動">✋</button>
+      <button id="tAtk" aria-label="攻擊">⚔️</button>
+    </div>
+  </div>
+  <div id="dialog" hidden><div class="face" id="dFace"></div><div><div class="who" id="dWho"></div><div class="say" id="dSay"></div><div class="next">點一下或按空白鍵繼續 ▸</div></div></div>
+  <div class="modal" id="mBag" hidden><div class="panel" id="pBag"></div></div>
+  <div class="modal" id="mShop" hidden><div class="panel" id="pShop"></div></div>
+  <div class="modal" id="mFull" hidden><div class="panel" id="pFull"></div></div>
+  <div class="modal" id="mExit" hidden><div class="panel" id="pExit"></div></div>
+  <div class="modal" id="mCard" hidden><div class="panel ccard" id="pCard"></div></div>
+  <div id="screen"></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const T = 32;
+const $ = s => document.querySelector(s);
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Segoe UI Symbol",sans-serif';
+// ⚠️ 只有「觀念提示開關」留在 localStorage（這台電腦的顯示偏好）；
+//    存檔、訓練完成、觀念卡、通關紀錄都在雲端（STORE，見 shared/gamesave.js）。
+const HINT_KEY = 'morningstar-hints';
+let STORE = null;            // GAMESAVE.createStore()，雲端讀到之後才有
+// 新手訓練第一次不能跳過：完成過一次（走出訓練場）才會解鎖「跳過」
+function isTrained() { return !!(STORE && STORE.get().trained); }
+function setTrained() { if (STORE && !STORE.get().trained) STORE.update(r => { r.trained = true; }); }
+// 觀念卡收藏（跨每一輪累積）：有新卡才寫
+function syncCards() { if (STORE && P && GAMESAVE.CARD_KEYS.some(k => P.cards[k] && !STORE.get().cards[k])) STORE.update(r => GAMESAVE.addCards(r, P.cards)); }
+
+const MAPS = {"forest": ["########################################", "#..........m,#.,.,.........#,...,.,...,#", "#.C.,..,.....#.$.........C.#..M.....,E.#", "#...b...#....#...,.........#....,......#", "#............#,...~~~~~....#,,,...,....#", "#,....s...........~~~~~....#...#...,...#", "#.......,.........~~~~~....#.......#...#", "#..#.,...b.,.#.....,..,....#,...b......#", "#...,.......,#..s....,.,s,.#.....,,.b..#", "#,...........#...,.........#.......,..,#", "#,.,,.,...,..#....,........#.,.....,...#", "######..#########################D######", "#.,..........#.,.,.........#.....,..,..#", "#...,.....#..#...s..,.,....#..C.,......#", "#,H......s,..#...,........,#.......#..,#", "#,..#........#...#.........#........,..#", "#,,,..........,.......,.,,.G...#.....,.#", "#.......,#,,.....,...O.....G.,..,......#", "#......,,....#.........#...#..,....,.,.#", "#,.....N.....#,...,........#.....s...,,#", "#..P..,...s..#..,.,....,s.,#,........,.#", "#,..,.,....C.#.,..s........#.........K,#", "#....,.......#.............#...........#", "########################################"], "cave": ["########################################", "#.....,........#............,.,...,.,..#", "#.K......#..b..#..C...,,,......N......,#", "#.,..#.......,.#..........,......~~....#", "#....,..k...,,.#........,.p.,....~~....#", "#....b....,..,.#....................$..#", "#..............#..........,.....,......#", "###########,.#########D#################", "##########..........,.,.......#....,...#", "##########.........,..b....#C.#...k,..,#", "#H....N,.#....~~~.p...........#..,.....#", "#.,......#....~~~..,..,..p....#........#", "#.P........,..,.....##..,.....D......E.#", "#,......,....,........,.......#.,.#....#", "#...,,...#...........,,~~~~...#.,......#", "#,..M....#..#,b....,...~~~~...#........#", "##########....,...............#....k.,.#", "##########....,....,..,......j#..,.....#", "###################,.###################", "##########......,....,..,.....#........#", "##########...k................#..C....,#", "##########....#..........#....G........#", "##########.,........O.....,...G,...,...#", "##########.,,...p....,...,.k..#......K.#", "##########....................#...,....#", "########################################"], "castle": ["########################################", "#.............#..,...,...#.............#", "#.K.......,C..#...,......#..C,.......K.#", "#....,.....,..#.#..,...#.#.,...........#", "#...........,.#....B..,..#...,..N.....,#", "#,.....,,.....#..........#.............#", "#.....k.,.....#........,.#.......,.....#", "#......,.,....#..........#....,........#", "#........,,...#.#,..,..#.#.........n...#", "#...#.........#..........#...,.....#...#", "#.,......b....#,..,......#,..,......,,,#", "#.............#..........#.............#", "#.,..,....,...#####D######....,..,..,..#", "######GG###########D############GG######", "#.............####..,.####........,....#", "#....,....,.,.####..g.####...,.........#", "#......,....,.####.k..####.........k..,#", "#..,n....#...,####....####.,.#n........#", "#.,...,.......####....####..........,..#", "#...~~........####....####...,...~~....#", "#...~~...,....#####,.#####.......~~,...#", "#...~~.....,..#..........#..,..,,~~....#", "#.............#..C.......#...........O.#", "#......g...............,.............,.#", "#,........n,...........,........,...n..#", "#.O...........#.H..P...M,#..g..........#", "#......,......#...,......#.........,...#", "########################################"], "camp": ["##################################", "#,.......#,.......,#.......,.#####", "#......,.#.N....,..#.N...,...#####", "#....N...#....,..C.#...s.....#####", "#..,.....#..,......#.,.......#####", "#,.......#,..w....,#.......,.#...#", "#..P,.d..G...,.....D..,..O...G.E.#", "#......,.G......,..#.....,...G...#", "#.,......#.,.......#,.......,#...#", "#...d,...#....,a...#...,.....#####", "#..,...d.#.H,....K.#.,....s..#####", "#,.......#,.......,#.......,.#####", "#......,.#......,..#.....,...#####", "##################################"]};
+
+/* ================= 資料 ================= */
+const ITEMS = {
+  knife:     {n:'小刀', i:'🔪', slot:'weapon', atk:1, kind:'melee', reach:20, r:0, d:'出發時帶在身上的小刀。'},
+  sword:     {n:'短劍', i:'🗡️', slot:'weapon', atk:3, kind:'melee', reach:24, r:1, price:30, d:'輕巧好揮的短劍。'},
+  iron:      {n:'鐵劍', i:'⚔️', slot:'weapon', atk:5, kind:'melee', reach:28, r:1, d:'矮人打造的鐵劍，揮得更遠。'},
+  bow:       {n:'獵弓', i:'🏹', slot:'weapon', atk:4, kind:'bow', r:1, price:40, d:'射出箭矢，站遠一點也打得到。'},
+  elfbow:    {n:'精靈長弓', i:'🏹', slot:'weapon', atk:7, kind:'bow', r:2, d:'箭飛得又快又遠。'},
+  trident:   {n:'雷神三叉戟', i:'🔱', slot:'weapon', atk:9, kind:'melee', reach:32, r:2, price:90, d:'傳說中勇者用過的武器。'},
+  woodshield:{n:'木盾', i:'🛡️', slot:'armor', def:1, r:0, price:20, d:'擋得住史萊姆的衝撞。'},
+  helm:      {n:'鐵盔', i:'⛑️', slot:'armor', def:2, r:1, price:45, d:'敲起來叮噹響。'},
+  kshield:   {n:'騎士盾', i:'🛡️', slot:'armor', def:4, r:2, price:70, d:'魔王城守衛的大盾。'},
+  copper:    {n:'銅戒指', i:'💍', slot:'acc', atk:1, r:0, d:'戴在手上，出手更有力。'},
+  silver:    {n:'銀戒指', i:'💍', slot:'acc', atk:1, def:1, r:1, d:'刻著看不懂的守護文字。'},
+  bracelet:  {n:'力量手環', i:'📿', slot:'acc', atk:2, def:1, r:2, d:'矮人鐵匠的謝禮。'},
+  potion:    {n:'小藥水', i:'🧪', slot:'use', heal:6, r:0, price:10, d:'喝下回復 6 點生命。'},
+  bigpotion: {n:'大藥水', i:'⚗️', slot:'use', heal:99, r:1, price:25, d:'喝下生命全滿。'},
+  apple:     {n:'蘋果', i:'🍎', slot:'use', heal:3, r:0, d:'吃下回復 3 點生命。'},
+  meat:      {n:'烤肉', i:'🍖', slot:'use', heal:10, r:0, price:18, d:'吃下回復 10 點生命。'},
+  fruit:     {n:'生命果實', i:'💗', slot:'use', maxhp:4, r:2, d:'最大生命 +4，並且回滿生命。'},
+  key:       {n:'鑰匙', i:'🗝️', slot:'key', r:1, d:'可以打開一扇上鎖的門，用過就會消失。'},
+  mushroom:  {n:'月光蘑菇', i:'🍄', slot:'quest', r:1, d:'在暗處會微微發亮。森林裡的老隱士在找它。'},
+  gem:       {n:'藍寶石', i:'💎', slot:'quest', r:1, d:'矮人鐵匠弄丟的寶石。'},
+};
+const SLOT_NAME = {weapon:'武器', armor:'防具', acc:'飾品'};
+function sellPrice(id) {
+  const it = ITEMS[id];
+  if (!it || it.slot === 'key' || it.slot === 'quest') return 0;
+  return it.price ? Math.floor(it.price / 2) : [4, 12, 25][it.r];
+}
+
+const FOES = {
+  s:{n:'史萊姆', hp:4,  atk:2, def:0, spd:55, r:12, gold:[1,2], aggro:6, xp:2},
+  b:{n:'蝙蝠', i:'🦇', hp:3, atk:2, def:0, spd:92, r:11, gold:[1,3], aggro:7, fly:1, xp:2},
+  p:{n:'洞窟蜘蛛', i:'🕷️', hp:6, atk:3, def:0, spd:62, r:12, gold:[2,4], aggro:6, xp:3},
+  k:{n:'骷髏投手', i:'💀', hp:7, atk:3, def:1, spd:50, r:12, gold:[3,5], aggro:7, xp:4},
+  g:{n:'幽靈', i:'👻', hp:8, atk:3, def:0, spd:42, r:13, gold:[3,6], aggro:8, ghost:1, xp:4},
+  n:{n:'石魔像', i:'🗿', hp:24, atk:6, def:2, spd:40, r:15, gold:[6,9], aggro:6, fixed:1, xp:8},
+  d:{n:'木樁', i:'🎯', hp:3, atk:0, def:0, spd:0, r:13, gold:[0,0], aggro:0, dummy:1, fixed:1, xp:0},
+  O:{n:'召喚陣', hp:12, atk:0, def:0, spd:0, r:16, gold:[5,8], aggro:8, nest:1, xp:6},
+  B:{n:'魔王', i:'👹', hp:110, atk:6, def:2, spd:58, r:28, gold:[0,0], aggro:8, boss:1, fixed:1},
+};
+
+const AREAS = [
+  { key:'camp', name:'勇者訓練場', ch:'序章', intro:'出發之前，先把基本功練好。', lvl:0, nestKid:'s', kidCap:2,
+    pal:{floor:'#5a5040', alt:'#605544', deco:'#7d6f55', wall:'#3b2f22', face:'#231c14', water:'#2e6c8a', waterHi:'#6fb3cf', slime:'#86d46e'},
+    wallIcon:null, dark:0, vignette:.22,
+    pool:['woodshield','potion'],
+    shop:[],
+    arenas:[{rect:[1,1,8,12], gates:[[9,6],[9,7]]},{rect:[20,1,28,12], gates:[[29,6],[29,7]]}],
+    npcs:{'5,3':'captain','11,2':'sign1','21,2':'sign2'}, items:{w:'sword', a:'apple'} },
+  { key:'forest', name:'迷霧森林', ch:'第一章', intro:'霧裡，有東西在草叢中蠕動。', lvl:0, nestKid:'s', kidCap:3,
+    pal:{floor:'#3b5833', alt:'#41613a', deco:'#6a9a52', wall:'#1b3820', face:'#12261a', water:'#2e6c8a', waterHi:'#6fb3cf', slime:'#86d46e'},
+    wallIcon:'🌲', dark:0, vignette:.38,
+    pool:['sword','woodshield','potion','potion','apple','copper'],
+    shop:['potion','sword','woodshield'],
+    arenas:[{rect:[14,12,26,22], gates:[[27,16],[27,17]]}],
+    npcs:{'7,19':'hermit'}, items:{m:'mushroom'} },
+  { key:'cave', name:'幽暗洞窟', ch:'第二章', intro:'火把只照得到身邊一小圈。', lvl:1, nestKid:'b', kidCap:3,
+    pal:{floor:'#3a3444', alt:'#413a4c', deco:'#5d5468', wall:'#1c1824', face:'#2d2738', water:'#22507a', waterHi:'#5b93c0', slime:'#b48be0'},
+    wallIcon:null, dark:.86, light:190, vignette:0,
+    pool:['iron','bow','helm','silver','potion','meat','fruit'],
+    shop:['potion','meat','bow','helm'],
+    arenas:[{rect:[10,19,29,24], gates:[[30,21],[30,22]]}],
+    npcs:{'6,10':'explorer','31,2':'dwarf'}, items:{j:'gem'} },
+  { key:'castle', name:'魔王城', ch:'第三章', intro:'城門在身後關上了。', lvl:2, nestKid:'b', kidCap:4,
+    pal:{floor:'#47403f', alt:'#4f4746', deco:'rgba(0,0,0,.22)', wall:'#29232a', face:'#1b171c', water:'#c14d1c', waterHi:'#f4a53a', slime:'#e07a5a'},
+    wallIcon:null, dark:.5, light:260, vignette:0,
+    pool:['elfbow','trident','kshield','bigpotion','bigpotion','fruit'],
+    shop:['potion','bigpotion','kshield','trident'],
+    arenas:[{rect:[1,14,13,26], gates:[[6,13],[7,13]]},{rect:[26,14,38,26], gates:[[32,13],[33,13]]}],
+    npcs:{'32,4':'fairy'}, items:{} },
+];
+
+const NPCS = {
+  captain:{n:'衛兵隊長', i:'💂',
+    lines:() => G.arenas[0] && G.arenas[0].cleared ? [
+        '做得好！右邊的房間有裝備、寶箱，還有一扇上鎖的門。',
+        '撿到東西會放進背包，按 I 打開看看。鑰匙就藏在那個房間的某個寶箱裡。'
+      ] : [
+        '新兵，歡迎來到訓練場！我是衛兵隊長。',
+        '用 WASD 或方向鍵移動，按空白鍵揮劍。用手機的話，左半邊拖曳移動，右下角的 ⚔️ 攻擊。',
+        '先把這三根木樁打倒。三根全倒下，右邊的柵門才會打開。'
+      ]},
+  sign1:{n:'告示牌', i:'📜',
+    lines:() => [
+      '撿到的東西會放進背包，按 I 打開。點一樣東西，可以裝備、使用、丟在地上。',
+      '背包裡選一樣東西按「插到第 1 格」，它就會排到最前面，之後按數字鍵 1 就能直接用它。',
+      '上鎖的門要用鑰匙開。受傷了就到泉水邊按 E，或按 Q 喝藥水。'
+    ]},
+  sign2:{n:'告示牌', i:'📜',
+    lines:() => [
+      '最後的試煉！召喚陣會一直生出史萊姆。',
+      '先打壞召喚陣，再把剩下的清乾淨，出口的柵門就會打開。',
+      '穿過柵門就是迷霧森林，真正的冒險從那裡開始。'
+    ]},
+  hermit:{n:'老隱士', i:'👴', quest:'mushroom', reward:'fruit',
+    lines:p => p.quests.hermit ? [
+        '鑰匙在試煉場東邊的寶箱裡。拿到之後，往北邊那扇上鎖的木門走。'
+      ] : has('mushroom') ? [
+        '喔！這不是月光蘑菇嗎？',
+        '這顆生命果實送你。吃下去，最大生命會增加。'
+      ] : [
+        '年輕人，魔王把晨星搶走之後，森林的霧就再也沒散過。',
+        '東邊的試煉場有一座召喚陣，史萊姆會一隻接一隻冒出來。先打壞召喚陣，再把剩下的清乾淨，封印門才會打開。',
+        '對了，北邊樹林的角落長了一朵月光蘑菇。幫我帶來，我會好好謝你。'
+      ]},
+  explorer:{n:'探險家', i:'🤠',
+    lines:() => [
+      '這座洞窟很暗，別離火光太遠。',
+      '洞裡有兩把鑰匙、兩扇上鎖的門。一把鑰匙在西北邊，另一把在南方試煉場後面。',
+      '往東的那扇門通往魔王城；北邊那扇門後面，聽說住著一位矮人鐵匠。'
+    ]},
+  dwarf:{n:'矮人鐵匠', i:'🧔', quest:'gem', reward:'bracelet',
+    lines:p => p.quests.dwarf ? [
+        '手環戴上了嗎？要放進「飾品」那一格才有效喔。'
+      ] : has('gem') ? [
+        '就是它！我的藍寶石！',
+        '拿去，力量手環。戴上之後，攻擊和防禦都會提高。'
+      ] : [
+        '我的藍寶石掉了，八成滾到大廳東南邊的角落去了。',
+        '幫我找回來，我打一只力量手環給你。'
+      ]},
+  fairy:{n:'晨星妖精', i:'🧚',
+    lines:() => [
+      '勇者，你終於來了！晨星被關在正北方的王座廳裡。',
+      '王座廳前面有兩道上鎖的門，需要兩把鑰匙。東塔、西塔各有一把。',
+      '要進塔，得先清空兩翼的試煉場。魔王的血剩一半時會發狂，記得多帶藥水。'
+    ]},
+};
+
+/* ================= 程式觀念卡 ================= */
+// 單元名稱、主題照 content/flowchart.js；清單積木用語照 whatislist.html
+const UNITS = [
+  [1, '班級置物櫃', '陣列概念與基礎操作'], [2, '集合點名', '清單查詢與邏輯判斷'], [3, '演奏小星星', '陣列應用與清單播放'],
+  [4, '計算成績', '陣列應用與資料運算'], [5, '抽號碼', '陣列應用與隨機抽籤'], [6, '撲克發牌', '陣列洗牌與依序發牌'],
+  [7, '動物點點名', '變數範圍與應用'], [8, '戰車王', '獨立變數與碰撞偵測'], [9, '分身小貓', '分身機制與私有變數'],
+  [10, '螞蟻搬乳酪', '分身應用與同步偵測'],
+];
+const CARDS = {
+  add:{u:1, n:'添加', what:'撿到的東西放進背包，排在已經有的東西後面。背包的項目多了一項。',
+    b:[['list', '添加 [🍎 蘋果] 到 [背包]']]},
+  ins:{u:1, n:'插入', what:'把東西插到第 1 項，原本的第 1 項以後通通往後推一格。東西的總數不變，只是位置變了。',
+    b:[['list', '插入 [🗡️ 短劍] 到 [背包] 的第 (1) 項']]},
+  replace:{u:1, n:'替換', what:'換上新裝備時，舊裝備回到原本那一格。位置不變、項目數量也不變，只有內容換掉。',
+    b:[['list', '替換 [背包] 的第 (2) 項為 [🔪 小刀]']]},
+  del:{u:1, n:'刪除', what:'喝掉藥水、用掉鑰匙、賣掉或丟掉東西，那一項就從背包拿掉，後面的東西會往前補上一格。',
+    b:[['list', '刪除 [背包] 的第 (1) 項']]},
+  has:{u:2, n:'包含', what:'走到上鎖的門前，遊戲先問：背包包含鑰匙嗎？「是」才開門並用掉鑰匙，「否」就告訴你門鎖著。NPC 檢查任務物品也是同一招。',
+    b:[['ctrl', '如果 ⟨ [背包] 包含 [🗝️ 鑰匙] 嗎？ ⟩ 那麼'], ['list in', '刪除 [背包] 裡的 [🗝️ 鑰匙]'], ['ctrl', '否則：說 [門鎖著]']]},
+  index:{u:2, n:'第幾項與長度', what:'按數字鍵 2，就是拿背包的第 2 項來用。背包上寫的「3 / 8 格」就是背包的長度，長度到 8 就不能再添加了。',
+    b:[['list', '[背包] 的第 (2) 項'], ['list', '[背包] 的長度']]},
+  sum:{u:4, n:'累加', what:'攻擊力是一項一項加起來的：基礎 1，加上武器，再加上飾品。防禦力也一樣，是防具加飾品。',
+    b:[['var', '將 [攻擊] 設為 (1)'], ['var', '將 [攻擊] 改變 (武器的攻擊)'], ['var', '將 [攻擊] 改變 (飾品的攻擊)']]},
+  judge:{u:4, n:'判斷', what:'打倒怪物時經驗會累加上去，每次都判斷一下：夠了就升級。升級需要的經驗一級比一級多。',
+    b:[['var', '將 [經驗] 改變 (得到的經驗)'], ['ctrl', '如果 ⟨ (經驗) ≥ (升級需要) ⟩ 那麼'], ['var in', '將 [等級] 改變 (1)']]},
+  avg:{u:4, n:'平均', what:'過關結算時，把這一章撿到的金幣總數，除以打倒的怪物數量，就是平均每隻怪掉幾枚金幣。',
+    b:[['op', '(金幣總數) ÷ (怪物數量)']]},
+  random:{u:5, n:'隨機抽、抽完刪除', what:'每一區都有一份寶物清單。打開寶箱時隨機抽一項給你，再把它從清單刪除，所以同一區不會開出重複的寶物。',
+    b:[['var', '將 [號碼] 設為 (在 1 到 ([寶物清單] 的長度) 間隨機取數)'], ['list', '刪除 [寶物清單] 的第 (號碼) 項']]},
+  scope:{u:7, n:'全域變數與角色變數', what:'金幣和經驗全遊戲只有一份，撿到就加在同一個地方，這是全域變數。每隻怪物的血量各記各的，打這隻不會扣到那隻，這是角色變數。',
+    b:[['var', '將 [金幣（所有角色）] 改變 (2)'], ['var', '將 [血量（僅限這個角色）] 改變 (-3)']]},
+  collide:{u:8, n:'碰撞偵測', what:'劍揮出去、箭飛出去，碰到哪一隻怪物，就扣那一隻的血。怪物撞到你也一樣，扣的是你的生命。',
+    b:[['sense', '如果 ⟨ 碰到 [勇者的劍]？ ⟩ 那麼'], ['var in', '將 [血量] 改變 ((0) − (攻擊))']]},
+  clone:{u:9, n:'分身', what:'召喚陣每隔一段時間就生出一隻史萊姆的分身。每隻分身都有自己的血量，打倒一隻，其他的不受影響。',
+    b:[['ctrl', '建立 [史萊姆] 的分身'], ['ctrl', '當分身產生'], ['var in', '將 [血量] 設為 (4)']]},
+  sync:{u:10, n:'同步偵測', what:'柵門一直在數試煉場裡還剩幾隻怪物，連召喚陣後來生出的分身也算。要等全部倒下、數到 0，門才會打開。',
+    b:[['ctrl', '等待直到 ⟨ (剩下的怪物) = (0) ⟩'], ['ctrl', '廣播 [打開柵門]']]},
+};
+const CARD_ORDER = Object.keys(CARDS);
+let hintsOn = true;
+try { hintsOn = localStorage.getItem(HINT_KEY) !== 'off'; } catch (e) {}
+const cardQ = [];
+function learn(key) {
+  if (!P || P.cards[key]) return;
+  P.cards[key] = 1;
+  syncCards();
+  if (hintsOn && !cardQ.includes(key)) cardQ.push(key);
+}
+function cardBody(key) {
+  const c = CARDS[key], u = UNITS[c.u - 1];
+  return `<p class="eyebrow">程式觀念 · 單元 ${u[0]}　${u[1]}</p>
+    <h3>${c.n}</h3><p class="topic">${u[2]}</p>
+    <p class="what">${c.what}</p>
+    <div class="blocks"><div class="cap">用積木來想</div>${c.b.map(([k, t]) => `<div class="blk ${k}">${t}</div>`).join('')}</div>`;
+}
+function showCard(key) {
+  UI.card = key;
+  $('#pCard').innerHTML = cardBody(key) + `<div class="acts"><button class="btn primary" data-a="ok">知道了</button></div>
+    <p class="muted" style="margin-top:10px">看過的觀念都收在暫停選單的「程式觀念」裡。</p>`;
+  $('#mCard').hidden = false; sfx('pick');
+  $('#pCard [data-a="ok"]').focus({preventScroll:true});
+}
+function closeCard() { UI.card = null; $('#mCard').hidden = true; input.keys.clear(); input.atkHeld = false; }
+$('#pCard').addEventListener('click', ev => { if (ev.target.closest('[data-a="ok"]')) closeCard(); });
+function setHints(on) { hintsOn = on; try { localStorage.setItem(HINT_KEY, on ? 'on' : 'off'); } catch (e) {} if (!on) cardQ.length = 0; }
+
+/* ================= 狀態 ================= */
+let G = null;        // 目前區域
+let P = null;        // 勇者
+const UI = {screen:true, bag:false, shop:false, full:null, dlg:null, pause:false, fading:false, ask:false, card:null};
+const input = {keys:new Set(), atkHeld:false, atkQ:false, joy:{x:0,y:0}};
+let muted = false;
+
+function newPlayer(s) {
+  s = s || {};
+  return {
+    x:0, y:0, r:11, dir:{x:0,y:1}, kbx:0, kby:0, walk:0,
+    hp:s.hp ?? 12, maxHp:s.maxHp ?? 12, gold:s.gold ?? 0,
+    bag:s.bag ? [...s.bag.filter(Boolean), ...Array(8).fill(null)].slice(0, 8) : ['potion', null, null, null, null, null, null, null],
+    cards:s.cards ? {...s.cards} : {},
+    equip:s.equip ? {...s.equip} : {weapon:'knife', armor:null, acc:null},
+    quests:s.quests ? {...s.quests} : {hermit:0, dwarf:0},
+    talked:s.talked ? {...s.talked} : {},
+    kills:s.kills ?? 0, deaths:s.deaths ?? 0, time:s.time ?? 0, lv:s.lv ?? 1, xp:s.xp ?? 0,
+    atkCd:0, swing:0, swingDir:{x:0,y:1}, hitSet:null, inv:0,
+  };
+}
+const has = id => P.bag.includes(id);
+const countOf = id => P.bag.filter(b => b === id).length;
+function weapon() { return ITEMS[P.equip.weapon] || {n:'空手', i:'✊', atk:0, kind:'melee', reach:16}; }
+function stats() {
+  const w = weapon(), a = ITEMS[P.equip.armor], c = ITEMS[P.equip.acc];
+  return {atk:1 + (w.atk || 0) + (c?.atk || 0), def:(a?.def || 0) + (c?.def || 0)};
+}
+
+/* ================= 地圖載入 ================= */
+function loadArea(idx) {
+  const A = AREAS[idx];
+  const rows = MAPS[A.key];
+  const h = rows.length, w = rows[0].length;
+  G = { idx, A, w, h, lvl:A.lvl, base:[], solid:[], objs:[], enemies:[], projs:[], drops:[], items:[], fx:[], texts:[],
+        arenas:[], pool:A.pool.slice(), stock:A.shop.slice(), exit:null, start:null, cam:{x:0,y:0}, shake:0,
+        seen:[], won:false, boss:null, bossRage:false, leaving:false, kills:0, goldIn:0, t0:P.time };
+  for (let y = 0; y < h; y++) {
+    G.base.push([]); G.solid.push([]); G.seen.push(new Array(w).fill(false));
+    for (let x = 0; x < w; x++) {
+      const c = rows[y][x];
+      let b = '.', s = 0;
+      if (c === '#') { b = '#'; s = 1; }
+      else if (c === '~') { b = '~'; s = 2; }
+      else if (c === ',') b = ',';
+      G.base[y].push(b);
+      const obj = k => { G.objs.push({kind:k, tx:x, ty:y, open:false, fade:1}); s = 1; };
+      switch (c) {
+        case 'C': obj('chest'); break;
+        case 'K': obj('keychest'); break;
+        case 'D': obj('door'); break;
+        case 'G': obj('gate'); break;
+        case 'H': obj('fountain'); break;
+        case 'M': obj('shop'); break;
+        case 'N': obj('npc'); G.objs[G.objs.length-1].npc = A.npcs[x + ',' + y]; break;
+        case 'E': G.exit = {tx:x, ty:y}; break;
+        case 'P': G.start = {x:(x+.5)*T, y:(y+.5)*T}; break;
+        case '$': for (let i = 0; i < 6; i++) dropCoin((x+.5)*T + rand(-8,8), (y+.5)*T + rand(-8,8), 2, true); break;
+        default:
+          if (FOES[c]) G.enemies.push(makeEnemy(c, (x+.5)*T, (y+.5)*T));
+          else if (A.items[c]) G.items.push({x:(x+.5)*T, y:(y+.5)*T, id:A.items[c], cool:false, t:rand(0,6)});
+      }
+      G.solid[y].push(s);
+    }
+  }
+  for (const a of A.arenas) {
+    const ar = {rect:a.rect, gates:[], cleared:false, left:0};
+    for (const [gx, gy] of a.gates) { const o = G.objs.find(o => o.kind === 'gate' && o.tx === gx && o.ty === gy); if (o) ar.gates.push(o); }
+    G.arenas.push(ar);
+  }
+  for (const e of G.enemies) {
+    const tx = Math.floor(e.x / T), ty = Math.floor(e.y / T);
+    e.arena = G.arenas.find(a => tx >= a.rect[0] && tx <= a.rect[2] && ty >= a.rect[1] && ty <= a.rect[3]) || null;
+    if (e.F.boss) G.boss = e;
+  }
+  G.checkpoint = {...G.start};
+  P.x = G.start.x; P.y = G.start.y; P.kbx = P.kby = 0;
+  G.pre = prerender();
+  snapCamera();
+  $('#areaName').textContent = A.ch + ' · ' + A.name;
+  writeSave();
+  banner(A.ch, A.name, A.intro);
+  if (idx === 0) setTimeout(() => toast(`先跟衛兵隊長說說話（走過去按 ${touchMode ? '✋' : 'E'}）`), 3200);
+  if (idx === 1 && !P.talked.hermit) setTimeout(() => toast('先去找附近的老隱士聊聊吧。'), 3200);
+}
+
+function makeEnemy(type, x, y) {
+  const F = FOES[type];
+  const sc = F.fixed ? 1 : 1 + .5 * G.lvl;
+  const hp = Math.round(F.hp * sc);
+  return {type, F, x, y, sx:x, sy:y, r:F.r, hp, max:hp, atk:F.atk + (F.fixed ? 0 : G.lvl), def:F.def, spd:F.spd,
+          kbx:0, kby:0, hx:0, hy:0, t:rand(0,1), cd:rand(1,2.2), state:0, flash:0, stun:0, kids:0, arena:null, parent:null,
+          dead:false, face:1, anim:rand(0,6), fire:2.5, sum:5, dx:0, dy:0};
+}
+
+/* ================= 碰撞 ================= */
+function solidAt(tx, ty, mode) {
+  if (tx < 0 || ty < 0 || tx >= G.w || ty >= G.h) return true;
+  const s = G.solid[ty][tx];
+  if (s === 0) return false;
+  if (s === 2 && mode === 'fly') return false;
+  return true;
+}
+function blocked(x, y, r, mode) {
+  const x0 = Math.floor((x - r) / T), x1 = Math.floor((x + r - .01) / T);
+  const y0 = Math.floor((y - r) / T), y1 = Math.floor((y + r - .01) / T);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (solidAt(tx, ty, mode)) return true;
+  return false;
+}
+function move(e, dx, dy, mode, assist) {
+  if (mode === 'ghost') { e.x = clamp(e.x + dx, T, (G.w - 1) * T); e.y = clamp(e.y + dy, T, (G.h - 1) * T); return; }
+  const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 6));
+  const sx = dx / n, sy = dy / n;
+  for (let i = 0; i < n; i++) {
+    if (sx) {
+      if (!blocked(e.x + sx, e.y, e.r, mode)) e.x += sx;
+      else if (assist && Math.abs(sy) < .01) slide(e, sx, 0, mode);
+    }
+    if (sy) {
+      if (!blocked(e.x, e.y + sy, e.r, mode)) e.y += sy;
+      else if (assist && Math.abs(sx) < .01) slide(e, 0, sy, mode);
+    }
+  }
+}
+// 卡在門框邊角時，幫勇者往空的那一側滑過去
+function slide(e, sx, sy, mode) {
+  for (const off of [4, -4, 8, -8, 12, -12]) {
+    const ox = sy ? off : 0, oy = sx ? off : 0;
+    if (!blocked(e.x + ox + sx, e.y + oy + sy, e.r, mode)) {
+      const step = Math.sign(off) * 1.6;
+      if (!blocked(e.x + (sy ? step : 0), e.y + (sx ? step : 0), e.r, mode)) { e.x += sy ? step : 0; e.y += sx ? step : 0; }
+      return;
+    }
+  }
+}
+
+/* ================= 畫面 ================= */
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const view = {w:0, h:0, scale:1, dpr:1, vw:0, vh:0};
+let light = null, lctx = null;
+function resize() {
+  const app = $('#app');
+  const cw = app.clientWidth, ch = app.clientHeight;
+  view.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(cw * view.dpr); cv.height = Math.round(ch * view.dpr);
+  view.w = cw; view.h = ch;
+  view.scale = cw >= ch ? Math.min(cw / (17 * T), ch / (10 * T)) : Math.min(cw / (10 * T), ch / (13 * T));
+  view.scale = Math.max(view.scale, .6);
+  view.vw = cw / view.scale; view.vh = ch / view.scale;
+  light = document.createElement('canvas'); light.width = cv.width; light.height = cv.height; lctx = light.getContext('2d');
+  SPR.clear();
+  if (G) snapCamera();
+}
+const SPR = new Map();
+function spr(ch, size) {
+  const k = Math.ceil(view.scale * view.dpr * 2) / 2 || 1;
+  const key = ch + '|' + size + '|' + k;
+  let c = SPR.get(key);
+  if (!c) {
+    c = document.createElement('canvas');
+    const px = Math.ceil(size * 1.35 * k);
+    c.width = c.height = px;
+    const x = c.getContext('2d');
+    x.font = `${size * k}px ${EMOJI}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(ch, px / 2, px / 2 + size * k * .07);
+    c.s = px / k;
+    SPR.set(key, c);
+  }
+  return c;
+}
+function emoji(ch, x, y, size, flip, alpha) {
+  const c = spr(ch, size);
+  ctx.save(); ctx.translate(x, y);
+  if (flip) ctx.scale(-1, 1);
+  if (alpha != null) ctx.globalAlpha = alpha;
+  ctx.drawImage(c, -c.s / 2, -c.s / 2, c.s, c.s);
+  ctx.restore();
+}
+function hash(x, y) { let h = x * 374761393 + y * 668265263; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+
+function prerender() {
+  const K = 2, A = G.A, pal = A.pal;
+  const c = document.createElement('canvas');
+  c.width = G.w * T * K; c.height = G.h * T * K;
+  const x = c.getContext('2d'); x.scale(K, K);
+  const isWall = (tx, ty) => tx < 0 || ty < 0 || tx >= G.w || ty >= G.h || G.base[ty][tx] === '#';
+  for (let ty = 0; ty < G.h; ty++) for (let tx = 0; tx < G.w; tx++) {
+    const b = G.base[ty][tx], px = tx * T, py = ty * T, r = hash(tx, ty);
+    x.fillStyle = r > .5 ? pal.floor : pal.alt; x.fillRect(px, py, T, T);
+    if (A.key === 'castle') { x.strokeStyle = 'rgba(0,0,0,.18)'; x.strokeRect(px + .5, py + .5, T - 1, T - 1); }
+    if (b === ',') {
+      x.fillStyle = pal.deco;
+      if (A.key === 'forest') { for (let i = 0; i < 3; i++) { const gx = px + 8 + i * 6 + r * 4, gy = py + 20 + (i % 2) * 3; x.fillRect(gx, gy - 6, 2, 7); } if (r > .8) { x.fillStyle = '#e8d36a'; x.beginPath(); x.arc(px + 22, py + 12, 2.4, 0, 7); x.fill(); } }
+      else if (A.key === 'cave' || A.key === 'camp') { x.beginPath(); x.ellipse(px + 10 + r * 10, py + 18, 4, 3, 0, 0, 7); x.fill(); x.beginPath(); x.ellipse(px + 20, py + 10 + r * 8, 2.5, 2, 0, 0, 7); x.fill(); }
+      else { x.fillRect(px + 4, py + 12 + r * 6, T - 8, 3); }
+    }
+    if (b === '~') {
+      x.fillStyle = pal.water; x.fillRect(px, py, T, T);
+      x.strokeStyle = pal.waterHi; x.lineWidth = 1.5; x.globalAlpha = .55;
+      x.beginPath(); x.moveTo(px + 4, py + 11 + r * 4); x.quadraticCurveTo(px + 10, py + 7 + r * 4, px + 16, py + 11 + r * 4); x.stroke();
+      x.beginPath(); x.moveTo(px + 14, py + 23); x.quadraticCurveTo(px + 20, py + 19, px + 26, py + 23); x.stroke();
+      x.globalAlpha = 1;
+    }
+    if (b === '#') {
+      x.fillStyle = pal.wall; x.fillRect(px, py, T, T);
+      const below = !isWall(tx, ty + 1);
+      if (A.key === 'castle') {
+        x.strokeStyle = 'rgba(255,255,255,.06)'; x.lineWidth = 1;
+        for (let i = 0; i < 4; i++) { x.beginPath(); x.moveTo(px, py + i * 8 + .5); x.lineTo(px + T, py + i * 8 + .5); x.stroke();
+          const o = (i % 2) * 8; x.beginPath(); x.moveTo(px + o + 8.5, py + i * 8); x.lineTo(px + o + 8.5, py + i * 8 + 8); x.moveTo(px + o + 24.5, py + i * 8); x.lineTo(px + o + 24.5, py + i * 8 + 8); x.stroke(); }
+      } else if (A.key === 'camp') {
+        for (let i = 0; i < 4; i++) { x.fillStyle = i % 2 ? '#5a4430' : '#6a5038'; x.fillRect(px + 1 + i * 8, py + 3, 6, T - 3); x.fillStyle = '#7d6146'; x.fillRect(px + 1 + i * 8, py + 3, 6, 3); }
+        x.fillStyle = '#3b2f22'; x.fillRect(px, py + 12, T, 3);
+      } else if (A.key === 'cave') {
+        x.fillStyle = pal.face; x.beginPath(); x.moveTo(px, py + 10 + r * 6); x.lineTo(px + 12, py + 4 + r * 4); x.lineTo(px + 22, py + 9); x.lineTo(px + T, py + 3 + r * 8); x.lineTo(px + T, py + T); x.lineTo(px, py + T); x.fill();
+      }
+      if (below) { x.fillStyle = A.key === 'forest' ? pal.face : 'rgba(0,0,0,.35)'; x.fillRect(px, py + T - 7, T, 7); }
+    }
+  }
+  if (A.wallIcon) {
+    x.font = `26px ${EMOJI}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    for (let ty = 0; ty < G.h; ty++) for (let tx = 0; tx < G.w; tx++) if (G.base[ty][tx] === '#') {
+      const r = hash(tx + 7, ty + 3);
+      x.fillText(r > .8 ? '🌳' : '🌲', tx * T + 16 + (r - .5) * 6, ty * T + 14 + (hash(tx, ty + 9) - .5) * 4);
+    }
+  }
+  return c;
+}
+
+function snapCamera() { const t = camTarget(); G.cam.x = t.x; G.cam.y = t.y; }
+function camTarget() {
+  const mw = G.w * T, mh = G.h * T;
+  const x = mw <= view.vw ? (mw - view.vw) / 2 : clamp(P.x - view.vw / 2, 0, mw - view.vw);
+  const y = mh <= view.vh ? (mh - view.vh) / 2 : clamp(P.y - view.vh / 2, 0, mh - view.vh);
+  return {x, y};
+}
+
+function render(t) {
+  const s = view.scale * view.dpr;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0d1211'; ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!G) return;
+  let sx = 0, sy = 0;
+  if (G.shake > 0) { sx = rand(-3, 3) * G.shake * 4; sy = rand(-3, 3) * G.shake * 4; }
+  const cx = Math.round((G.cam.x + sx) * s) / s, cy = Math.round((G.cam.y + sy) * s) / s;
+  ctx.setTransform(s, 0, 0, s, -cx * s, -cy * s);
+  // 地圖
+  const vx0 = Math.max(0, cx), vy0 = Math.max(0, cy);
+  const vw = Math.min(G.w * T - vx0, view.vw + 2), vh = Math.min(G.h * T - vy0, view.vh + 2);
+  if (vw > 0 && vh > 0) ctx.drawImage(G.pre, vx0 * 2, vy0 * 2, vw * 2, vh * 2, vx0, vy0, vw, vh);
+  const pal = G.A.pal;
+  // 出口
+  if (G.exit) drawPortal((G.exit.tx + .5) * T, (G.exit.ty + .5) * T, t);
+  // 物件
+  for (const o of G.objs) drawObj(o, t);
+  // 地上的東西
+  for (const it of G.items) {
+    const bob = Math.sin(t / 300 + it.t) * 3;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(it.x, it.y + 9, 8, 3, 0, 0, 7); ctx.fill();
+    if (it.lost) { ctx.fillStyle = `rgba(185,160,255,${.22 + Math.sin(t / 220) * .1})`; ctx.beginPath(); ctx.arc(it.x, it.y - 2 + bob, 16, 0, 7); ctx.fill(); }
+    const rr = ITEMS[it.id].r;
+    if (rr) { ctx.strokeStyle = rr === 2 ? 'rgba(240,195,90,.7)' : 'rgba(111,176,232,.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(it.x, it.y - 2 + bob, 12, 0, 7); ctx.stroke(); }
+    emoji(ITEMS[it.id].i, it.x, it.y - 2 + bob, 18);
+  }
+  for (const d of G.drops) {
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(d.x, d.y + 4, 4, 1.6, 0, 0, 7); ctx.fill();
+    if (d.kind === 'heart') emoji('❤️', d.x, d.y - d.z, 12);
+    else { ctx.fillStyle = '#f0c35a'; ctx.beginPath(); ctx.ellipse(d.x, d.y - d.z, Math.abs(Math.cos(t / 120 + d.x)) * 4 + .8, 4.5, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#9b7420'; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+  // 角色依 y 排序
+  const list = G.enemies.filter(e => !e.dead);
+  list.push(P);
+  list.sort((a, b) => a.y - b.y);
+  for (const e of list) e === P ? drawPlayer(t) : drawEnemy(e, t, pal);
+  // 投射物
+  for (const p of G.projs) drawProj(p, t);
+  // 粒子
+  for (const f of G.fx) { ctx.globalAlpha = clamp(f.life / f.max, 0, 1); ctx.fillStyle = f.c; ctx.fillRect(f.x - f.s / 2, f.y - f.s / 2, f.s, f.s); }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const x of G.texts) {
+    ctx.globalAlpha = clamp(x.life / .3, 0, 1);
+    ctx.font = `700 ${x.big ? 15 : 12}px system-ui,sans-serif`;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(x.s, x.x, x.y); ctx.fillStyle = x.c; ctx.fillText(x.s, x.x, x.y);
+  }
+  ctx.globalAlpha = 1;
+  // 光線
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (G.A.dark) {
+    lctx.globalCompositeOperation = 'source-over';
+    lctx.clearRect(0, 0, light.width, light.height);
+    lctx.fillStyle = `rgba(4,3,10,${G.A.dark})`; lctx.fillRect(0, 0, light.width, light.height);
+    lctx.globalCompositeOperation = 'destination-out';
+    const hole = (wx, wy, rad, a) => {
+      const px = (wx - cx) * s, py = (wy - cy) * s, R = rad * s;
+      if (px < -R || py < -R || px > light.width + R || py > light.height + R) return;
+      const g = lctx.createRadialGradient(px, py, R * .15, px, py, R);
+      g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      lctx.fillStyle = g; lctx.beginPath(); lctx.arc(px, py, R, 0, 7); lctx.fill();
+    };
+    hole(P.x, P.y, G.A.light * (1 + Math.sin(t / 180) * .02), 1);
+    for (const o of G.objs) if (o.kind === 'fountain' || o.kind === 'shop') hole((o.tx + .5) * T, (o.ty + .5) * T, 80, .7);
+    if (G.exit) hole((G.exit.tx + .5) * T, (G.exit.ty + .5) * T, 90, .8);
+    for (const p of G.projs) if (p.kind === 'fire') hole(p.x, p.y, 40, .6);
+    for (const it of G.items) if (it.lost) hole(it.x, it.y, 60, .75);
+    ctx.drawImage(light, 0, 0);
+  }
+  if (G.A.vignette) {
+    const g = ctx.createRadialGradient(cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * .35, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * .75);
+    g.addColorStop(0, 'rgba(200,220,210,0)'); g.addColorStop(1, `rgba(170,190,185,${G.A.vignette})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
+  }
+  if (P.hp > 0 && P.hp <= P.maxHp * .25) {
+    const g = ctx.createRadialGradient(cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * .3, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * .7);
+    g.addColorStop(0, 'rgba(180,20,20,0)'); g.addColorStop(1, `rgba(160,20,20,${.25 + Math.sin(t / 200) * .1})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
+  }
+}
+
+function drawPortal(x, y, t) {
+  ctx.save(); ctx.translate(x, y);
+  const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 18);
+  g.addColorStop(0, 'rgba(255,240,200,.95)'); g.addColorStop(.5, 'rgba(161,132,242,.6)'); g.addColorStop(1, 'rgba(161,132,242,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.fill();
+  ctx.rotate(t / 500); ctx.strokeStyle = 'rgba(230,215,255,.8)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) { ctx.rotate(2.094); ctx.beginPath(); ctx.arc(0, 0, 12, 0, 1.6); ctx.stroke(); }
+  ctx.restore();
+}
+function drawObj(o, t) {
+  const x = o.tx * T, y = o.ty * T, cx = x + T / 2, cy = y + T / 2;
+  switch (o.kind) {
+    case 'chest': case 'keychest': {
+      const band = o.kind === 'keychest' ? '#cfd8e4' : '#e0b54a';
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(cx, y + 26, 13, 4, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#7a4a24'; ctx.fillRect(x + 5, y + 12, 22, 14);
+      if (o.open) { ctx.fillStyle = '#2a1608'; ctx.fillRect(x + 7, y + 12, 18, 4); ctx.fillStyle = '#8c5a2e'; ctx.fillRect(x + 5, y + 4, 22, 7); }
+      else { ctx.fillStyle = '#8c5a2e'; ctx.fillRect(x + 5, y + 6, 22, 8); ctx.fillStyle = band; ctx.fillRect(x + 14, y + 11, 4, 6); }
+      ctx.fillStyle = band; ctx.fillRect(x + 5, y + 18, 22, 2); ctx.fillRect(x + 8, y + (o.open ? 4 : 6), 2, o.open ? 22 : 20); ctx.fillRect(x + 22, y + (o.open ? 4 : 6), 2, o.open ? 22 : 20);
+      if (!o.open && o.kind === 'keychest') { ctx.globalAlpha = .5 + Math.sin(t / 250) * .3; emoji('✨', cx + 10, y + 4, 10); ctx.globalAlpha = 1; }
+      break;
+    }
+    case 'door':
+      if (o.open && o.fade <= 0) break;
+      ctx.globalAlpha = o.open ? o.fade : 1;
+      ctx.fillStyle = '#3d2614'; ctx.fillRect(x, y, T, T);
+      ctx.fillStyle = '#6e4524'; ctx.fillRect(x + 3, y + 2, T - 6, T - 2);
+      ctx.strokeStyle = '#4a2d15'; ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + 3 + i * 6.5, y + 2); ctx.lineTo(x + 3 + i * 6.5, y + T); ctx.stroke(); }
+      ctx.fillStyle = '#9aa0a8'; ctx.fillRect(x + 3, y + 8, T - 6, 3); ctx.fillRect(x + 3, y + 22, T - 6, 3);
+      emoji('🔒', cx, cy + 1, 13);
+      ctx.globalAlpha = 1; break;
+    case 'gate': {
+      if (o.open && o.fade <= 0) break;
+      ctx.globalAlpha = o.open ? o.fade : 1;
+      ctx.fillStyle = 'rgba(40,20,70,.65)'; ctx.fillRect(x, y, T, T);
+      const pulse = .6 + Math.sin(t / 220 + o.tx) * .25;
+      ctx.strokeStyle = `rgba(185,160,255,${pulse})`; ctx.lineWidth = 3;
+      for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + 5 + i * 7.3, y); ctx.lineTo(x + 5 + i * 7.3, y + T); ctx.stroke(); }
+      ctx.fillStyle = `rgba(230,215,255,${pulse})`; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1; break;
+    }
+    case 'fountain':
+      ctx.fillStyle = 'rgba(120,200,255,.18)'; ctx.beginPath(); ctx.arc(cx, cy, 15 + Math.sin(t / 300) * 2, 0, 7); ctx.fill();
+      emoji('⛲', cx, cy - 2, 26); break;
+    case 'shop':
+      ctx.fillStyle = '#6b2f2a'; ctx.fillRect(x + 2, y + 18, T - 4, 12); ctx.fillStyle = '#e0b54a'; ctx.fillRect(x + 2, y + 20, T - 4, 1.5);
+      emoji('🧙', cx, cy - 2 + Math.sin(t / 400) * 1, 24);
+      break;
+    case 'npc': {
+      const N = NPCS[o.npc];
+      emoji(N.i, cx, cy - 1 + Math.sin(t / 380 + o.tx) * 1, 24);
+      const want = !P.talked[o.npc] || (N.quest && !P.quests[o.npc] && has(N.quest));
+      if (want) emoji('💬', cx + 11, y - 4 + Math.sin(t / 200) * 2, 13);
+      break;
+    }
+  }
+}
+function drawPlayer(t) {
+  const blink = P.inv > 0 && Math.floor(t / 70) % 2 === 0;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(P.x, P.y + 10, 10, 3.5, 0, 0, 7); ctx.fill();
+  const w = weapon();
+  if (P.swing > 0) {
+    const a = Math.atan2(P.swingDir.y, P.swingDir.x), reach = (w.reach || 16), prog = 1 - P.swing / .16;
+    ctx.save(); ctx.translate(P.x, P.y);
+    ctx.fillStyle = 'rgba(255,250,230,.35)'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach + 12, a - 1.1, a + 1.1); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, reach + 10, a - 1.1, a - 1.1 + 2.2 * prog); ctx.stroke();
+    ctx.restore();
+  }
+  if (!blink) {
+    const bob = Math.abs(Math.sin(P.walk)) * 2;
+    emoji('🤺', P.x, P.y - 3 - bob, 24, P.dir.x < -.1);
+  }
+  // 手上的武器
+  const a = Math.atan2(P.dir.y, P.dir.x);
+  const wx = P.x + Math.cos(a) * 14, wy = P.y + Math.sin(a) * 14 - 2;
+  if (!blink && P.swing <= 0) emoji(w.i, wx, wy, 12);
+  const ar = ITEMS[P.equip.armor];
+  if (!blink && ar) emoji(ar.i, P.x - Math.cos(a) * 9 + (P.dir.x < -.1 ? 6 : -6), P.y + 2, 11);
+  if (!blink && P.equip.acc) { ctx.strokeStyle = `rgba(240,195,90,${.35 + Math.sin(t / 250) * .15})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(P.x, P.y + 10, 12, 4.5, 0, 0, 7); ctx.stroke(); }
+}
+function drawEnemy(e, t, pal) {
+  const F = e.F;
+  if (!F.ghost && !F.nest) { ctx.fillStyle = 'rgba(0,0,0,.33)'; ctx.beginPath(); ctx.ellipse(e.x, e.y + e.r * .75, e.r * .85, e.r * .3, 0, 0, 7); ctx.fill(); }
+  const shake = (e.state === 1) ? rand(-1.5, 1.5) : 0;
+  if (e.type === 's') {
+    const sq = 1 + Math.sin(e.anim * 9) * .08 + (Math.hypot(e.hx, e.hy) > 40 ? -.12 : 0);
+    ctx.save(); ctx.translate(e.x, e.y + 3); ctx.scale(1 / sq, sq);
+    ctx.fillStyle = pal.slime; ctx.beginPath(); ctx.moveTo(-12, 6); ctx.quadraticCurveTo(-13, -12, 0, -12); ctx.quadraticCurveTo(13, -12, 12, 6); ctx.quadraticCurveTo(0, 9, -12, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(-5, -6, 3, 2, -.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#1b1b1b'; ctx.beginPath(); ctx.arc(-4 * e.face + (e.face > 0 ? 6 : -6) * .3, -2, 1.8, 0, 7); ctx.arc(4 * e.face + (e.face > 0 ? 6 : -6) * .3, -2, 1.8, 0, 7); ctx.fill();
+    ctx.restore();
+  } else if (F.nest) {
+    ctx.save(); ctx.translate(e.x, e.y);
+    const p = 1 + Math.sin(e.anim * 4) * .06;
+    ctx.fillStyle = 'rgba(60,20,90,.55)'; ctx.beginPath(); ctx.arc(0, 0, 18 * p, 0, 7); ctx.fill();
+    ctx.rotate(e.anim * .8); ctx.strokeStyle = '#b9a0ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, 16 * p, 0, 7); ctx.stroke();
+    ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * 2.513; ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * 15 * p, Math.sin(a) * 15 * p); } ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  } else {
+    let alpha = F.ghost ? .55 + Math.sin(e.anim * 3) * .2 : null;
+    const size = F.boss ? 54 : e.type === 'n' ? 30 : 24;
+    const fl = e.type === 'b' ? Math.sin(e.anim * 20) * 2 : 0;
+    if (F.dummy) { ctx.fillStyle = '#6b4a2a'; ctx.fillRect(e.x - 3, e.y - 2, 6, 14); ctx.fillStyle = '#c9a66b'; ctx.fillRect(e.x - 9, e.y - 4, 18, 4); }
+    if (F.boss && G.bossRage) { ctx.fillStyle = `rgba(230,60,40,${.25 + Math.sin(t / 90) * .12})`; ctx.beginPath(); ctx.arc(e.x, e.y, 34, 0, 7); ctx.fill(); }
+    emoji(F.i, e.x + shake, e.y - 2 + fl - (F.fly ? 6 : 0), size, e.face > 0 && e.type !== 'n', alpha);
+  }
+  if (e.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(e.x, e.y - 2, e.r, 0, 7); ctx.fill(); }
+  if (e.hp < e.max && !F.boss) {
+    const w = Math.max(20, e.r * 1.8), y = e.y - e.r - 12 - (F.fly ? 6 : 0);
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(e.x - w / 2 - 1, y - 1, w + 2, 5);
+    ctx.fillStyle = F.nest ? '#b9a0ff' : '#e05a4a'; ctx.fillRect(e.x - w / 2, y, w * e.hp / e.max, 3);
+  }
+}
+function drawProj(p, t) {
+  if (p.kind === 'arrow') {
+    const a = Math.atan2(p.vy, p.vx);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a);
+    ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(6, 0); ctx.stroke();
+    ctx.fillStyle = '#cfd6e0'; ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(3, -3.5); ctx.lineTo(3, 3.5); ctx.fill();
+    ctx.restore();
+  } else if (p.kind === 'bone') {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(t / 60);
+    ctx.fillStyle = '#efe7d6'; ctx.fillRect(-7, -1.5, 14, 3); ctx.beginPath(); ctx.arc(-7, 0, 2.6, 0, 7); ctx.arc(7, 0, 2.6, 0, 7); ctx.fill();
+    ctx.restore();
+  } else {
+    const g = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 10);
+    g.addColorStop(0, '#fff3c0'); g.addColorStop(.4, '#ff8a3a'); g.addColorStop(1, 'rgba(200,40,20,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, 7); ctx.fill();
+  }
+}
+
+/* ================= 小地圖 ================= */
+const mini = $('#mini'), mctx = mini.getContext('2d');
+let miniT = 0;
+function drawMini() {
+  const k = 3;
+  if (mini.width !== G.w * k) { mini.width = G.w * k; mini.height = G.h * k; mini.style.width = G.w * k + 'px'; mini.style.height = G.h * k + 'px'; }
+  mctx.clearRect(0, 0, mini.width, mini.height);
+  for (let y = 0; y < G.h; y++) for (let x = 0; x < G.w; x++) {
+    if (!G.seen[y][x]) continue;
+    const b = G.base[y][x];
+    mctx.fillStyle = b === '#' ? 'rgba(0,0,0,0)' : b === '~' ? '#2d5f80' : '#6d6a5c';
+    if (b !== '#') mctx.fillRect(x * k, y * k, k, k);
+  }
+  for (const o of G.objs) {
+    if (!G.seen[o.ty][o.tx]) continue;
+    let c = null;
+    if (o.kind === 'door' && !o.open) c = '#c58b4a';
+    else if (o.kind === 'gate' && !o.open) c = '#a184f2';
+    else if ((o.kind === 'chest' || o.kind === 'keychest') && !o.open) c = '#f0c35a';
+    else if (o.kind === 'fountain') c = '#6fc3ff';
+    else if (o.kind === 'shop' || o.kind === 'npc') c = '#86c98f';
+    if (c) { mctx.fillStyle = c; mctx.fillRect(o.tx * k, o.ty * k, k, k); }
+  }
+  if (G.exit && G.seen[G.exit.ty][G.exit.tx]) { mctx.fillStyle = '#ffffff'; mctx.fillRect(G.exit.tx * k - 1, G.exit.ty * k - 1, k + 2, k + 2); }
+  mctx.strokeStyle = '#c9a8ff'; mctx.lineWidth = 1.5;
+  for (const it of G.items) if (it.lost) {
+    const x = Math.floor(it.x / T) * k + k / 2, y = Math.floor(it.y / T) * k + k / 2;
+    mctx.beginPath(); mctx.moveTo(x - 3, y - 3); mctx.lineTo(x + 3, y + 3); mctx.moveTo(x + 3, y - 3); mctx.lineTo(x - 3, y + 3); mctx.stroke();
+  }
+  mctx.fillStyle = '#ff5a4a'; mctx.fillRect(Math.floor(P.x / T) * k - 1, Math.floor(P.y / T) * k - 1, k + 2, k + 2);
+}
+function reveal() {
+  const tx = Math.floor(P.x / T), ty = Math.floor(P.y / T), R = 5;
+  for (let y = ty - R; y <= ty + R; y++) for (let x = tx - R; x <= tx + R; x++)
+    if (x >= 0 && y >= 0 && x < G.w && y < G.h && (x - tx) ** 2 + (y - ty) ** 2 <= R * R + 2) G.seen[y][x] = true;
+}
+
+/* ================= 更新 ================= */
+function update(dt) {
+  P.time += dt;
+  G.shake = Math.max(0, G.shake - dt);
+  updatePlayer(dt);
+  updateEnemies(dt);
+  updateProjs(dt);
+  updateDrops(dt);
+  for (const f of G.fx) { f.life -= dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= .92; f.vy *= .92; }
+  G.fx = G.fx.filter(f => f.life > 0);
+  for (const x of G.texts) { x.life -= dt; x.y -= 28 * dt; }
+  G.texts = G.texts.filter(x => x.life > 0);
+  for (const o of G.objs) if (o.open && o.fade > 0) o.fade -= dt * 2;
+  G.enemies = G.enemies.filter(e => !e.dead);
+  checkArenas();
+  checkExit();
+  const t = camTarget();
+  G.cam.x += (t.x - G.cam.x) * Math.min(1, dt * 8);
+  G.cam.y += (t.y - G.cam.y) * Math.min(1, dt * 8);
+  reveal();
+}
+
+function updatePlayer(dt) {
+  let mx = 0, my = 0;
+  const k = input.keys;
+  if (k.has('ArrowLeft') || k.has('KeyA')) mx -= 1;
+  if (k.has('ArrowRight') || k.has('KeyD')) mx += 1;
+  if (k.has('ArrowUp') || k.has('KeyW')) my -= 1;
+  if (k.has('ArrowDown') || k.has('KeyS')) my += 1;
+  mx += input.joy.x; my += input.joy.y;
+  let len = Math.hypot(mx, my);
+  if (len > 1) { mx /= len; my /= len; len = 1; }
+  if (len > .2) { P.dir = {x:mx / len, y:my / len}; P.walk += dt * 11; } else P.walk = 0;
+  const sp = 132;
+  move(P, (mx * sp + P.kbx) * dt, (my * sp + P.kby) * dt, 'walk', true);
+  P.kbx -= P.kbx * Math.min(1, dt * 10); P.kby -= P.kby * Math.min(1, dt * 10);
+  P.atkCd -= dt; P.inv -= dt;
+  if (P.swing > 0) { P.swing -= dt; meleeHits(); }
+  if ((input.atkHeld || input.atkQ) && P.atkCd <= 0) { input.atkQ = false; attack(); }
+}
+function attack() {
+  const w = weapon(), st = stats();
+  if (w.kind === 'bow') {
+    const sp = w.atk >= 7 ? 520 : 420;
+    G.projs.push({kind:'arrow', owner:'p', x:P.x + P.dir.x * 10, y:P.y + P.dir.y * 10, vx:P.dir.x * sp, vy:P.dir.y * sp, r:5, dmg:st.atk, life:w.atk >= 7 ? .75 : .6});
+    P.atkCd = .4; sfx('bow');
+  } else {
+    P.swing = .16; P.swingDir = {...P.dir}; P.hitSet = new Set(); P.atkCd = .34; sfx('swing');
+    meleeHits();
+  }
+}
+function meleeHits() {
+  const w = weapon(), reach = w.reach || 16, atk = stats().atk;
+  const cx = P.x + P.swingDir.x * reach * .8, cy = P.y + P.swingDir.y * reach * .8;
+  for (const e of G.enemies) {
+    if (e.dead || P.hitSet.has(e)) continue;
+    if (Math.hypot(e.x - cx, e.y - cy) < reach + e.r) { P.hitSet.add(e); hitEnemy(e, atk, P.swingDir); }
+  }
+}
+function hitEnemy(e, atk, dir) {
+  const d = Math.max(1, atk - e.def);
+  e.hp -= d; e.flash = .12;
+  learn('collide');
+  if (!e.F.nest && !e.F.dummy) {
+    const kb = e.F.boss ? 60 : e.type === 'n' ? 110 : 230;
+    e.kbx = dir.x * kb; e.kby = dir.y * kb; e.stun = e.F.boss ? 0 : .18;
+    if (e.state === 1 && !e.F.boss) e.state = 0;
+  }
+  text(e.x, e.y - e.r - 6, '-' + d, '#fff');
+  burst(e.x, e.y, 4, '#fff6d8');
+  sfx('hit');
+  if (e.hp <= 0) killEnemy(e);
+}
+function killEnemy(e) {
+  if (e.dead) return;
+  e.dead = true; P.kills++; G.kills++;
+  const col = e.type === 's' ? G.A.pal.slime : e.F.nest ? '#b9a0ff' : '#d8d2c4';
+  burst(e.x, e.y, e.F.boss ? 60 : 14, col);
+  if (e.parent) e.parent.kids--;
+  gainXp(e.parent ? 0 : (e.F.xp || 0) * (e.F.fixed ? 1 : 1 + .5 * G.lvl), e.x, e.y, !!e.parent);
+  const [g0, g1] = e.F.gold;
+  let g = randi(g0, g1) + (e.F.fixed ? 0 : G.lvl);
+  const coins = Math.min(g, 6);
+  for (let i = 0; i < coins; i++) dropCoin(e.x, e.y, Math.ceil(g / coins));
+  if (!e.F.nest && !e.F.dummy && Math.random() < .12) G.drops.push({kind:'heart', x:e.x, y:e.y, vx:rand(-40,40), vy:rand(-40,40), z:0, vz:120, t:0});
+  if (e.F.nest) { toast('召喚陣被打壞了！'); sfx('gate'); }
+  else sfx('pop');
+  if (e.F.boss) win();
+}
+// 升級：每升一級最大生命 +2，並且補滿
+// 升級越來越難：需要的經驗一級比一級多，等級越高打怪拿到的經驗也越少
+const needXp = lv => 6 + 4 * lv;
+const xpRate = lv => 3 / (lv + 2);          // Lv1 100%、Lv2 75%、Lv3 60%、Lv4 50%……
+function gainXp(base, x, y, minion) {
+  if (!base && !minion) return;
+  const n = minion ? 1 : Math.max(1, Math.round(base * xpRate(P.lv)));
+  P.xp += n;
+  text(x, y - 26, `+${n} 經驗`, '#9fd0ff');
+  let up = 0;
+  while (P.xp >= needXp(P.lv)) { P.xp -= needXp(P.lv); P.lv++; P.maxHp += 2; up++; }
+  if (up) {
+    P.hp = P.maxHp;
+    burst(P.x, P.y, 26, '#f0c35a'); text(P.x, P.y - 34, `升級！Lv ${P.lv}`, '#f0c35a', true);
+    toast(`升到 Lv ${P.lv}！最大生命 +${up * 2}，生命回滿。`); sfx('level'); learn('judge');
+  }
+}
+function dropCoin(x, y, v, still) {
+  G.drops.push({kind:'coin', x, y, v, vx:still ? 0 : rand(-60, 60), vy:still ? 0 : rand(-60, 60), z:0, vz:still ? 0 : rand(90, 150), t:0});
+}
+
+function updateEnemies(dt) {
+  for (const e of G.enemies) {
+    if (e.dead) continue;
+    const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
+    if (d > 20 * T && !e.F.boss) continue;
+    e.flash -= dt; e.anim += dt; e.cd -= dt; e.t -= dt;
+    const aggro = d < e.F.aggro * T && P.hp > 0 && !G.won;
+    let vx = 0, vy = 0;
+    if (e.stun > 0) e.stun -= dt;
+    else switch (e.type) {
+      case 's': {
+        if (e.t <= 0) {
+          e.t = rand(.7, 1.1);
+          const a = aggro ? Math.atan2(dy, dx) + rand(-.3, .3) : rand(0, 6.28);
+          const m = aggro ? 2.4 : 1.1;
+          e.hx = Math.cos(a) * e.spd * m; e.hy = Math.sin(a) * e.spd * m;
+        }
+        e.hx -= e.hx * Math.min(1, dt * 3.2); e.hy -= e.hy * Math.min(1, dt * 3.2);
+        vx = e.hx; vy = e.hy; break;
+      }
+      case 'b':
+        if (aggro) { const a = Math.atan2(dy, dx) + Math.sin(e.anim * 5) * .9; vx = Math.cos(a) * e.spd; vy = Math.sin(a) * e.spd; }
+        else { vx = Math.cos(e.anim * 1.3 + e.sx) * 26; vy = Math.sin(e.anim * 1.7) * 26; }
+        break;
+      case 'p': case 'n': {
+        const range = e.type === 'p' ? 3.2 : 3, dash = e.type === 'p' ? 270 : 230, wind = e.type === 'p' ? .38 : .6;
+        if (e.state === 0) {
+          if (aggro) { vx = dx / d * e.spd; vy = dy / d * e.spd; }
+          if (aggro && d < range * T && e.cd <= 0) { e.state = 1; e.t = wind; e.dx = dx / d; e.dy = dy / d; }
+        } else if (e.state === 1) { if (e.t <= 0) { e.state = 2; e.t = .32; } }
+        else { vx = e.dx * dash; vy = e.dy * dash; if (e.t <= 0) { e.state = 0; e.cd = rand(1.6, 2.4); } }
+        break;
+      }
+      case 'k':
+        if (aggro) {
+          const m = d < 3.2 * T ? -1 : d > 5 * T ? 1 : 0, sw = Math.sin(e.anim * 1.2) * .6;
+          vx = (dx / d * m - dy / d * sw) * e.spd; vy = (dy / d * m + dx / d * sw) * e.spd;
+          if (e.cd <= 0) { e.cd = rand(1.8, 2.6); const sp = 170; G.projs.push({kind:'bone', owner:'e', x:e.x, y:e.y, vx:dx / d * sp, vy:dy / d * sp, r:6, dmg:e.atk, life:3}); }
+        }
+        break;
+      case 'g':
+        if (aggro) { vx = dx / d * e.spd; vy = dy / d * e.spd; }
+        else { vx = Math.cos(e.anim * .7 + e.sy) * 15; vy = Math.sin(e.anim * .9) * 15; }
+        break;
+      case 'O':
+        if (aggro && e.cd <= 0 && e.kids < G.A.kidCap) {
+          e.cd = 3.2;
+          const a = rand(0, 6.28), nx = e.x + Math.cos(a) * 26, ny = e.y + Math.sin(a) * 26;
+          const kid = makeEnemy(G.A.nestKid, nx, ny);
+          if (!blocked(nx, ny, kid.r, 'walk')) { kid.arena = e.arena; kid.parent = e; e.kids++; G.enemies.push(kid); burst(nx, ny, 8, '#b9a0ff'); if (seesClone(e, d)) learn('clone'); }
+        }
+        break;
+      case 'B': bossAI(e, dt, dx, dy, d, aggro); vx = e.vx || 0; vy = e.vy || 0; break;
+    }
+    const mode = e.F.ghost ? 'ghost' : e.F.fly ? 'fly' : 'walk';
+    move(e, (vx + e.kbx) * dt, (vy + e.kby) * dt, mode);
+    e.kbx -= e.kbx * Math.min(1, dt * 9); e.kby -= e.kby * Math.min(1, dt * 9);
+    if (Math.abs(vx) > 2) e.face = vx < 0 ? -1 : 1;
+    if (!e.F.nest && e.atk > 0 && d < e.r + P.r - 3) hurtPlayer(e.atk, e);
+  }
+  // 讓怪物不要疊在一起
+  const L = G.enemies;
+  for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+    const a = L[i], b = L[j];
+    if (a.F.nest || b.F.nest) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), m = a.r + b.r - 4;
+    if (d > 0 && d < m) {
+      const push = (m - d) / 2, ux = dx / d, uy = dy / d;
+      const ma = a.F.ghost ? 'ghost' : a.F.fly ? 'fly' : 'walk', mb = b.F.ghost ? 'ghost' : b.F.fly ? 'fly' : 'walk';
+      if (!a.F.boss) move(a, -ux * push, -uy * push, ma);
+      if (!b.F.boss) move(b, ux * push, uy * push, mb);
+    }
+  }
+}
+// 分身要在勇者看得到的地方生出來，才跳觀念卡（隔著牆生的不算）
+function seesClone(e, d) {
+  if (!e.arena) return d < 6 * T;
+  const tx = Math.floor(P.x / T), ty = Math.floor(P.y / T), r = e.arena.rect;
+  return tx >= r[0] && tx <= r[2] && ty >= r[1] && ty <= r[3];
+}
+function bossAI(e, dt, dx, dy, d, aggro) {
+  e.vx = 0; e.vy = 0;
+  if (!aggro) return;
+  const rage = e.hp < e.max / 2;
+  if (rage && !G.bossRage) { G.bossRage = true; toast('魔王發狂了！'); G.shake = .5; sfx('roar'); }
+  const spd = e.spd * (rage ? 1.35 : 1);
+  if (e.state === 0) {
+    e.vx = dx / d * spd; e.vy = dy / d * spd;
+    e.fire -= dt; e.sum -= dt;
+    if (e.fire <= 0) {
+      e.fire = rage ? 2.3 : 3.3;
+      const n = rage ? 14 : 9, off = rand(0, 1);
+      for (let i = 0; i < n; i++) { const a = (i + off) / n * Math.PI * 2; G.projs.push({kind:'fire', owner:'e', x:e.x, y:e.y, vx:Math.cos(a) * 140, vy:Math.sin(a) * 140, r:8, dmg:e.atk - 1, life:3.5, fly:1}); }
+      sfx('fire');
+    }
+    if (e.sum <= 0) {
+      e.sum = 7;
+      for (let i = 0; i < 2 && e.kids < 4; i++) {
+        const a = rand(0, 6.28), kid = makeEnemy('b', e.x + Math.cos(a) * 40, e.y + Math.sin(a) * 40);
+        kid.parent = e; e.kids++; G.enemies.push(kid); burst(kid.x, kid.y, 8, '#b9a0ff');
+      }
+    }
+    if (rage && e.cd <= 0 && d < 4.5 * T) { e.state = 1; e.t = .55; e.dx = dx / d; e.dy = dy / d; }
+  } else if (e.state === 1) { if (e.t <= 0) { e.state = 2; e.t = .42; } }
+  else { e.vx = e.dx * 320; e.vy = e.dy * 320; if (e.t <= 0) { e.state = 0; e.cd = 3; } }
+}
+
+function hurtPlayer(dmg, src) {
+  if (P.inv > 0 || G.won || P.hp <= 0) return;
+  const def = stats().def, d = Math.max(1, dmg - def), saved = dmg - d;
+  P.hp -= d; P.inv = 1;
+  // 防具擋掉的傷害要看得到
+  if (saved > 0) {
+    text(P.x + 22, P.y - 4, `🛡️ 擋 ${saved}`, '#a9d3ff');
+    burst(P.x - P.dir.x * 10, P.y - P.dir.y * 10, 6, '#cfe6ff');
+    sfx('block');
+  }
+  const dx = P.x - src.x, dy = P.y - src.y, l = Math.hypot(dx, dy) || 1;
+  P.kbx = dx / l * 260; P.kby = dy / l * 260;
+  G.shake = .25;
+  text(P.x, P.y - 18, '-' + d, '#ff7a6a', true);
+  sfx('hurt');
+  if (P.hp <= 0) {
+    P.hp = 0; burst(P.x, P.y, 20, '#ff7a6a');
+    const lost = Math.ceil(P.gold / 2); P.gold -= lost;
+    const gear = dropGear();
+    setTimeout(() => showDeath(lost, gear), 700);
+  }
+}
+
+function updateProjs(dt) {
+  for (const p of G.projs) {
+    p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+    const tx = Math.floor(p.x / T), ty = Math.floor(p.y / T);
+    if (solidAt(tx, ty, 'fly')) { p.life = 0; burst(p.x, p.y, 3, '#bbb'); continue; }
+    if (p.owner === 'p') {
+      for (const e of G.enemies) if (!e.dead && Math.hypot(e.x - p.x, e.y - p.y) < e.r + p.r) {
+        const l = Math.hypot(p.vx, p.vy); hitEnemy(e, p.dmg, {x:p.vx / l, y:p.vy / l}); p.life = 0; break;
+      }
+    } else if (Math.hypot(P.x - p.x, P.y - p.y) < P.r + p.r - 2) { hurtPlayer(p.dmg, p); p.life = 0; }
+  }
+  G.projs = G.projs.filter(p => p.life > 0);
+}
+function updateDrops(dt) {
+  for (const d of G.drops) {
+    d.t += dt;
+    d.vz -= 420 * dt; d.z = Math.max(0, d.z + d.vz * dt); if (d.z === 0) { d.vz = 0; d.vx *= .85; d.vy *= .85; }
+    const dist = Math.hypot(P.x - d.x, P.y - d.y);
+    if (d.t > .35 && dist < 70 && P.hp > 0) { d.x += (P.x - d.x) / dist * 260 * dt; d.y += (P.y - d.y) / dist * 260 * dt; }
+    else { d.x += d.vx * dt; d.y += d.vy * dt; }
+    if (d.t > .35 && dist < 14) {
+      d.gone = true;
+      if (d.kind === 'heart') { heal(2); }
+      else { P.gold += d.v; G.goldIn += d.v; sfx('coin'); learn('scope'); }
+    }
+  }
+  G.drops = G.drops.filter(d => !d.gone);
+  for (const it of G.items) {
+    const dist = Math.hypot(P.x - it.x, P.y - it.y);
+    if (it.cool) { if (dist > 34) it.cool = false; continue; }
+    if (dist < 18 && P.hp > 0) pickup(it);
+  }
+}
+function heal(n) {
+  const before = P.hp; P.hp = Math.min(P.maxHp, P.hp + n);
+  if (P.hp > before) { text(P.x, P.y - 20, '+' + (P.hp - before), '#86e08f', true); sfx('heal'); }
+}
+
+/* ================= 背包與道具 ================= */
+// 背包就是一份清單：刪除時後面的往前補，空格永遠在最後面
+function bagDel(i, quiet) { P.bag.splice(i, 1); P.bag.push(null); if (!quiet) learn('del'); }
+function pickup(it) {
+  const i = P.bag.indexOf(null);
+  if (i >= 0) {
+    P.bag[i] = it.id; G.items.splice(G.items.indexOf(it), 1);
+    toast(`撿到了 ${ITEMS[it.id].i} ${ITEMS[it.id].n}`); sfx('pick');
+    learn('add');
+    afterGain(i);
+  } else openFull(it);
+}
+// 拿到裝備時：那一格空著就直接穿上；比身上的好就提醒去換
+function afterGain(i) {
+  const id = P.bag[i], it = ITEMS[id];
+  if (!it || !(it.slot in SLOT_NAME)) return;
+  if (!P.equip[it.slot]) { P.equip[it.slot] = id; bagDel(i, true); toast(`自動裝備了 ${it.i} ${it.n}`); sfx('equip'); learn('sum'); return; }
+  const now = stats(), nx = statsWith(id);
+  if (nx.atk + nx.def > now.atk + now.def) toast(`${it.n} 比身上的好！按 ${touchMode ? '🎒' : 'I'} 打開背包換上`);
+}
+function statsWith(id) {
+  const s = ITEMS[id].slot, keep = P.equip[s];
+  P.equip[s] = id; const r = stats(); P.equip[s] = keep; return r;
+}
+function compareHTML(id) {
+  const it = ITEMS[id];
+  if (!it || !(it.slot in SLOT_NAME) || P.equip[it.slot] === id) return '';
+  const a = stats(), b = statsWith(id);
+  const f = (x, y) => x === y ? `<b>${x}</b>` : `<b>${x}</b> → <b class="${y > x ? 'up' : 'down'}">${y}</b>`;
+  return `<p class="cmp">換上之後：攻擊 ${f(a.atk, b.atk)}　防禦 ${f(a.def, b.def)}</p>`;
+}
+function dropItem(id, x, y) { G.items.push({x, y, id, cool:true, t:rand(0,6)}); }
+function useItem(i) {
+  const id = P.bag[i], it = ITEMS[id];
+  if (!it || it.slot !== 'use') return false;
+  if (it.maxhp) { P.maxHp += it.maxhp; P.hp = P.maxHp; toast(`最大生命提高到 ${P.maxHp}！`); sfx('heal'); }
+  else { if (P.hp >= P.maxHp) { toast('生命已經是滿的。'); return false; } heal(it.heal); }
+  bagDel(i);
+  return true;
+}
+function quickPotion() {
+  if (P.hp >= P.maxHp) { toast('生命已經是滿的。'); return; }
+  const order = ['potion', 'apple', 'meat', 'bigpotion'];
+  for (const id of order) { const i = P.bag.indexOf(id); if (i >= 0) { useItem(i); return; } }
+  toast('背包裡沒有可以喝的藥。');
+}
+
+let sel = null;
+function openBag() { if (blockedUI() && !UI.bag) return; UI.bag = true; sel = sel || {t:'bag', i:0}; renderBag(); $('#mBag').hidden = false; }
+function closeBag() { UI.bag = false; $('#mBag').hidden = true; }
+function slotHTML(id, extra, cap, selected, no) {
+  const it = ITEMS[id], n = no ? `<span class="no">${no}</span>` : '';
+  if (!it) return `<button class="slot empty${selected ? ' sel' : ''}" ${extra}>${n}${cap || '空'}</button>`;
+  return `<button class="slot${selected ? ' sel' : ''}" data-r="${it.r}" ${extra} aria-label="${no ? no + '：' : ''}${it.n}">${n}${it.i}${cap ? `<span class="cap">${cap}</span>` : ''}</button>`;
+}
+// 數字鍵 1～8：裝備就換上、藥就喝掉，背包不用打開
+function quickSlot(i) {
+  const id = P.bag[i];
+  if (!id) { toast(`背包第 ${i + 1} 格是空的。`); }
+  else {
+    const it = ITEMS[id];
+    if (it.slot in SLOT_NAME) {
+      const s = it.slot, old = P.equip[s]; P.equip[s] = id; sfx('equip');
+      if (old) { P.bag[i] = old; learn('replace'); } else bagDel(i, true);
+      learn('sum');
+      toast(`換上 ${it.i} ${it.n}${old ? `，${ITEMS[old].n} 放回第 ${i + 1} 格` : ''}`);
+    } else if (it.slot === 'use') useItem(i);
+    else toast(`${it.i} ${it.n}：${it.slot === 'key' ? '走到上鎖的門前按 E 就會用掉。' : '把它交給需要的人。'}`);
+  }
+  learn('index');
+  if (UI.bag) { sel = {t:'bag', i}; renderBag(); }
+}
+function digit(c) { const m = /^(?:Digit|Numpad)([1-8])$/.exec(c); return m ? +m[1] - 1 : -1; }
+function itemTags(it) {
+  const t = [];
+  if (it.slot in SLOT_NAME) t.push(SLOT_NAME[it.slot]);
+  if (it.atk) t.push('攻擊 +' + it.atk);
+  if (it.def) t.push(`防禦 +${it.def}（每次受傷少 ${it.def} 點）`);
+  if (it.kind === 'bow') t.push('遠距離');
+  if (it.heal) t.push(it.heal >= 99 ? '回滿生命' : '回復 ' + it.heal);
+  if (it.maxhp) t.push('最大生命 +' + it.maxhp);
+  if (it.slot === 'key') t.push('開門');
+  if (it.slot === 'quest') t.push('任務物品');
+  return t.map(s => `<span class="tag">${s}</span>`).join('');
+}
+function renderBag() {
+  const st = stats();
+  let id = null;
+  if (sel?.t === 'bag') id = P.bag[sel.i]; else if (sel?.t === 'eq') id = P.equip[sel.s];
+  const it = ITEMS[id];
+  let acts = '';
+  if (it && sel.t === 'bag') {
+    if (it.slot in SLOT_NAME) acts += `<button class="btn primary" data-a="equip">${P.equip[it.slot] ? '換上（替換 ' + ITEMS[P.equip[it.slot]].n + '）' : '裝備'}</button>`;
+    if (it.slot === 'use') acts += `<button class="btn primary" data-a="use">使用</button>`;
+    if (sel.i > 0) acts += `<button class="btn" data-a="ins">插到第 1 格</button>`;
+    acts += `<button class="btn" data-a="drop">丟在地上</button>`;
+  } else if (it && sel.t === 'eq') acts += `<button class="btn" data-a="unequip">卸下放回背包</button>`;
+  $('#pBag').innerHTML = `
+    <header><h3>背包</h3><small>${P.bag.filter(Boolean).length} / 8 格</small><button class="x" data-a="close">關閉 I</button></header>
+    <p class="label">身上的裝備</p>
+    <div class="slots eq">${['weapon', 'armor', 'acc'].map(s => slotHTML(P.equip[s], `data-eq="${s}"`, SLOT_NAME[s], sel?.t === 'eq' && sel.s === s)).join('')}</div>
+    <p class="label">背包</p>
+    <div class="slots">${P.bag.map((b, i) => slotHTML(b, `data-i="${i}"`, '', sel?.t === 'bag' && sel.i === i, i + 1)).join('')}</div>
+    <div class="detail">${it ? `<h4>${it.i} ${it.n}</h4><div class="tags">${itemTags(it)}</div><p>${it.d}</p>${sel.t === 'bag' ? compareHTML(id) : ''}<div class="acts">${acts}</div>` : `<p>點一格看看裡面是什麼。背包最多放 8 樣東西，滿了要先丟掉或用掉一些。${touchMode ? '' : '<br>不開背包也能按數字鍵 1～8：裝備直接換上，藥直接喝掉。'}</p>`}</div>
+    <div class="sum"><span>等級 <b>${P.lv}</b>（經驗 ${P.xp}/${needXp(P.lv)}，打怪經驗 ${Math.round(xpRate(P.lv) * 100)}%）</span><span>攻擊 <b>${st.atk}</b></span><span>防禦 <b>${st.def}</b></span><span>生命 <b>${P.hp}/${P.maxHp}</b></span><span>金幣 <b>${P.gold}</b></span></div>
+    <p style="margin:8px 0 0;font-size:13px;color:var(--muted)">受到的傷害 = 怪物攻擊 − 你的防禦（最少扣 1）。${st.def ? `現在每次受傷少扣 ${st.def} 點。` : '穿上防具或飾品就能少扣血。'}</p>`;
+}
+$('#pBag').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  if (b.dataset.i != null) { sel = {t:'bag', i:+b.dataset.i}; renderBag(); return; }
+  if (b.dataset.eq) { sel = {t:'eq', s:b.dataset.eq}; renderBag(); return; }
+  const a = b.dataset.a;
+  if (a === 'close') return closeBag();
+  if (a === 'equip') {
+    const id = P.bag[sel.i], s = ITEMS[id].slot, old = P.equip[s];
+    P.equip[s] = id; sfx('equip'); toast(`裝備了 ${ITEMS[id].n}`);
+    if (old) { P.bag[sel.i] = old; learn('replace'); } else bagDel(sel.i, true);
+    learn('sum');
+  } else if (a === 'use') { useItem(sel.i); }
+  else if (a === 'ins') {
+    const id = P.bag.splice(sel.i, 1)[0]; P.bag.unshift(id); sel = {t:'bag', i:0}; sfx('equip');
+    toast(`${ITEMS[id].n} 插到第 1 格，其他東西往後推一格`); learn('ins');
+  }
+  else if (a === 'drop') { const id = P.bag[sel.i]; bagDel(sel.i); dropItem(id, P.x, P.y + 4); toast(`把 ${ITEMS[id].n} 放在地上了`); }
+  else if (a === 'unequip') {
+    const i = P.bag.indexOf(null);
+    if (i < 0) { toast('背包滿了，放不回去。'); return; }
+    P.bag[i] = P.equip[sel.s]; P.equip[sel.s] = null; sel = {t:'bag', i};
+  }
+  renderBag();
+});
+
+function openFull(it) { UI.full = it; renderFull(); $('#mFull').hidden = false; }
+function closeFull() { if (UI.full) UI.full.cool = true; UI.full = null; $('#mFull').hidden = true; }
+function renderFull() {
+  const it = ITEMS[UI.full.id];
+  $('#pFull').innerHTML = `
+    <header><h3>背包滿了</h3><button class="x" data-a="skip">先不拿</button></header>
+    <div class="detail" style="margin:0 0 14px"><h4>${it.i} ${it.n}</h4><div class="tags">${itemTags(it)}</div><p>${it.d}</p></div>
+    <p class="label">要用哪一格換它？被換掉的東西會留在地上</p>
+    <div class="slots">${P.bag.map((b, i) => slotHTML(b, `data-i="${i}"`, ITEMS[b]?.n)).join('')}</div>`;
+}
+$('#pFull').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  if (b.dataset.a === 'skip') return closeFull();
+  if (b.dataset.i != null) {
+    const i = +b.dataset.i, it = UI.full, old = P.bag[i];
+    P.bag[i] = it.id; G.items.splice(G.items.indexOf(it), 1);
+    dropItem(old, P.x, P.y + 4);
+    toast(`拿起 ${ITEMS[it.id].n}，放下 ${ITEMS[old].n}`); sfx('pick'); learn('replace');
+    UI.full = null; $('#mFull').hidden = true;
+    afterGain(i);
+  }
+});
+
+let shopTab = 'buy';
+function openShop() { UI.shop = true; shopTab = 'buy'; renderShop(); $('#mShop').hidden = false; }
+function closeShop() { UI.shop = false; $('#mShop').hidden = true; }
+function renderShop() {
+  const free = P.bag.indexOf(null) >= 0;
+  $('#pShop').innerHTML = `
+    <header><h3>旅行商人</h3><small>你有 💰 ${P.gold}</small><button class="x" data-a="close">離開</button></header>
+    <div class="tabs"><button data-tab="buy" class="${shopTab === 'buy' ? 'on' : ''}">買東西</button><button data-tab="sell" class="${shopTab === 'sell' ? 'on' : ''}">賣東西</button></div>
+    ${shopTab === 'buy' ? G.stock.map(id => { const it = ITEMS[id]; const ok = P.gold >= it.price && free; return `
+      <div class="shoprow"><div class="ic">${it.i}</div><div><h4>${it.n} <span class="price">💰${it.price}</span></h4><p>${it.d}</p>${compareHTML(id)}</div>
+      <button class="btn ${ok ? 'primary' : ''}" data-buy="${id}" ${ok ? '' : 'disabled'}>買</button></div>`; }).join('')
+      + `<p style="margin:12px 0 0;color:var(--muted);font-size:13px">${free ? '藥水要多少有多少，裝備每樣只有一件。' : '背包滿了，先賣掉一些東西再買。'}</p>`
+    : (P.bag.some(Boolean) ? P.bag.map((id, i) => { if (!id) return ''; const it = ITEMS[id], v = sellPrice(id); return `
+      <div class="shoprow"><div class="ic">${it.i}</div><div><h4>${it.n} ${v ? `<span class="price">💰${v}</span>` : ''}</h4><p>${v ? it.d : '這個商人不收這種東西。'}</p></div>
+      <button class="btn" data-sell="${i}" ${v ? '' : 'disabled'}>賣</button></div>`; }).join('')
+      : '<p style="color:var(--muted)">背包是空的。</p>')
+      + `<p style="margin:12px 0 0;color:var(--muted);font-size:13px">只能賣背包裡的東西。身上穿著的裝備要先卸下才能賣；鑰匙和任務物品不收。</p>`}`;
+}
+$('#pShop').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  if (b.dataset.a === 'close') return closeShop();
+  if (b.dataset.tab) { shopTab = b.dataset.tab; return renderShop(); }
+  if (b.dataset.sell != null) {
+    const i = +b.dataset.sell, id = P.bag[i], v = sellPrice(id);
+    if (!v) return;
+    bagDel(i); P.gold += v; sfx('coin'); toast(`賣掉 ${ITEMS[id].n}，得到 ${v} 金幣`);
+    return renderShop();
+  }
+  const id = b.dataset.buy; if (!id) return;
+  const it = ITEMS[id], i = P.bag.indexOf(null);
+  if (i < 0 || P.gold < it.price) return;
+  P.gold -= it.price; P.bag[i] = id; sfx('coin'); toast(`買了 ${it.i} ${it.n}`); learn('add');
+  if (it.slot !== 'use') G.stock.splice(G.stock.indexOf(id), 1);
+  afterGain(i);
+  renderShop();
+});
+
+/* ================= 互動 ================= */
+function nearest() {
+  let best = null, bd = 50;
+  for (const o of G.objs) {
+    if ((o.kind === 'door' || o.kind === 'gate') && o.open) continue;
+    const d = Math.hypot((o.tx + .5) * T - P.x, (o.ty + .5) * T - P.y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+function promptText(o) {
+  switch (o.kind) {
+    case 'chest': case 'keychest': return o.open ? null : '打開寶箱';
+    case 'door': return has('key') ? '用鑰匙開門' : '上鎖的門';
+    case 'gate': return '封印門';
+    case 'fountain': return '泉水';
+    case 'shop': return '商店';
+    case 'npc': return '和' + NPCS[o.npc].n + '說話';
+  }
+}
+function interact() {
+  const o = nearest(); if (!o) return;
+  const cx = (o.tx + .5) * T, cy = (o.ty + .5) * T;
+  switch (o.kind) {
+    case 'chest': case 'keychest': {
+      if (o.open) return;
+      o.open = true; G.solid[o.ty][o.tx] = 1; sfx('open');
+      let id;
+      if (o.kind === 'keychest') id = 'key';
+      else if (G.pool.length) { id = G.pool.splice(Math.floor(Math.random() * G.pool.length), 1)[0]; learn('random'); }
+      burst(cx, cy - 6, 12, '#f0c35a');
+      if (!id) { for (let i = 0; i < 5; i++) dropCoin(cx, cy, 3); toast('寶箱裡只剩一些金幣。'); return; }
+      const dx = P.x - cx, dy = P.y - cy, l = Math.hypot(dx, dy) || 1;
+      G.items.push({x:cx + dx / l * 24, y:cy + dy / l * 24, id, cool:false, t:0});
+      toast(`寶箱裡有 ${ITEMS[id].i} ${ITEMS[id].n}！`);
+      return;
+    }
+    case 'door': {
+      const i = P.bag.indexOf('key');
+      learn('has');
+      if (i < 0) { toast('門鎖著。背包裡沒有鑰匙。'); sfx('deny'); return; }
+      bagDel(i); o.open = true; G.solid[o.ty][o.tx] = 0; sfx('door');
+      toast('用掉一把鑰匙，門打開了。'); burst(cx, cy, 10, '#c58b4a'); return;
+    }
+    case 'gate': {
+      const ar = G.arenas.find(a => a.gates.includes(o));
+      toast(`封印門：試煉場裡還有 ${ar ? ar.left : '?'} 隻怪物，全部打倒才會打開。`); sfx('deny'); return;
+    }
+    case 'fountain':
+      P.hp = P.maxHp; G.checkpoint = {x:cx, y:cy + T}; sfx('heal');
+      burst(cx, cy, 16, '#8fd3ff');
+      toast('生命回滿了。泉水記住了你的位置。'); return;
+    case 'shop': openShop(); return;
+    case 'npc': {
+      const N = NPCS[o.npc];
+      const lines = N.lines(P);
+      const turnIn = N.quest && !P.quests[o.npc] && has(N.quest);
+      P.talked[o.npc] = true;
+      talk(N, lines, turnIn ? () => {
+        bagDel(P.bag.indexOf(N.quest)); P.quests[o.npc] = 1; learn('has');
+        G.items.push({x:P.x, y:P.y + 2, id:N.reward, cool:false, t:0});
+        toast(`得到 ${ITEMS[N.reward].i} ${ITEMS[N.reward].n}！`); sfx('gate');
+      } : null);
+    }
+  }
+}
+
+function checkArenas() {
+  const ptx = Math.floor(P.x / T), pty = Math.floor(P.y / T);
+  let inside = null;
+  for (const a of G.arenas) {
+    if (a.cleared) continue;
+    a.left = G.enemies.filter(e => e.arena === a && !e.dead).length;
+    if (a.left === 0) {
+      a.cleared = true;
+      for (const g of a.gates) { g.open = true; G.solid[g.ty][g.tx] = 0; burst((g.tx + .5) * T, (g.ty + .5) * T, 14, '#b9a0ff'); }
+      toast('封印解除了！門打開了。'); sfx('gate'); G.shake = .2; learn('sync');
+      continue;
+    }
+    if (ptx >= a.rect[0] && ptx <= a.rect[2] && pty >= a.rect[1] && pty <= a.rect[3]) inside = a;
+  }
+  const tag = $('#arenaTag');
+  if (inside) { tag.hidden = false; tag.innerHTML = `封印試煉　剩下 <b>${inside.left}</b> 隻`; } else tag.hidden = true;
+}
+function checkExit() {
+  if (!G.exit || G.leaving) return;
+  if (Math.floor(P.x / T) === G.exit.tx && Math.floor(P.y / T) === G.exit.ty) {
+    const lost = G.items.filter(i => i.lost);
+    if (lost.length) { openExitAsk(lost); return; }
+    leaveArea();
+  }
+}
+function leaveArea() { G.leaving = true; sfx('gate'); showSummary(); }
+function showSummary() {
+  if (G.idx === 0) setTrained();
+  const A = G.A, next = AREAS[G.idx + 1], k = G.kills, g = G.goldIn;
+  const avg = k ? Math.round(g / k * 10) / 10 : 0;
+  const teach = hintsOn && !P.cards.avg;
+  P.cards.avg = 1;
+  syncCards();
+  showScreen(`<div class="card">
+    <p class="eyebrow">${A.ch} 完成</p>
+    <h2>${A.name}</h2>
+    <div class="result">
+      <div><b>${k}</b>打倒的怪物</div><div><b>${g}</b>撿到的金幣</div>
+      <div><b>${k ? avg : '—'}</b>平均每隻掉幾枚</div><div><b>${fmtTime(P.time - G.t0)}</b>這一章花的時間</div>
+    </div>
+    ${k ? `<p class="muted" style="margin:-10px 0 18px">${g} ÷ ${k} ≈ ${avg}</p>` : ''}
+    ${teach ? `<div class="panel ccard" style="margin:0 auto 20px;text-align:left">${cardBody('avg')}</div>` : ''}
+    <div class="acts"><button class="btn primary" data-go="next">前往${next.ch}：${next.name}</button></div>
+  </div>`);
+}
+// 出口前提醒：倒下時掉的裝備還沒撿回來
+function openExitAsk(lost) {
+  UI.ask = true; sfx('deny');
+  $('#pExit').innerHTML = `
+    <header><h3>還有裝備沒撿回來</h3></header>
+    <p style="margin:0 0 12px;line-height:1.7">倒下時掉的東西還在這一區，小地圖上的紫色 ✕ 就是位置。<b>一離開這一區就再也拿不回來了。</b></p>
+    <div class="tags" style="margin-bottom:16px">${lost.map(i => `<span class="tag" style="font-size:14px;padding:4px 10px">${ITEMS[i.id].i} ${ITEMS[i.id].n}</span>`).join('')}</div>
+    <div class="acts"><button class="btn primary" data-a="back">回去撿</button><button class="btn" data-a="go">不要了，離開</button></div>`;
+  $('#mExit').hidden = false;
+  $('#pExit [data-a="back"]').focus({preventScroll:true});
+}
+function closeExitAsk(go) {
+  UI.ask = false; $('#mExit').hidden = true;
+  if (go) { leaveArea(); return; }
+  // 把勇者推離出口一格，免得一關掉又馬上跳出來
+  const cx = (G.exit.tx + .5) * T, cy = (G.exit.ty + .5) * T;
+  let best = null;
+  for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+    const x = cx + dx * T, y = cy + dy * T;
+    if (!blocked(x, y, P.r, 'walk')) { best = {x, y}; break; }
+  }
+  if (best) { P.x = best.x; P.y = best.y; }
+  P.kbx = P.kby = 0; input.keys.clear(); input.joy.x = input.joy.y = 0;
+}
+$('#pExit').addEventListener('click', ev => { const b = ev.target.closest('[data-a]'); if (b) closeExitAsk(b.dataset.a === 'go'); });
+function fadeTo(fn) {
+  UI.fading = true; $('#fade').classList.add('on');
+  setTimeout(() => { fn(); setTimeout(() => { $('#fade').classList.remove('on'); UI.fading = false; }, 120); }, 480);
+}
+
+/* ================= 對話、提示、特效 ================= */
+function talk(N, lines, onEnd) {
+  UI.dlg = {N, lines, i:0, onEnd};
+  showLine(); $('#dialog').hidden = false;
+}
+function showLine() { const d = UI.dlg; $('#dFace').textContent = d.N.i; $('#dWho').textContent = d.N.n; $('#dSay').textContent = d.lines[d.i]; }
+function advance() {
+  const d = UI.dlg; if (!d) return;
+  d.i++;
+  if (d.i >= d.lines.length) { UI.dlg = null; $('#dialog').hidden = true; d.onEnd && d.onEnd(); }
+  else showLine();
+}
+$('#dialog').addEventListener('click', advance);
+
+function toast(s) {
+  const box = $('#toasts');
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = s;
+  box.appendChild(el);
+  while (box.children.length > 3) box.firstChild.remove();
+  setTimeout(() => el.remove(), 2700);
+}
+function banner(a, b, c) {
+  const el = $('#banner');
+  $('#banSmall').textContent = a; $('#banTitle').textContent = b; $('#banText').textContent = c;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
+function burst(x, y, n, c) { for (let i = 0; i < n; i++) { const a = rand(0, 6.28), s = rand(30, 140); G.fx.push({x, y, vx:Math.cos(a) * s, vy:Math.sin(a) * s, life:rand(.25, .6), max:.6, c, s:rand(2, 4)}); } }
+function text(x, y, s, c, big) { G.texts.push({x, y, s, c, big, life:.8}); }
+
+/* ================= HUD ================= */
+const hudCache = {};
+function setHud(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).textContent = v; } }
+function updateHud() {
+  const st = stats();
+  setHud('#hpText', `${P.hp} / ${P.maxHp}`);
+  $('#hpFill').style.width = (P.hp / P.maxHp * 100) + '%';
+  setHud('#sLv', 'Lv ' + P.lv);
+  $('#xpFill').style.width = (P.xp / needXp(P.lv) * 100) + '%';
+  setHud('#sAtk', st.atk); setHud('#sDef', st.def); setHud('#sGold', P.gold); setHud('#sKey', countOf('key'));
+  setHud('#potCount', P.bag.filter(b => b && ITEMS[b].heal).length);
+  const gearKey = P.equip.weapon + '|' + P.equip.armor + '|' + P.equip.acc;
+  if (hudCache.gear !== gearKey) {
+    hudCache.gear = gearKey;
+    $('#gear').innerHTML = ['weapon', 'armor', 'acc'].map(s => { const it = ITEMS[P.equip[s]];
+      return it ? `<button data-g title="${SLOT_NAME[s]}：${it.n}">${it.i}</button>` : `<button data-g class="none" title="${SLOT_NAME[s]}：沒有裝備">${SLOT_NAME[s]}</button>`; }).join('');
+  }
+  const o = (!UI.screen && P.hp > 0) ? nearest() : null;
+  const label = o && promptText(o);
+  const pr = $('#prompt');
+  if (label) { pr.hidden = false; const h = `<kbd>${touchMode ? '✋' : 'E'}</kbd>${label}`; if (pr.innerHTML !== h) pr.innerHTML = h; } else pr.hidden = true;
+  $('#tAct').classList.toggle('ready', !!label);
+  const bb = $('#bossBar');
+  const b = G.boss;
+  if (b && !b.dead && Math.hypot(b.x - P.x, b.y - P.y) < 8.5 * T) { bb.hidden = false; $('#bossFill').style.width = (b.hp / b.max * 100) + '%'; $('#arenaTag').hidden = true; }
+  else bb.hidden = true;
+}
+
+/* ================= 存檔 ================= */
+function snapshot() {
+  return {v:2, area:G.idx, hp:P.maxHp, maxHp:P.maxHp, gold:P.gold, bag:P.bag.slice(), equip:{...P.equip}, quests:{...P.quests}, talked:{...P.talked}, kills:P.kills, deaths:P.deaths, time:P.time, lv:P.lv, xp:P.xp, cards:{...P.cards}};
+}
+// 每章開頭存一份（loadArea 呼叫）。存檔格式照原作的 v2，整份放進 games.morningstar.save
+function writeSave() { if (STORE) STORE.update(r => { r.save = snapshot(); GAMESAVE.addCards(r, P.cards); }); }
+function readSave() { const s = STORE && STORE.get().save; return s && s.v === 2 ? s : null; }
+function clearSave() { if (STORE) STORE.update(r => { r.save = null; }); }
+
+/* ================= 畫面切換 ================= */
+function blockedUI() { return UI.screen || UI.bag || UI.shop || UI.full || UI.dlg || UI.pause || UI.fading || UI.ask || UI.card; }
+function showScreen(html) { const s = $('#screen'); s.innerHTML = html; s.hidden = false; UI.screen = true; const b = s.querySelector('.btn'); if (b) b.focus({preventScroll:true}); }
+function hideScreen() { $('#screen').hidden = true; UI.screen = false; }
+const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+function showTitle() {
+  const s = readSave();
+  showScreen(`<div class="card">
+    <p class="eyebrow">一趟約二十分鐘的冒險</p>
+    <h1>晨<span class="star">星</span>勇者</h1>
+    <p class="lead">魔王從村莊奪走了「晨星」，從此天空再也沒有亮過。穿過迷霧森林和幽暗洞窟，闖進魔王城，把晨星帶回來。</p>
+    <div class="keys">
+      <div><kbd>WASD／方向鍵</kbd>移動</div><div><kbd>空白鍵／J</kbd>攻擊</div><div><kbd>E</kbd>開寶箱、說話</div>
+      <div><kbd>I／1～8</kbd>背包／快速使用</div><div><kbd>Q</kbd>喝藥水</div><div><kbd>Esc</kbd>暫停</div>
+    </div>
+    <div class="acts">
+      ${s ? `<button class="btn primary" data-go="continue">繼續：${AREAS[s.area].ch} ${AREAS[s.area].name}</button>` : ''}
+      <button class="btn ${s ? '' : 'primary'}" data-go="new">${s ? '重新開始：新手訓練' : '從新手訓練開始'}</button>
+      <button class="btn" data-go="skip" ${isTrained() ? '' : 'disabled'}>跳過訓練，直接到第一章</button>
+    </div>
+    ${isTrained() ? '' : '<p class="muted" style="margin-top:10px">第一次玩要先完成新手訓練，走出訓練場之後就能跳過了。</p>'}
+    <p style="margin-top:16px"><button class="toggle" data-go="hints">程式觀念提示：${hintsOn ? '開' : '關'}</button></p>
+    <p style="margin-top:16px;font-size:13px;color:var(--muted)">手機或平板：左半邊拖曳移動，右下角按鈕攻擊和互動。</p>
+    <p style="margin-top:6px;font-size:13px;color:var(--muted)">☁️ 進度存在你自己的帳號裡，換電腦也能接著玩。</p>
+    <p style="margin-top:14px"><a class="toggle" style="text-decoration:none;display:inline-block" href="flowchart.html">← 回到程式設計</a></p>
+  </div>`);
+}
+// 還沒完成十關（直接貼網址進來也會走到這裡）
+function showLocked(g) {
+  showScreen(`<div class="card">
+    <p class="eyebrow">完成程式設計十關之後開放</p>
+    <h1>晨<span class="star">星</span>勇者</h1>
+    <p class="lead">程式設計的 10 關都通關（${!(window.CONFIG||{}).GRADER_URL ? '流程圖都排對' : '流程圖排對、程式拿到 2⭐ 以上'}）就能進來冒險。<br>你目前完成了 <b>${g.done} / ${g.total}</b> 關。</p>
+    <div class="acts"><a class="btn primary" style="text-decoration:none" href="flowchart.html">回到程式設計</a></div>
+  </div>`);
+}
+// 雲端讀不到：只存雲端 ⇒ 不開始遊戲，講清楚原因
+function showOffline(why) {
+  showScreen(`<div class="card">
+    <p class="eyebrow">晨星勇者</p>
+    <h2>讀不到你的存檔</h2>
+    <p class="lead">進度是存在雲端的，現在連不上，所以先不開始（不然玩了也存不進去）。<br>請重新整理一次；還是不行的話，回闖關基地重新登入。</p>
+    <p class="muted" style="margin:-8px 0 18px">${String(why || '').replace(/[<>&]/g, '')}</p>
+    <div class="acts"><button class="btn primary" data-go="reload">重新整理</button><a class="btn" style="text-decoration:none" href="hub.html">回闖關基地</a></div>
+  </div>`);
+}
+let cloudBad = false;
+function cloudState(st, why) {
+  if (st === 'error' && !cloudBad && G) toast('⚠️ 存檔沒有存進雲端（網路不穩），下次存檔會再試一次。');
+  if (st === 'ok') cloudBad = false; else if (st === 'error') cloudBad = true;
+}
+function startGame(save, from) {
+  P = newPlayer(save);
+  cardQ.length = 0;
+  hideScreen();
+  loadArea(save ? save.area : (from || 0));
+}
+// 倒下時：身上的裝備散落在原地，可以回去撿；金幣少一半，找不回來
+function dropGear() {
+  const ids = ['weapon', 'armor', 'acc'].map(s => P.equip[s]).filter(Boolean);
+  P.equip = {weapon:null, armor:null, acc:null};
+  ids.forEach((id, k) => {
+    const a = k / ids.length * Math.PI * 2 + .5, r = ids.length > 1 ? 14 : 0;
+    let x = P.x + Math.cos(a) * r, y = P.y + Math.sin(a) * r;
+    if (blocked(x, y, 6, 'walk')) { x = P.x; y = P.y; }
+    G.items.push({x, y, id, cool:false, t:rand(0, 6), lost:true});
+  });
+  return ids;
+}
+function showDeath(lost, gear) {
+  if (G.won) return;
+  P.deaths++;
+  const g = gear.length ? `身上的 ${gear.map(id => ITEMS[id].i + ' ' + ITEMS[id].n).join('、')}掉在倒下的地方，回去撿起來吧，小地圖上的紫色 ✕ 就是那裡。` : '';
+  showScreen(`<div class="card">
+    <p class="eyebrow">${G.A.ch} · ${G.A.name}</p>
+    <h2>你倒下了</h2>
+    <p class="lead">${lost ? `金幣少了一半，${lost} 枚找不回來了。` : ''}${g}泉水會把你帶回最後去過的地方，打倒的怪物不會再出現。</p>
+    <div class="acts"><button class="btn primary" data-go="respawn">從泉水重新出發</button></div>
+  </div>`);
+}
+function respawn() {
+  P.hp = P.maxHp; P.inv = 1.5; P.kbx = P.kby = 0;
+  P.x = G.checkpoint.x; P.y = G.checkpoint.y;
+  G.projs = [];
+  for (const e of G.enemies) { e.hp = e.max; e.x = e.sx; e.y = e.sy; e.state = 0; e.kbx = e.kby = 0; if (e.F.boss) { e.fire = 2.5; e.sum = 5; } }
+  G.bossRage = false;
+  hideScreen(); snapCamera();
+  if (G.items.some(i => i.lost)) setTimeout(() => toast(weapon().atk ? '裝備掉在倒下的地方，跟著小地圖的紫色 ✕ 走。' : '現在是空手！先回倒下的地方撿回武器，或從背包換一把。'), 400);
+}
+function win() {
+  G.won = true;
+  for (const e of G.enemies) if (!e.dead && !e.F.boss) { e.dead = true; burst(e.x, e.y, 10, '#b9a0ff'); }
+  G.projs = [];
+  G.shake = .8; sfx('win');
+  // 通關：清掉存檔、記一筆通關紀錄（時間、等級、打倒數、倒下次數…），馬上寫回雲端
+  if (STORE) { STORE.update(r => { r.save = null; GAMESAVE.addCards(r, P.cards); GAMESAVE.addClear(r, P); }); STORE.flush(); }
+  setTimeout(() => {
+    showScreen(`<div class="card">
+      <p class="eyebrow">終章</p>
+      <h1 style="font-size:clamp(40px,10vw,68px)"><span class="star">晨星</span>回來了</h1>
+      <p class="lead">魔王倒下的那一刻，晨星從王座上升起，飛回村莊的天空。很久很久沒有天亮的世界，終於迎來了早晨。</p>
+      <div class="result">
+        <div><b>${fmtTime(P.time)}</b>冒險時間</div><div><b>${P.kills}</b>打倒的怪物</div>
+        <div><b>${P.gold}</b>剩下的金幣</div><div><b>${P.deaths}</b>倒下次數</div>
+        <div><b>Lv ${P.lv}</b>最後的等級</div><div><b>${P.maxHp}</b>最大生命</div>
+      </div>
+      <div class="acts"><button class="btn primary" data-go="title">回到標題</button></div>
+    </div>`);
+  }, 2200);
+}
+function togglePause(on) {
+  if (on && blockedUI()) return;
+  UI.pause = on;
+  if (on) showPause();
+  else hideScreen();
+}
+function showPause() {
+  const got = CARD_ORDER.filter(k => P.cards[k]).length;
+  showScreen(`<div class="card"><p class="eyebrow">${G.A.ch} · ${G.A.name}</p><h2>暫停</h2>
+    <div class="result"><div><b>${fmtTime(P.time)}</b>冒險時間</div><div><b>${P.kills}</b>打倒的怪物</div></div>
+    <div class="acts"><button class="btn primary" data-go="resume">繼續</button><button class="btn" data-go="codex">程式觀念（${got}/${CARD_ORDER.length}）</button><button class="btn" data-go="title">回到標題</button></div>
+    <p style="margin-top:16px"><button class="toggle" data-go="hints">程式觀念提示：${hintsOn ? '開' : '關'}</button></p></div>`);
+}
+function showCodex() {
+  showScreen(`<div class="card" style="width:min(620px,100%)"><p class="eyebrow">遊戲裡藏了哪些程式觀念</p><h2>程式觀念</h2>
+    <div class="codex">${UNITS.map(([u, name, topic]) => {
+      const ks = CARD_ORDER.filter(k => CARDS[k].u === u);
+      return `<div class="unit"><h4>單元 ${u}　${name}<small>${topic}</small></h4>${ks.length
+        ? `<div class="chips">${ks.map(k => P.cards[k] ? `<button class="chip" data-go="card" data-k="${k}">${CARDS[k].n}</button>` : `<button class="chip" disabled>？？？</button>`).join('')}</div>`
+        : '<p class="muted">這款遊戲沒有用到這個單元。</p>'}</div>`; }).join('')}</div>
+    <div class="acts"><button class="btn primary" data-go="back">返回</button></div></div>`);
+}
+$('#screen').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-go]'); if (!b) return;
+  unlockAudio();
+  const go = b.dataset.go;
+  if (go === 'new') { clearSave(); startGame(null, 0); }
+  else if (go === 'skip') { if (!isTrained()) return; clearSave(); startGame(null, 1); }
+  else if (go === 'hints') { setHints(!hintsOn); b.textContent = `程式觀念提示：${hintsOn ? '開' : '關'}`; }
+  else if (go === 'codex') showCodex();
+  else if (go === 'card') showScreen(`<div class="card" style="width:min(520px,100%)"><div class="panel ccard" style="text-align:left;margin:0 auto 18px">${cardBody(b.dataset.k)}</div><div class="acts"><button class="btn primary" data-go="codex">返回</button></div></div>`);
+  else if (go === 'back') showPause();
+  else if (go === 'next') { const n = G.idx + 1; fadeTo(() => { hideScreen(); loadArea(n); }); }
+  else if (go === 'continue') startGame(readSave());
+  else if (go === 'respawn') respawn();
+  else if (go === 'resume') togglePause(false);
+  else if (go === 'title') { UI.pause = false; G = null; showTitle(); }
+  else if (go === 'reload') location.reload();
+});
+
+/* ================= 音效 ================= */
+let AC = null;
+function unlockAudio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); }
+function tone(f, dur, type, slide, vol, delay) {
+  const t = AC.currentTime + (delay || 0);
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
+  g.gain.setValueAtTime(vol || .06, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + .02);
+}
+let lastCoin = 0;
+function sfx(n) {
+  if (muted || !AC) return;
+  try {
+    switch (n) {
+      case 'swing': tone(700, .07, 'triangle', -450, .04); break;
+      case 'bow': tone(900, .09, 'square', -600, .03); break;
+      case 'hit': tone(180, .07, 'square', -80, .05); break;
+      case 'pop': tone(420, .12, 'triangle', 300, .05); break;
+      case 'hurt': tone(220, .22, 'sawtooth', -140, .06); break;
+      case 'coin': if (AC.currentTime - lastCoin < .05) break; lastCoin = AC.currentTime; tone(988, .06, 'square', 0, .03); tone(1319, .12, 'square', 0, .03, .05); break;
+      case 'pick': tone(660, .08, 'triangle', 0, .05); tone(990, .12, 'triangle', 0, .05, .07); break;
+      case 'open': [523, 659, 784].forEach((f, i) => tone(f, .14, 'triangle', 0, .05, i * .07)); break;
+      case 'gate': [392, 523, 659, 784].forEach((f, i) => tone(f, .18, 'sine', 0, .06, i * .08)); break;
+      case 'door': tone(110, .25, 'square', -40, .05); break;
+      case 'deny': tone(160, .12, 'square', 0, .04); tone(120, .14, 'square', 0, .04, .1); break;
+      case 'heal': [523, 784, 1047].forEach((f, i) => tone(f, .16, 'sine', 0, .05, i * .06)); break;
+      case 'equip': tone(300, .06, 'square', 200, .04); break;
+      case 'fire': tone(160, .3, 'sawtooth', -90, .04); break;
+      case 'roar': tone(90, .6, 'sawtooth', -40, .08); break;
+      case 'block': tone(1200, .05, 'triangle', -400, .04); break;
+      case 'level': [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .14, 'square', 0, .035, i * .06)); break;
+      case 'win': [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, .3, 'triangle', 0, .06, i * .15)); break;
+    }
+  } catch (e) {}
+}
+$('#bSound').addEventListener('click', () => { muted = !muted; $('#bSound').textContent = muted ? '🔇' : '🔊'; unlockAudio(); });
+$('#bBag').addEventListener('click', () => { unlockAudio(); UI.bag ? closeBag() : openBag(); });
+$('#gear').addEventListener('click', ev => { if (ev.target.closest('[data-g]')) { unlockAudio(); if (!UI.bag) openBag(); } });
+$('#bPause').addEventListener('click', () => { if (!UI.screen) togglePause(true); else if (UI.pause) togglePause(false); });
+
+/* ================= 鍵盤 ================= */
+window.addEventListener('keydown', ev => {
+  unlockAudio();
+  const c = ev.code;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(c) && !UI.screen) ev.preventDefault();
+  if (UI.screen) {
+    if (c === 'Escape' && UI.pause) togglePause(false);
+    return;
+  }
+  if (UI.dlg) { if (['Space', 'KeyE', 'Enter', 'KeyJ', 'KeyK'].includes(c) && !ev.repeat) advance(); return; }
+  if (UI.card) { if (['Escape', 'Enter', 'Space', 'KeyE'].includes(c) && !ev.repeat) closeCard(); return; }
+  if (UI.ask) { if (c === 'Escape') closeExitAsk(false); return; }
+  if (UI.full) { if (c === 'Escape') closeFull(); return; }
+  if (UI.shop) { if (c === 'Escape' || c === 'KeyE') closeShop(); return; }
+  if (UI.bag) { if (c === 'Escape' || c === 'KeyI' || c === 'KeyB' || c === 'Tab') closeBag(); else if (digit(c) >= 0 && !ev.repeat) quickSlot(digit(c)); return; }
+  if (UI.fading) return;
+  input.keys.add(c);
+  if ((c === 'Space' || c === 'KeyJ') && P.hp > 0) { input.atkHeld = true; if (!ev.repeat) input.atkQ = true; }
+  if ((c === 'KeyE' || c === 'KeyK' || c === 'Enter') && !ev.repeat && P.hp > 0) interact();
+  if ((c === 'KeyI' || c === 'KeyB' || c === 'Tab') && !ev.repeat) openBag();
+  if (c === 'KeyQ' && !ev.repeat && P.hp > 0) quickPotion();
+  if (digit(c) >= 0 && !ev.repeat && P.hp > 0) quickSlot(digit(c));
+  if ((c === 'Escape' || c === 'KeyP') && !ev.repeat) togglePause(true);
+});
+window.addEventListener('keyup', ev => {
+  input.keys.delete(ev.code);
+  if (ev.code === 'Space' || ev.code === 'KeyJ') input.atkHeld = false;
+});
+window.addEventListener('blur', () => { input.keys.clear(); input.atkHeld = false; });
+
+/* ================= 觸控 ================= */
+let touchMode = false;
+function enableTouch() {
+  if (touchMode) return;
+  touchMode = true; $('#touch').hidden = false; $('#app').classList.add('touching');
+}
+if (window.matchMedia && matchMedia('(pointer: coarse)').matches) enableTouch();
+const joy = {id:null, ox:0, oy:0};
+cv.addEventListener('pointerdown', ev => {
+  if (ev.pointerType === 'mouse') return;
+  enableTouch(); unlockAudio();
+  if (joy.id !== null || blockedUI()) return;
+  joy.id = ev.pointerId; joy.ox = ev.clientX; joy.oy = ev.clientY;
+  const r = $('#app').getBoundingClientRect();
+  const j = $('#joy'); j.hidden = false; j.style.left = (ev.clientX - r.left) + 'px'; j.style.top = (ev.clientY - r.top) + 'px';
+  $('#joyKnob').style.transform = '';
+  try { cv.setPointerCapture(ev.pointerId); } catch (e) {}
+});
+cv.addEventListener('pointermove', ev => {
+  if (ev.pointerId !== joy.id) return;
+  let dx = ev.clientX - joy.ox, dy = ev.clientY - joy.oy;
+  const l = Math.hypot(dx, dy), R = 46;
+  if (l > R) { dx = dx / l * R; dy = dy / l * R; }
+  input.joy.x = dx / R; input.joy.y = dy / R;
+  $('#joyKnob').style.transform = `translate(${dx}px,${dy}px)`;
+});
+const joyEnd = ev => { if (ev.pointerId !== joy.id) return; joy.id = null; input.joy.x = input.joy.y = 0; $('#joy').hidden = true; };
+cv.addEventListener('pointerup', joyEnd); cv.addEventListener('pointercancel', joyEnd);
+const tb = (id, down, up) => {
+  const el = $(id);
+  el.addEventListener('pointerdown', ev => { ev.preventDefault(); unlockAudio(); if (!blockedUI() || (UI.dlg && id === '#tAct')) down(); });
+  if (up) { el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('pointerleave', up); }
+};
+tb('#tAtk', () => { if (P.hp > 0) { input.atkHeld = true; input.atkQ = true; } }, () => { input.atkHeld = false; });
+tb('#tAct', () => { if (UI.dlg) advance(); else if (P.hp > 0) interact(); });
+tb('#tPot', () => { if (P.hp > 0) quickPotion(); });
+
+/* ================= 主迴圈 ================= */
+let last = performance.now();
+function frame(t) {
+  const dt = Math.min(.05, (t - last) / 1000); last = t;
+  if (G && P) {
+    if (!blockedUI() && P.hp > 0 && cardQ.length) showCard(cardQ.shift());
+    if (!blockedUI() && P.hp > 0) update(dt);
+    else if (P.hp <= 0 && !UI.screen) { for (const f of G.fx) { f.life -= dt; f.x += f.vx * dt; f.y += f.vy * dt; } G.fx = G.fx.filter(f => f.life > 0); }
+    render(t);
+    updateHud();
+    miniT -= dt; if (miniT <= 0) { miniT = .2; drawMini(); }
+  } else render(t);
+  $('#hud').style.visibility = $('#mini').style.visibility = $('#touch').style.visibility = (G && P && !UI.screen) ? 'visible' : 'hidden';
+  requestAnimationFrame(frame);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// 開機：先讀雲端存檔、確認十關都通關了，才顯示標題畫面
+function boot() {
+  showScreen(`<div class="card"><p class="eyebrow">晨星勇者</p><h2>正在讀取你的存檔…</h2></div>`);
+  requestAnimationFrame(t => { last = t; frame(t); });
+  window.MS_BRIDGE.ready.then(api => {
+    if (!api || api.error) { showOffline(api && api.error); return; }
+    let docData = {};
+    STORE = GAMESAVE.createStore({
+      load: () => api.readDoc().then(d => { docData = d || {}; return (docData.games || {}).morningstar; }),
+      write: rec => api.writeGame(rec),
+      onState: cloudState
+    });
+    STORE.load().then(() => {
+      const mods = docData.modules || {};
+      const flowDone = {};
+      ((mods.flowchart && mods.flowchart.units) || []).forEach(u => { flowDone[u] = true; });
+      const g = GAMESAVE.unlocked(window.FLOW_UNITS, flowDone, (mods.scratch && mods.scratch.unitStars) || {},
+                                  (window.GRADING || {}).GATE);
+      if (!g.ok) showLocked(g); else showTitle();
+    }, e => showOffline((e && (e.code || e.message)) || e));
+  });
+}
+// 關分頁、切走時把還沒寫出去的存檔趕快送出去
+window.addEventListener('pagehide', () => { if (STORE) STORE.flush(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && STORE) STORE.flush(); });
+boot();
+})();
+</script>
+
+</body></html>

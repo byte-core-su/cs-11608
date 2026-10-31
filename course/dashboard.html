@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ★ 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」與標頭 -->
+  <script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+  <style>.embedded [data-standalone] { display: none !important; }</style>
+  <title>成績總覽</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 Confetti 彩帶特效庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <!-- 🌟 引入 Chart.js 圖表庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- 🌟 引入 Firebase SDK (外部資料庫相容版) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <!-- 全站共用計分規則（單一來源；與學生端共用，改這支即同步「重算星星」） -->
+  <script src="config.js"></script>
+  <!-- 老師 email 的判斷（與 shared/firestore.rules 的 isTeacher 同一份定義）-->
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/grading.js"></script>
+  <!-- 可疑紀錄的判斷（學生面板的 ⏱⚠ 和 shared/audit.html 用同一份） -->
+  <script src="../shared/audit.js"></script>
+  <!-- 課表與「這週有沒有上課日」的判定（學生端 hub 同一支）-->
+  <script src="../shared/schedule.js"></script>
+  <!-- 關卡清單（教師端的「各科關卡進度」矩陣要用）。
+       ⚠️ 只取清單與順序，題目本身用不到 —— 但這兩支就是清單的單一來源，
+          在教師端另抄一份的話，課程調整時這裡不會跟著改。 -->
+  <script src="content/ethics.js"></script>
+  <script src="content/flowchart.js"></script>
+
+  <style>
+    @keyframes fade-in-down {
+      0% { opacity: 0; transform: translateY(-10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pop {
+      0% { transform: scale(0.9); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    .animate-fade-in-down {
+      animation: fade-in-down 0.3s ease-out forwards;
+    }
+    .star-pop {
+      animation: pop 0.3s ease-out;
+    }
+    /* 自訂捲軸讓畫面更乾淨 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1; 
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1; 
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8; 
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans min-h-screen flex flex-col">
+
+  <!-- 🌟 登入畫面 -->
+  <div id="login-view" class="flex-1 flex items-center justify-center py-12 animate-fade-in-down min-h-screen relative z-50">
+    <div class="bg-white p-8 sm:p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 w-full max-w-md text-center">
+      <div class="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      </div>
+      <h2 class="text-2xl font-bold mb-2 text-slate-800">教師成績系統</h2>
+      <p class="text-slate-500 mb-6 text-sm">請以教師帳號登入系統。</p>
+
+      <!-- 教師帳號是 Firebase 的「電子郵件／密碼」帳號（config.js 的 SCHOOL.TEACHER_EMAIL） -->
+      <form id="teacher-login-form" onsubmit="event.preventDefault(); teacherPasswordLogin();" class="space-y-3 text-left">
+        <label class="block text-sm font-bold text-slate-600">教師信箱
+          <input id="teacher-email" type="email" autocomplete="username" required class="mt-1 w-full border-2 border-slate-200 rounded-xl px-4 py-3 focus:border-blue-400 outline-none"></label>
+        <label class="block text-sm font-bold text-slate-600">密碼
+          <input id="teacher-password" type="password" autocomplete="current-password" required class="mt-1 w-full border-2 border-slate-200 rounded-xl px-4 py-3 focus:border-blue-400 outline-none"></label>
+        <button id="teacher-go" type="submit" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all text-lg">登入</button>
+      </form>
+
+      <p id="login-error" class="text-red-500 text-sm mt-4 hidden font-medium flex items-center justify-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        密碼錯誤，請重試！
+      </p>
+    </div>
+  </div>
+
+  <!-- 🌟 主畫面 -->
+  <div id="main-app" class="hidden flex-col flex-1 w-full">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 right-4 z-50 bg-white border-l-4 border-emerald-500 shadow-lg rounded px-4 py-3 items-center gap-3 hidden animate-fade-in-down">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <span id="toast-message" class="text-gray-800 font-medium">訊息</span>
+    </div>
+
+    <!-- Header -->
+    <header data-standalone class="bg-white border-b shadow-sm px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-40 relative">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">教師成績登錄系統</h1>
+        <p id="status-text" class="text-sm text-gray-500 mt-1">正準備載入資料...</p>
+      </div>
+      <button onclick="teacherLogout()" class="self-start sm:self-auto text-slate-400 hover:text-slate-700 flex items-center gap-1 text-xs bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        登出
+      </button>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6 relative">
+      
+      <!-- Top Controls -->
+      <div class="sticky top-0 z-30 bg-gray-50 pt-2 pb-4 -mt-2">
+        <div class="flex flex-col lg:flex-row gap-6">
+          <div class="bg-white rounded-lg shadow-sm border p-2 flex-1 flex flex-wrap items-center justify-between gap-4">
+            <div id="tabs-container" class="flex flex-wrap gap-2">
+              <!-- Tabs will be rendered here -->
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3 px-2">
+              <div class="flex items-center gap-2 text-sm text-gray-600 font-medium bg-blue-50 px-3 py-1.5 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span id="student-count">載入中...</span>
+              </div>
+              
+              <input
+                type="text"
+                id="search-input"
+                placeholder="搜尋學號或姓名..."
+                oninput="handleSearch(this.value)"
+                class="px-4 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-36 sm:w-48 bg-gray-50"
+              />
+
+              <!-- 🌟 學生名冊管理（開教師後台的「👥 學生帳號」） -->
+              <button onclick="goAccounts()" class="px-4 py-2 bg-amber-50 text-amber-700 rounded-full text-sm font-bold hover:bg-amber-100 border border-amber-200 shadow-sm flex items-center gap-1.5 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                名冊管理
+              </button>
+
+
+
+              <!-- 📡 本節課即時看板 -->
+              <button onclick="openLiveModal()" class="px-4 py-2 bg-sky-50 text-sky-700 rounded-full text-sm font-bold hover:bg-sky-100 border border-sky-200 shadow-sm flex items-center gap-1.5 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+                即時看板
+              </button>
+
+              <!-- 🗓️ 上課日設定 -->
+              <button onclick="openSchedModal()" class="px-4 py-2 bg-violet-50 text-violet-700 rounded-full text-sm font-bold hover:bg-violet-100 border border-violet-200 shadow-sm flex items-center gap-1.5 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>
+                上課日設定
+              </button>
+
+              <!-- 📅 每週評分（依 history 時間戳統計每週取得星數 → 折算百分） -->
+              <button onclick="openWeeklyModal()" class="px-4 py-2 bg-rose-50 text-rose-700 rounded-full text-sm font-bold hover:bg-rose-100 border border-rose-200 shadow-sm flex items-center gap-1.5 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                每週評分
+              </button>
+
+              <!-- 以下工具頁都在同一個分頁開啟：教師端用 SESSION 持久性，登入狀態在 sessionStorage，
+                   那是每個分頁各自獨立的 —— 開新分頁會變成要再登入一次。
+                   （放在教師後台的分頁裡時，這幾顆按鈕會藏起來：後台本身就有這些分頁） -->
+
+              <!-- 📗 評分範本（上傳各關的參考解答／空白範本，Apps Script 拿來比對學生作品） -->
+              <a href="../shared/refs.html" data-bust data-standalone
+                 class="px-4 py-2 bg-emerald-50 text-emerald-800 rounded-full text-sm font-bold hover:bg-emerald-100 border border-emerald-300 shadow-sm flex items-center gap-1.5 transition-colors">
+                📗 評分範本
+              </a>
+
+              <!-- 🔑 驗證碼管理（學生用學號＋六位數驗證碼登入，忘記了在這裡查看／重設） -->
+              <a href="../shared/codes.html" data-bust data-standalone
+                 class="px-4 py-2 bg-yellow-50 text-yellow-800 rounded-full text-sm font-bold hover:bg-yellow-100 border border-yellow-300 shadow-sm flex items-center gap-1.5 transition-colors">
+                🔑 驗證碼管理
+              </a>
+
+              <!-- 🔍 可疑紀錄：測驗沒有作答過程、作答速度像腳本（只讀，不改任何資料） -->
+              <a href="../shared/audit.html" data-bust data-standalone
+                 class="px-4 py-2 bg-stone-100 text-stone-700 rounded-full text-sm font-bold hover:bg-stone-200 border border-stone-300 shadow-sm flex items-center gap-1.5 transition-colors">
+                🔍 可疑紀錄
+              </a>
+
+              <!-- 📥 繳交審核與加分（流程圖圖片 ＋1⭐） -->
+              <a href="../shared/review.html" data-bust data-standalone
+                 class="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-full text-sm font-bold hover:bg-indigo-200 border border-indigo-300 shadow-sm flex items-center gap-1.5 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                繳交審核
+              </a>
+
+
+              <!-- 📊 題目分析（哪幾題全班一直錯 → 下一節要重講什麼） -->
+              <a href="../shared/qstat.html" data-bust data-standalone
+                 class="px-4 py-2 bg-orange-100 text-orange-700 rounded-full text-sm font-bold hover:bg-orange-200 border border-orange-300 shadow-sm flex items-center gap-1.5 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                題目分析
+              </a>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Student Cards Grid Area -->
+      <div class="relative min-h-[400px]">
+        <div id="loading-spinner" class="absolute inset-0 bg-gray-50/80 z-20 flex flex-col items-center justify-center hidden rounded-xl backdrop-blur-sm transition-all duration-300">
+           <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mb-3"></div>
+           <p class="text-gray-700 font-bold tracking-wide animate-pulse">處理中...</p>
+        </div>
+        <div id="students-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6"></div>
+        <div id="no-data-msg" class="hidden py-20 text-center text-gray-500 bg-white border border-dashed border-gray-300 rounded-xl">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-3 text-gray-400"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <p>沒有找到符合條件的學生資料。</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- 星星任務輸入與折線圖 彈出視窗 (Modal) -->
+    <div id="task-modal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center opacity-0 transition-opacity duration-300">
+      <!-- 面板要寬：四欄關卡矩陣在窄面板裡字會縮到看不清楚。
+           ⚠️ w-11/12 要留著：小螢幕（或投影）時才不會被 max-w 撐出畫面。 -->
+      <div class="bg-white w-11/12 max-w-6xl rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[92vh]" id="task-modal-content">
+        
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center text-white shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="bg-white/20 p-2 rounded-full">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            </div>
+            <div>
+              <h2 id="modal-student-name" class="text-xl font-bold">學生姓名</h2>
+              <p id="modal-student-id" class="text-blue-100 text-sm font-mono">學號</p>
+            </div>
+          </div>
+          <button onclick="saveAndCloseModal()" class="text-white hover:bg-white/20 p-1.5 rounded-full transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+
+        <div class="bg-indigo-50 flex items-center px-6 pt-3 gap-6 border-b border-indigo-100 shrink-0">
+          <button onclick="switchStudentTab('tasks')" id="tab-tasks" class="font-bold text-blue-700 border-b-4 border-blue-600 pb-2 text-sm flex items-center gap-1.5 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            任務評分
+          </button>
+          <button onclick="switchStudentTab('chart')" id="tab-chart" class="font-bold text-indigo-400 border-b-4 border-transparent pb-2 hover:text-indigo-600 text-sm flex items-center gap-1.5 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            進度圖表
+          </button>
+          <button onclick="switchStudentTab('attend')" id="tab-attend" class="font-bold text-indigo-400 border-b-4 border-transparent pb-2 hover:text-indigo-600 text-sm flex items-center gap-1.5 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
+            出席紀錄
+          </button>
+        </div>
+
+        <!-- Modal Body (任務列表) -->
+        <div class="p-6 overflow-y-auto bg-gray-50 flex-1 relative">
+          <!-- 區塊A：任務評分 -->
+          <div id="modal-tasks-container"></div>
+          
+          <!-- 區塊B：折線圖容器 -->
+          <div id="modal-chart-container" class="hidden h-full flex flex-col items-center justify-center">
+            <!-- 視窗寬，圖也可以高一點 -->
+            <div class="w-full h-80 relative bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <canvas id="student-progress-chart"></canvas>
+            </div>
+            <p class="text-sm text-gray-500 mt-4 text-center">此圖表依該學生的<b>實際過關歷程</b>畫出星數成長曲線。<br>橫軸為有闖關的日期，縱軸為累積到當天的總星數。</p>
+          </div>
+
+          <!-- 區塊C：出席紀錄 -->
+          <div id="modal-attend-container" class="hidden"></div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-white px-6 py-4 border-t flex justify-between items-center shrink-0">
+          <div class="flex flex-col gap-1">
+            <div class="flex gap-2">
+              <button onclick="navigateStudent('prev')" class="px-3 py-2 bg-gray-100 text-gray-600 font-medium rounded-lg hover:bg-gray-200 hover:text-blue-600 transition-colors shadow-sm focus:ring-2 focus:ring-gray-300 flex items-center gap-1 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                上一位
+              </button>
+              <button onclick="navigateStudent('next')" class="px-3 py-2 bg-gray-100 text-gray-600 font-medium rounded-lg hover:bg-gray-200 hover:text-blue-600 transition-colors shadow-sm focus:ring-2 focus:ring-gray-300 flex items-center gap-1 text-sm">
+                下一位
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
+            <span class="text-xs text-gray-400 hidden sm:block">💡 可使用鍵盤 ⬅️ ➡️ 鍵快速切換</span>
+          </div>
+          <button onclick="saveAndCloseModal()" class="px-8 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 text-lg">
+            完成
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- 🌟 結束 main-app 區塊 -->
+
+  <!-- 🌟 共用確認/警告視窗 (Custom Dialog) -->
+  <div id="custom-dialog-modal" class="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-[70] hidden flex items-center justify-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white w-11/12 max-w-sm rounded-3xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300 p-6 text-center" id="custom-dialog-content">
+      <div id="custom-dialog-icon" class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+      <h3 id="custom-dialog-title" class="text-xl font-bold text-gray-800 mb-2">提示</h3>
+      <p id="custom-dialog-msg" class="text-sm text-gray-500 mb-6 leading-relaxed whitespace-pre-wrap">訊息內容</p>
+      <div class="flex gap-3 justify-center" id="custom-dialog-buttons">
+        <!-- 按鈕將動態產生 -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 🌟 Firebase 設定（集中在 config.js）
+    const extFirebaseConfig = window.CONFIG.FIREBASE;
+    
+    // 初始化自有的 Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(extFirebaseConfig);
+    }
+    const extDb = firebase.firestore();
+    const extAuth = firebase.auth();
+
+    // --- 應用程式狀態 ---
+    let spreadsheetData = {};
+    let activeSheet = '';
+    let searchTerm = '';
+    let subjects = []; 
+    let currentEditingStudentId = null; 
+    let activeCategory = 'all'; 
+    let availableCategories = []; 
+    let customMapping = { categories: ['未分類'], taskMap: {} };
+
+    // 🌟 圖表狀態
+    let studentChartInstance = null;
+
+    // --- 🌟 自訂對話框邏輯 ---
+    window.showCustomDialog = function(options) {
+      const modal = document.getElementById('custom-dialog-modal');
+      const content = document.getElementById('custom-dialog-content');
+      document.getElementById('custom-dialog-title').innerText = options.title || '提示';
+      const msgEl = document.getElementById('custom-dialog-msg');
+      msgEl.innerText = options.message || '';
+      msgEl.style.whiteSpace = 'pre-line';   // 讓訊息中的換行正常顯示
+      msgEl.style.textAlign = (options.message || '').includes('\n') ? 'left' : '';
+      
+      const iconDiv = document.getElementById('custom-dialog-icon');
+      if (options.type === 'warning' || options.type === 'danger') {
+        iconDiv.className = "w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100";
+        iconDiv.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
+      } else {
+        iconDiv.className = "w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100";
+        iconDiv.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+      }
+
+      const btnContainer = document.getElementById('custom-dialog-buttons');
+      btnContainer.innerHTML = '';
+
+      if (options.showCancel) {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.innerText = options.cancelText || '取消';
+        cancelBtn.className = "flex-1 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors";
+        cancelBtn.onclick = () => { closeCustomDialog(); if(options.onCancel) options.onCancel(); };
+        btnContainer.appendChild(cancelBtn);
+      }
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.innerText = options.confirmText || '確定';
+      confirmBtn.className = options.type === 'danger' 
+        ? "flex-1 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-md shadow-red-200"
+        : "flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md shadow-blue-200";
+      confirmBtn.onclick = () => { closeCustomDialog(); if(options.onConfirm) options.onConfirm(); };
+      btnContainer.appendChild(confirmBtn);
+
+      modal.classList.remove('hidden');
+      setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 10);
+    };
+
+    window.closeCustomDialog = function() {
+      const modal = document.getElementById('custom-dialog-modal');
+      const content = document.getElementById('custom-dialog-content');
+      modal.classList.add('opacity-0'); content.classList.add('scale-95');
+      setTimeout(() => { modal.classList.add('hidden'); }, 300);
+    };
+
+    window.addEventListener('keydown', function(e) {
+      const modal = document.getElementById('task-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); window.navigateStudent('prev'); } 
+        else if (e.key === 'ArrowRight') { e.preventDefault(); window.navigateStudent('next'); }
+      }
+    });
+
+    // 設為分頁層級持久性：關閉瀏覽器即登出（較適合共用電腦）
+    extAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(e => console.warn('設定持久性失敗', e));
+
+    // 以 Firebase Auth 判斷登入狀態
+    let mainShown = false;
+    /* ⚠️ 只判斷 user 存不存在是不夠的：教師端和學生頁是同一個 Firebase 專案、同一個網域，
+       這台電腦開過學生頁的話 user 就是非 null —— 直接進主畫面會每一筆讀取都被安全規則擋下。
+       所以這裡要問的不是「有沒有人登入」，而是「登入的是不是老師」。 */
+    function isTeacherUser(user) {
+      if (!user) return false;
+      /* 學生也是 email／密碼帳號，所以不能只看登入方式 ——
+           一定要是 config.js 的 TEACHER_EMAIL 那一個（判斷邏輯在 shared/auth.js，與規則同一份） */
+      return !!(user.email && window.AUTH && AUTH.isTeacherEmail(user.email));
+    }
+
+    extAuth.onAuthStateChanged(async (user) => {
+      if (!user) return;                       // 還沒登入 → 停在登入畫面
+      if (!isTeacherUser(user)) {
+        // 學生頁留下的登入狀態，不能拿來進教師端
+        console.warn('偵測到非教師身分的登入狀態，已登出：', user.email || '(匿名)');
+        try { await extAuth.signOut(); } catch (e) {}
+        return;
+      }
+      if (!mainShown) { mainShown = true; showMainApp(); }
+    });
+
+    /* 名冊在教師後台的「👥 學生帳號」分頁管理（匯入時直接填班級、座號）。 */
+    window.goAccounts = function () {
+      if (window.self !== window.top) { window.parent.postMessage({ type: 'admin-open', tab: 'accounts' }, location.origin); }
+      else { location.href = '../shared/codes.html'; }
+    };
+
+    // 教師登出
+    window.teacherLogout = function() {
+      extAuth.signOut().then(() => location.reload()).catch(e => console.error('登出失敗', e));
+    };
+
+    /* ===== 教師端登入（電子郵件＋密碼）===== */
+    {
+      const em = document.getElementById('teacher-email');
+      if (em && window.AUTH) em.value = AUTH.TEACHER_EMAIL || '';
+    }
+    window.teacherPasswordLogin = async function() {
+      const btn = document.getElementById('teacher-go');
+      const errorEl = document.getElementById('login-error');
+      const email = document.getElementById('teacher-email').value.trim();
+      const pw = document.getElementById('teacher-password').value;
+      errorEl.classList.add('hidden');
+      if (!AUTH.isTeacherEmail(email)) {
+        errorEl.innerHTML = '這不是教師帳號（config.js 的 SCHOOL.TEACHER_EMAIL）。';
+        errorEl.classList.remove('hidden'); return;
+      }
+      btn.disabled = true; btn.textContent = '登入中…';
+      try {
+        await extAuth.signInWithEmailAndPassword(email, pw);
+        // 成功後 onAuthStateChanged 會呼叫 showMainApp()
+      } catch (e) {
+        const c = (e && e.code) || '';
+        errorEl.innerHTML = (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found' || c === 'auth/invalid-login-credentials')
+          ? '信箱或密碼不對。（教師帳號要先在 Firebase Console → Authentication 建立）'
+          : AUTH.hintFor(c || 'unknown');
+        errorEl.classList.remove('hidden');
+        btn.disabled = false; btn.textContent = '登入';
+      }
+    };
+
+    async function showMainApp() {
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('main-app').classList.remove('hidden');
+      document.getElementById('main-app').classList.add('flex');
+
+      document.getElementById('loading-spinner').classList.remove('hidden');
+      document.getElementById('status-text').innerText = "正在從雲端 (Firebase) 載入資料...";
+      try {
+        await fetchGoogleSheetData();
+        showToast('已從雲端 (Firebase) 載入名冊與成績！', false);
+        document.getElementById('status-text').innerText = "資料已同步（Firebase 雲端）";
+      } catch (error) {
+        // 第一次連線常見的競速：登入權杖還沒生效就先讀取 → 稍等再試一次
+        console.warn('第一次載入失敗，1.5 秒後重試：', error);
+        document.getElementById('status-text').innerText = "連線中，正在重試…";
+        try {
+          await new Promise(r => setTimeout(r, 1500));
+          await fetchGoogleSheetData();
+          showToast('已從雲端 (Firebase) 載入名冊與成績！', false);
+          document.getElementById('status-text').innerText = "資料已同步（Firebase 雲端）";
+        } catch (error2) {
+          const msg = String((error2 && (error2.code || error2.message)) || '');
+          const isAuthOrNet = /permission|denied|unauthenticated|unavailable|network|failed-precondition/i.test(msg);
+          if (isAuthOrNet) {
+            // 權限或連線問題 → 自動退回登入畫面，不要留在空殼主畫面
+            backToLoginWithError('無法連線到雲端資料，請重新登入一次。');
+            return;
+          }
+          // 其他情況（例如雲端還沒有資料）
+          loadFallbackData();
+          showToast('雲端尚無資料，已載入範例資料。', true);
+          document.getElementById('status-text').innerText = "使用離線範例資料（請先建立名冊）";
+        }
+      }
+      document.getElementById('loading-spinner').classList.add('hidden');
+      renderAll();
+    }
+
+    // 載入失敗時自動回到登入畫面（免得老師要自己按登出再登入）
+    function backToLoginWithError(message) {
+      try { document.getElementById('loading-spinner').classList.add('hidden'); } catch (e) {}
+      const main = document.getElementById('main-app');
+      main.classList.add('hidden'); main.classList.remove('flex');
+      document.getElementById('login-view').classList.remove('hidden');
+      const err = document.getElementById('login-error');
+      if (err) { err.innerHTML = '⚠️ ' + message; err.classList.remove('hidden'); }
+      mainShown = false;                       // 允許重新進入主畫面
+      const gbtn = document.getElementById('teacher-go');
+      if (gbtn) { gbtn.disabled = false; gbtn.textContent = '登入'; }   // 讓他可以再按一次登入
+      try { extAuth.signOut(); } catch (e) {}   // 清掉半殘的登入狀態
+    }
+
+    function applyCustomMappingToSubjects(rawSubjects) {
+      return rawSubjects.map(sub => {
+        let group = customMapping.taskMap[sub.key];
+        if (!group || !customMapping.categories.includes(group)) {
+           group = customMapping.categories[0] || '未分類';
+           customMapping.taskMap[sub.key] = group; 
+        }
+        
+        let displayLabel = sub.label;
+        const match = sub.label.match(/^([^\s\-_：:]+)[\s\-_：:]+(.+)$/);
+        if (match && match[1].trim() === group) {
+           displayLabel = match[2].trim();
+        }
+
+        return { ...sub, group: group, displayLabel: displayLabel };
+      });
+    }
+
+    // 預設成績簿：首次沒有設定時，用 7 個課程模組當科目
+    function defaultGradebook() {
+      return {
+        // 與學生端一致的四個計星模組（滿星 100★：30+20+20+30）
+        subjects: [
+          { key: 'ethics',    label: '資訊倫理',   index: 0 },
+          { key: 'thinking',  label: '運算思維',   index: 1 },
+          { key: 'flowchart', label: '流程圖',     index: 2 }
+          /* 有接 Apps Script 評分（GRADER_URL）才列「程式設計」（作品星） */
+        ].concat(window.CONFIG.GRADER_URL ? [{ key: 'scratch', label: '程式設計', index: 3 }] : []),
+        customMapping: {
+          categories: ['法律倫理', '運算思維', '流程圖'].concat(window.CONFIG.GRADER_URL ? ['程式設計'] : []),
+          taskMap: Object.assign({ ethics: '法律倫理', thinking: '運算思維', flowchart: '流程圖' },
+                                 window.CONFIG.GRADER_URL ? { scratch: '程式設計' } : {})
+        }
+      };
+    }
+
+    // 從 Firebase 讀取成績簿設定、名冊與進度
+    async function fetchGoogleSheetData() {
+      // 1. 成績簿設定（科目 + 分類）
+      let rawSubjects = [];
+      const gbSnap = await extDb.collection(window.CONFIG.COLLECTIONS.CONFIG).doc('gradebook').get();
+      if (gbSnap.exists && gbSnap.data().subjects && gbSnap.data().subjects.length) {
+        const gb = gbSnap.data();
+        rawSubjects = gb.subjects;
+        if (gb.customMapping) customMapping = gb.customMapping;
+
+        // 🧹 自動清掉已淘汰的科目（Scratch 清單、音樂程式、Arduino 現在都沒有星數機制）
+        const VALID = ['ethics', 'thinking', 'flowchart'].concat(window.CONFIG.GRADER_URL ? ['scratch'] : []);   // 有評分服務才有作品星
+        const cleaned = rawSubjects.filter(s => VALID.includes(s.key));
+        if (cleaned.length !== rawSubjects.length && cleaned.length) {
+          rawSubjects = cleaned.map((s, i) => ({ ...s, index: i }));
+          Object.keys(customMapping.taskMap || {}).forEach(k => {
+            if (!VALID.includes(k)) delete customMapping.taskMap[k];
+          });
+          // 寫回雲端，之後就不會再出現
+          try {
+            await extDb.collection(window.CONFIG.COLLECTIONS.CONFIG).doc('gradebook')
+              .set({ subjects: rawSubjects, customMapping }, { merge: true });
+          } catch (e) { console.warn('清理成績簿科目失敗', e); }
+        }
+        /* 後來才接上評分服務（GRADER_URL）的話，舊的成績簿沒有「程式設計」這一科 —— 補上 */
+        if (window.CONFIG.GRADER_URL && !rawSubjects.some(s => s.key === 'scratch')) {
+          rawSubjects = rawSubjects.concat([{ key: 'scratch', label: '程式設計', index: rawSubjects.length }]);
+          customMapping.categories = customMapping.categories || [];
+          if (!customMapping.categories.includes('程式設計')) customMapping.categories.push('程式設計');
+          customMapping.taskMap = Object.assign({}, customMapping.taskMap || {}, { scratch: '程式設計' });
+          try {
+            await extDb.collection(window.CONFIG.COLLECTIONS.CONFIG).doc('gradebook')
+              .set({ subjects: rawSubjects, customMapping }, { merge: true });
+          } catch (e) { console.warn('補上程式設計科目失敗', e); }
+        }
+      } else {
+        const def = defaultGradebook();
+        rawSubjects = def.subjects; customMapping = def.customMapping;
+        await extDb.collection(window.CONFIG.COLLECTIONS.CONFIG).doc('gradebook').set(def, { merge: true });
+      }
+      localStorage.setItem('gradeSystemCustomMap', JSON.stringify(customMapping));
+
+      // 2. 名冊（學生）＋ 學生闖關進度（{TERM}-progress，與 hub 同一套星星）
+      const [rosterSnap, progressSnap] = await Promise.all([
+        extDb.collection(window.CONFIG.COLLECTIONS.ROSTER).get(),
+        extDb.collection(window.CONFIG.COLLECTIONS.PROGRESS).get()
+      ]);
+      const progMap = {}, histMap = {};
+      const attMap = {};
+      progressSnap.forEach(d => { const pd = d.data(); progMap[d.id] = pd.modules || {}; histMap[d.id] = (window.GRADING && GRADING.statHistory) ? GRADING.statHistory(pd) : (pd.history || []); attMap[d.id] = pd.attendance || {}; });
+
+      const sheets = {};
+      rosterSnap.forEach(d => {
+        const r = d.data();
+        const cls = String(r.cls || '未分班');
+        if (!sheets[cls]) sheets[cls] = [];
+        const student = { id: r.studentId || d.id, name: r.name || '', no: r.no };
+        const mods = progMap[student.id] || {};
+        rawSubjects.forEach(sub => {
+          let v = (mods[sub.key] && mods[sub.key].stars) || 0;
+          // 程式設計：一律由「各關星數」重算總星數，不信任可能過時的匯總欄位
+          const us = mods.scratch && mods.scratch.unitStars;
+          if (sub.key === 'scratch' && us) {
+            v = Object.values(us).reduce((a, b) => a + (Number(b) > 0 ? Number(b) : 0), 0);
+          }
+          /* ⚠️ 星星**只有一個來源**：{TERM}-progress（和學生端同一份），教師端不另外算一套。 */
+          student[sub.key] = v;
+        });
+        /* 繳交加分（交流程圖圖片 +1⭐）另外存一份。
+           ⚠️ **不可以**併進 student[sub.key] —— 那一格會被「儲存到雲端」寫回 modules.{key}.stars，
+              併進去的話下次讀出來再加一次就是雙重計算。分母含加分，分子也要算（見 calculateTotalStarsForData）。 */
+        const __b = (window.GRADING && GRADING.starsWithBonus)
+          ? GRADING.starsWithBonus({ modules: mods }) : {};
+        student.__bonusMap = { flowchart: __b.flowchartBonus || 0 };
+        student.__modules = mods;               // 各模組 meta（level/score…）供明細用
+        student.history = histMap[student.id] || [];  // 過關歷程供明細分析
+        student.attendance = attMap[student.id] || {};  // 出席紀錄（日期 → 首次登入時間）
+        student.cls = cls;
+        sheets[cls].push(student);
+      });
+      Object.keys(sheets).forEach(cls => sheets[cls].sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0)));
+
+      if (Object.keys(sheets).length === 0) throw new Error('名冊尚無學生，請先到「名冊管理」建立');
+
+      spreadsheetData = sheets;
+      subjects = applyCustomMappingToSubjects(rawSubjects);
+      updateAvailableCategories();
+      activeSheet = Object.keys(spreadsheetData)[0];
+
+    }
+
+    function loadFallbackData() {
+      // 不提供假資料，避免混淆：讀不到雲端時顯示空名冊狀態
+      const def = defaultGradebook();
+      const savedMapping = localStorage.getItem('gradeSystemCustomMap');
+      customMapping = savedMapping ? JSON.parse(savedMapping) : def.customMapping;
+      subjects = applyCustomMappingToSubjects(def.subjects);
+      spreadsheetData = {};
+      updateAvailableCategories();
+      activeSheet = null;
+    }
+
+    function updateAvailableCategories() {
+      availableCategories = customMapping.categories;
+      const select = document.getElementById('category-filter');
+      if (!select) return;
+      let options = `<option value="all">📁 所有任務</option>`;
+      availableCategories.forEach(cat => { options += `<option value="${cat}" ${activeCategory === cat ? 'selected' : ''}>📁 ${cat}</option>`; });
+      select.innerHTML = options;
+    }
+
+    // 各模組星數上限（與學生端 hub 完全一致）
+    //   資訊倫理 10 章 × 3★ = 30　　運算思維 10 關 × 2★ = 20
+    //   流程圖   10 關 × 2★ = 20　　程式設計 10 關 × 3★ = 30（未達 75 分 0★）
+    /* 流程圖與程式設計的上限含「繳交加分」，所以從 grading.js 算 ——
+       加分權重只寫在那一支，這裡跟著變，不會兩邊各改各的。 */
+    const MODULE_MAX = Object.assign(
+      { ethics: 30, thinking: 20 },
+      (window.GRADING && GRADING.moduleMax) ? GRADING.moduleMax(10) : { flowchart: 30, scratch: 40 }
+    );
+    function subjMax(key){ return MODULE_MAX[key] || 3; }
+    function sumSubjMax(subjectList){ return subjectList.reduce((a, s) => a + subjMax(s.key), 0); }
+
+    /* 這一科拿到幾顆加分星（老師在「繳交審核」給的）。
+       ⚠️ 只用在「顯示與百分比」，永遠不寫回 stars —— 見名冊載入那一段的說明。 */
+    function bonusOf(data, key) { return ((data && data.__bonusMap) || {})[key] || 0; }
+
+    function calculateTotalStarsForData(studentData, subjectList = subjects) {
+      let totalStars = 0;
+      let displaySubjects = activeCategory === 'all' ? subjectList : subjectList.filter(sub => sub.group === activeCategory);
+      displaySubjects.forEach(sub => {
+        let val = parseInt(studentData[sub.key]);
+        if (!isNaN(val) && val > 0) totalStars += val;  // 不再封頂 3，反映實際星數
+        totalStars += bonusOf(studentData, sub.key);   // ★ 加分也是星星：分母算了，分子就要算
+      });
+      return totalStars;
+    }
+
+    function calculateTotalStars(student) {
+      return calculateTotalStarsForData(student, subjects);
+    }
+
+    function getProgressBarColor(percentage, isMax) {
+      if (isMax) return "bg-yellow-400";
+      if (percentage < 33) return "bg-red-400";
+      if (percentage < 66) return "bg-amber-400";
+      return "bg-emerald-400";
+    }
+
+    function renderAll() { renderTabs(); renderCards(); }
+
+    function renderTabs() {
+      const container = document.getElementById('tabs-container');
+      container.innerHTML = '';
+      Object.keys(spreadsheetData).forEach(sheetName => {
+        const btn = document.createElement('button');
+        btn.innerText = sheetName;
+        if (sheetName === activeSheet) {
+          btn.className = 'px-6 py-2 rounded-full font-bold text-sm transition-all duration-200 bg-blue-600 text-white shadow-md transform hover:scale-105';
+        } else {
+          btn.className = 'px-6 py-2 rounded-full font-medium text-sm transition-all duration-200 bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 hover:shadow-sm';
+        }
+        btn.onclick = () => {
+          activeSheet = sheetName; document.getElementById('search-input').value = ''; searchTerm = '';
+          activeCategory = 'all'; renderAll();
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function renderCards() {
+      const grid = document.getElementById('students-grid');
+      const noDataMsg = document.getElementById('no-data-msg');
+      let currentData = spreadsheetData[activeSheet] || [];
+      let filteredData = currentData;
+      if (searchTerm.trim() !== '') {
+        const lowerSearch = searchTerm.toLowerCase();
+        filteredData = currentData.filter(s => s.name.toLowerCase().includes(lowerSearch) || String(s.id).toLowerCase().includes(lowerSearch));
+      }
+
+      document.getElementById('student-count').innerText = `共 ${filteredData.length} 名學生`;
+
+      if (filteredData.length === 0) {
+        grid.innerHTML = '';
+        const msgP = noDataMsg.querySelector('p');
+        if (msgP) msgP.innerText = (Object.keys(spreadsheetData).length === 0)
+          ? '目前雲端尚無名冊，請先到「名冊管理」建立學生。'
+          : '沒有找到符合條件的學生資料。';
+        noDataMsg.classList.remove('hidden');
+        return;
+      } else noDataMsg.classList.add('hidden');
+
+      let cardsHTML = '';
+      let displaySubjects = activeCategory === 'all' ? subjects : subjects.filter(sub => sub.group === activeCategory);
+      const maxPossibleStars = sumSubjMax(displaySubjects);
+
+      filteredData.forEach(student => {
+        let totalStars = calculateTotalStars(student);
+        let progressPercentage = maxPossibleStars > 0 ? (totalStars / maxPossibleStars) * 100 : 0;
+        let isMaxStars = (totalStars === maxPossibleStars && maxPossibleStars > 0);
+
+        const coolColors = ['bg-blue-100 text-blue-600', 'bg-cyan-100 text-cyan-600', 'bg-teal-100 text-teal-600', 'bg-indigo-100 text-indigo-600'];
+        const warmColors = ['bg-pink-100 text-pink-600', 'bg-rose-100 text-rose-600', 'bg-red-100 text-red-600', 'bg-orange-100 text-orange-600', 'bg-amber-100 text-amber-600'];
+        const neutralColors = ['bg-purple-100 text-purple-600', 'bg-emerald-100 text-emerald-600', 'bg-gray-100 text-gray-600'];
+
+        const palette = coolColors.concat(warmColors, neutralColors);
+        let hash = String(student.id).split('').reduce((a, ch) => a + ch.charCodeAt(0), 0);
+        let colorClass = palette[hash % palette.length];
+        let cardBaseStyle = isMaxStars ? "bg-gradient-to-b from-yellow-50 to-white border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.4)]" : "bg-white border-gray-200 hover:border-blue-300";
+        let progressBarColor = getProgressBarColor(progressPercentage, isMaxStars);
+
+        cardsHTML += `
+          <div onclick="openModal('${student.id}')" class="${cardBaseStyle} border rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden">
+            ${isMaxStars ? '<div class="absolute -top-6 -right-6 w-16 h-16 bg-yellow-400 opacity-20 rounded-full blur-xl"></div>' : ''}
+            <div class="w-16 h-16 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform relative z-10 ${colorClass}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              ${isMaxStars ? '<div class="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-1 shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg></div>' : ''}
+            </div>
+            <div class="text-center w-full relative z-10">
+              <h3 class="font-bold text-gray-800 text-lg truncate" title="${student.name}">${student.name}</h3>
+              <p class="text-xs text-gray-500 font-mono mt-0.5">${student.id}</p>
+            </div>
+            <div class="mt-4 w-full relative z-10 px-1">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="text-yellow-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                  <span class="text-sm font-bold ${isMaxStars ? 'text-yellow-600' : 'text-gray-700'}">${totalStars} <span class="text-xs text-gray-400 font-normal">/ ${maxPossibleStars}</span></span>
+                </div>
+                <span class="text-xs font-bold ${isMaxStars ? 'text-yellow-600' : 'text-gray-400'}">${Math.round(progressPercentage)}%</span>
+              </div>
+              <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner">
+                <div class="${progressBarColor} h-full rounded-full transition-all duration-700 ease-out" style="width: ${progressPercentage}%"></div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      grid.innerHTML = cardsHTML;
+    }
+
+    window.switchStudentTab = function(tabName) {
+      const ON  = "font-bold text-blue-700 border-b-4 border-blue-600 pb-2 text-sm flex items-center gap-1.5 transition-colors";
+      const OFF = "font-bold text-indigo-400 border-b-4 border-transparent pb-2 hover:text-indigo-600 text-sm flex items-center gap-1.5 transition-colors";
+      const panes = { tasks:'modal-tasks-container', chart:'modal-chart-container', attend:'modal-attend-container' };
+      const tabs  = { tasks:'tab-tasks', chart:'tab-chart', attend:'tab-attend' };
+      Object.entries(panes).forEach(([k,id])=>{
+        const el=document.getElementById(id); if(el) el.classList.toggle('hidden', k!==tabName);
+      });
+      Object.entries(tabs).forEach(([k,id])=>{
+        const el=document.getElementById(id); if(el) el.className = (k===tabName? ON : OFF);
+      });
+      if (tabName === 'chart')  renderStudentChart();
+      if (tabName === 'attend') renderStudentAttendance();
+    };
+
+    // 出席紀錄：依課表算出應到日期，比對學生的登入紀錄
+    async function renderStudentAttendance(){
+      const box = document.getElementById('modal-attend-container');
+      box.innerHTML = '<div class="text-sm text-slate-400 p-4">計算中…</div>';
+      const stu = (spreadsheetData[activeSheet]||[]).find(s => s.id === currentEditingStudentId);
+      if(!stu){ box.innerHTML='<div class="text-sm text-slate-400 p-4">找不到學生資料。</div>'; return; }
+
+      try{ await loadSchedule(); }catch(e){}
+      const att = stu.attendance || {};
+      const cls = String(stu.cls || activeSheet || '');
+      const START = new Date((localStorage.getItem('wky_start') || window.CONFIG.TERM_START) + 'T00:00:00');
+      const today = new Date(); today.setHours(23,59,59,999);
+
+      // 逐週推算應到日期（只算到今天）
+      const rows = [];
+      for(let i=0; i<25; i++){
+        const ws = new Date(START.getTime() + i*7*86400000);
+        if(ws.getTime() > today.getTime()) break;
+        const days = (typeof classDatesOfWeek==='function') ? classDatesOfWeek(cls, ws) : [];
+        if(!days.length){ rows.push({ week:i+1, date:null }); continue; }
+        days.filter(d => new Date(d+'T00:00:00').getTime() <= today.getTime())
+            .forEach(d => rows.push({ week:i+1, date:d, at:att[d]||0 }));
+      }
+      const should = rows.filter(r=>r.date).length;
+      const came   = rows.filter(r=>r.date && r.at).length;
+      const rate   = should ? Math.round(came/should*100) : 0;
+      const fmt = t => { const d=new Date(Number(t)); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+
+      box.innerHTML = `
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <div class="bg-sky-50 border border-sky-200 rounded-xl p-3 text-center">
+            <div class="text-xs font-bold text-sky-700">應到</div><div class="text-2xl font-black text-sky-600">${should}</div></div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+            <div class="text-xs font-bold text-emerald-700">實到</div><div class="text-2xl font-black text-emerald-600">${came}</div></div>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+            <div class="text-xs font-bold text-amber-700">出席率</div><div class="text-2xl font-black text-amber-600">${rate}%</div></div>
+        </div>
+        ${rows.length ? `<table class="w-full text-sm border-collapse bg-white rounded-xl overflow-hidden">
+          <thead><tr class="bg-slate-50"><th class="border border-slate-200 px-2 py-1">週次</th>
+            <th class="border border-slate-200 px-2 py-1">上課日</th>
+            <th class="border border-slate-200 px-2 py-1">狀態</th>
+            <th class="border border-slate-200 px-2 py-1">登入時間</th></tr></thead>
+          <tbody>${rows.map(r=>{
+            if(!r.date) return `<tr class="text-slate-300"><td class="border border-slate-200 px-2 py-1 text-center">第${r.week}週</td>
+              <td class="border border-slate-200 px-2 py-1 text-center" colspan="3">停課</td></tr>`;
+            return `<tr><td class="border border-slate-200 px-2 py-1 text-center text-slate-500">第${r.week}週</td>
+              <td class="border border-slate-200 px-2 py-1 text-center font-mono">${r.date}</td>
+              <td class="border border-slate-200 px-2 py-1 text-center font-bold ${r.at?'text-emerald-600':'text-red-500'}">${r.at?'✓ 出席':'✗ 未登入'}</td>
+              <td class="border border-slate-200 px-2 py-1 text-center font-mono text-slate-500">${r.at?fmt(r.at):'—'}</td></tr>`;
+          }).join('')}</tbody></table>`
+        : '<div class="text-sm text-slate-400 p-4 text-center">尚未設定課表，或學期還沒開始。請先到「🗓️ 上課日設定」建立課表。</div>'}
+        <p class="text-[11px] text-slate-400 mt-3">出席以「當天是否登入闖關基地」判定，時間為當日<b>第一次登入</b>。停課日不列入應到。</p>`;
+    }
+    window.renderStudentAttendance = renderStudentAttendance;
+
+    function openModal(studentId) {
+      currentEditingStudentId = studentId;
+      const classData = spreadsheetData[activeSheet];
+      const student = classData.find(s => s.id === studentId);
+      if (!student) return;
+
+      document.getElementById('modal-student-name').innerText = student.name;
+      document.getElementById('modal-student-id').innerText = student.id;
+      
+      switchStudentTab('tasks'); 
+      renderModalTasks();
+
+      const modal = document.getElementById('task-modal');
+      const content = document.getElementById('task-modal-content');
+      modal.classList.remove('hidden');
+      setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 10);
+    }
+
+    window.navigateStudent = function(direction) {
+      let filteredData = spreadsheetData[activeSheet] || [];
+      if (searchTerm.trim() !== '') filteredData = filteredData.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) || String(s.id).toLowerCase().includes(searchTerm.toLowerCase()));
+      if (filteredData.length === 0) return;
+      const currentIndex = filteredData.findIndex(s => s.id === currentEditingStudentId);
+      if (currentIndex === -1) return;
+
+      let nextIndex = (direction === 'prev') ? (currentIndex > 0 ? currentIndex - 1 : filteredData.length - 1) : (currentIndex < filteredData.length - 1 ? currentIndex + 1 : 0);
+      currentEditingStudentId = filteredData[nextIndex].id;
+      document.getElementById('modal-student-name').innerText = filteredData[nextIndex].name;
+      document.getElementById('modal-student-id').innerText = filteredData[nextIndex].id;
+      
+      const containerTasks = document.getElementById('modal-tasks-container');
+      const containerChart = document.getElementById('modal-chart-container');
+      containerTasks.classList.add('opacity-50', 'scale-95'); containerChart.classList.add('opacity-50', 'scale-95');
+      
+      setTimeout(() => {
+        renderModalTasks();
+        if (!containerChart.classList.contains('hidden')) renderStudentChart();
+        /* 出席分頁開著的時候按「下一位」也要重畫，不然名字換了、底下還是前一位的出席表 */
+        const containerAttend = document.getElementById('modal-attend-container');
+        if (containerAttend && !containerAttend.classList.contains('hidden')) renderStudentAttendance();
+        containerTasks.classList.remove('opacity-50', 'scale-95'); containerChart.classList.remove('opacity-50', 'scale-95');
+      }, 150);
+    };
+
+    function closeModal() {
+      const modal = document.getElementById('task-modal');
+      const content = document.getElementById('task-modal-content');
+      modal.classList.add('opacity-0'); content.classList.add('scale-95');
+      setTimeout(() => { modal.classList.add('hidden'); currentEditingStudentId = null; renderCards(); }, 300);
+    }
+
+    async function saveAndCloseModal() { closeModal(); await syncDataToGoogleSheet(); }
+
+    async function syncDataToGoogleSheet() {
+      const classData = spreadsheetData[activeSheet];
+      if (!classData || classData.length === 0) return;
+      showToast(`正在將星星儲存至雲端...`, false);
+      try {
+        const batch = extDb.batch();
+        classData.forEach(student => {
+          const modules = {};
+          subjects.forEach(sub => { modules[sub.key] = { stars: (student[sub.key] != null ? student[sub.key] : 0) }; });
+          batch.set(extDb.collection(window.CONFIG.COLLECTIONS.PROGRESS).doc(student.id), {
+            studentId: student.id, modules, updatedAt: Date.now()
+          }, { merge: true });
+        });
+        await batch.commit();
+        showToast(`⭐ 星星已儲存成功！`, false);
+      } catch (error) { showToast('儲存失敗：' + error.message, true); }
+    }
+
+    window.fillGroupStars = function(groupName) {
+      if (!currentEditingStudentId) return;
+      const studentIndex = spreadsheetData[activeSheet].findIndex(s => s.id === currentEditingStudentId);
+      if (studentIndex > -1) {
+        const student = spreadsheetData[activeSheet][studentIndex];
+        const previousTotal = calculateTotalStars(student);
+        let displaySubjects = activeCategory === 'all' ? subjects : subjects.filter(sub => sub.group === activeCategory);
+        
+        subjects.filter(sub => sub.group === groupName).forEach(sub => { student[sub.key] = subjMax(sub.key); });
+        const newTotal = calculateTotalStars(student);
+        const fullTotal = sumSubjMax(displaySubjects);
+        if (newTotal === fullTotal && previousTotal < fullTotal) triggerConfetti();
+        renderModalTasks(); 
+      }
+    };
+
+    // 某模組的星星明細（過關歷程）
+    function moduleHistoryHtml(moduleKey, student) {
+      const items = (student.history || []).filter(h => h.module === moduleKey).slice().sort((a, b) => (a.at || 0) - (b.at || 0));
+      if (!items.length) return '<div class="text-xs text-gray-400 px-3 py-2">尚無逐筆明細（可能是舊資料或以「重算星星」產生，僅有總星數）。</div>';
+      return items.map((h, i) => {
+        const dt = h.at ? new Date(h.at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+        /* 資訊倫理寫進 history 的欄位是 unit（見 shared/report.js） */
+        const what = h.chapter ? `章節 ${h.chapter}`
+          : (h.challenge != null ? `第 ${h.challenge} 關`
+          : (h.unit ? (moduleKey === 'ethics' ? `章節 ${h.unit}` : `第 ${h.unit} 關`)
+          : '完成一項'));
+        const sc = (h.score != null) ? `　正確率 ${h.score}%` : '';
+        /* ⚠️⚠️ 作答過程的參考數字 ——
+           **不是作弊判定**，系統不會因為這些數字擋任何人。
+             ⏱ 中位／最快／最慢：每一題想了幾秒
+             ⧉ 複製：按 Ctrl+C 的次數（題目本來就不給複製，按了只會拿到一句話）
+             ↗ 離開：切到別的分頁或 App 的次數（通知跳出來也算）
+           ★ 單看一個數字沒有意義，要看**對照**：
+             整份都 3 秒、或難題特別久，那才值得找學生聊一句。
+
+           ★ 光看「中位數很小」不夠（例如用瀏覽器外掛自動作答）—— 真的很熟的學生也可能很快。
+                分得出人和腳本的是**最慢那一題**：
+                  人　 一定有長尾（某題卡住、回頭重看）→ max 常常十幾二十秒
+                  腳本 每題都一樣快　　　　　　　　　 → max 和 min 幾乎相同
+              ⇒ 所以標紅的條件是「**連最慢的一題都在 1 秒內**」，
+                不是「平均很快」——這一條不會誤傷手速快的學生。
+           ⚠️ 標紅只是提醒你去看，**不是判定**，也不會擋任何人的星星。
+              沒有 max 的紀錄判不出來就不標 —— 寧可漏掉，也不可以冤枉人。 */
+        const p = h.pace || null;
+        /* 題數太少沒有統計意義（連對 3 題就結束的不算）。 */
+        /* 判斷在 shared/audit.js（AUDIT.isRobotPace），「🔍 可疑紀錄」那一頁用的也是它 */
+        const robot = !!(window.AUDIT && AUDIT.isRobotPace(p));
+        const bits = [];
+        if (p && p.med != null) {
+          bits.push(p.max != null
+            ? `⏱ ${p.med}s／最快 ${p.min}s／最慢 ${p.max}s`
+            : `⏱ ${p.med}s／最快 ${p.min}s`);
+        }
+        if (h.copy) bits.push(`⧉ ${h.copy}`);
+        if (h.away) bits.push(`↗ ${h.away}`);
+        const beh = bits.length
+          ? `<span class="${robot ? 'text-red-600 font-bold' : 'text-gray-400'} ml-2" title="作答過程參考：想的秒數／複製次數／切出視窗次數（不是作弊判定）${robot ? ' ⚠ 連最慢的一題都在 1 秒內 —— 值得看一下，但這不是判定' : ''}">${bits.join('　')}${robot ? '　⚠' : ''}</span>`
+          : '';
+        return `<div class="text-xs text-gray-600 px-3 py-1.5 border-b border-gray-50 flex justify-between gap-2"><span class="font-medium">${i + 1}. ${what}${sc}${beh}</span><span class="text-gray-400 flex-shrink-0">${dt}</span></div>`;
+      }).join('');
+    }
+
+
+    /* ═══ 關卡矩陣：橫式四欄（法律倫理／運算思維／流程圖／程式設計），往下列出所有關卡 ═══
+       ⚠️ 各科的「第 N 關」不是同一件事（資訊倫理的第 5 個是整章挑戰），
+          所以每一格都印出**該科自己的代號**，不要只印第幾關。
+       ⚠️ 每一科的滿星上限也不一樣：
+            資訊倫理 3　運算思維 2　流程圖 2＋1 加分　程式設計 3
+          用同一個上限畫的話，流程圖永遠看起來差一顆。
+
+       ★ 關卡清單哪裡來（一律取現成的單一來源，不在這裡另抄一份）
+            資訊倫理 → content/ethics.js 的 QUIZ_CONTENT
+            流程圖   → content/flowchart.js 的 FLOW_UNITS
+            程式設計 → config.js 的 CONFIG.UNITS
+            運算思維 → 只有編號（題目清單寫在 thinking.html 裡面，
+                       沒有共用檔可讀）—— 所以顯示「第 N 題」。 */
+    function unitColumns() {
+      const cols = [];
+      const has = k => subjects.some(s => s.key === k);
+
+      if (has('ethics') && window.QUIZ_CONTENT) {
+        const list = [];
+        (QUIZ_CONTENT.chapters || []).forEach(ch => {
+          (ch.sections || []).forEach(s => list.push({ id: s.id, label: s.id }));
+          if (ch.challenge) list.push({ id: ch.challenge.id, label: '整章' });
+        });
+        cols.push({ key: 'ethics', name: (subjects.find(s=>s.key==='ethics')||{}).label || '資訊倫理',
+                    cap: 3, units: list });
+      }
+      if (has('thinking')) {
+        cols.push({ key: 'thinking', name: '運算思維', cap: 2,
+                    units: Array.from({ length: 10 }, (_, i) => ({ id: String(i+1), label: '第' + (i+1) + '題' })) });
+      }
+      if (has('flowchart') && window.FLOW_UNITS) {
+        cols.push({ key: 'flowchart', name: '流程圖',
+                    cap: (window.GRADING ? GRADING.FLOWCHART_PER_UNIT + GRADING.BONUS.img : 3),
+                    units: FLOW_UNITS.map(u => ({ id: u.id, label: u.id })) });
+      }
+      if (has('scratch')) {
+        cols.push({ key: 'scratch', name: '程式設計',
+                    cap: 3,
+                    units: (window.CONFIG.UNITS || []).map(u => ({ id: u[0], label: u[0] })) });
+      }
+      return cols;
+    }
+
+    /** 這個學生在這一科的這一關拿了幾顆（含加分） */
+    function unitStarOf(student, key, unitId) {
+      const m = (student.__modules) || {};
+      if (key === 'ethics') {
+        const u = ((m.ethics || {}).units || {})[unitId];
+        return Number(u && u.star) || 0;
+      }
+      if (key === 'thinking') {
+        /* 運算思維沒有 units，只有 history 裡的 challenge。
+           ⚠️ 每完成一題固定 2 顆（GRADING.thinkingStars 是 題數×2）。 */
+        const hit = (student.history || []).some(h => h.module === 'thinking'
+                       && String(h.challenge) === String(unitId));
+        return hit ? 2 : 0;
+      }
+      if (key === 'flowchart') {
+        const done = ((m.flowchart || {}).units || []).indexOf(unitId) >= 0;
+        const bonus = ((m.flowchart || {}).imgUnits || {})[unitId] ? (window.GRADING ? GRADING.BONUS.img : 1) : 0;
+        return done ? ((window.GRADING ? GRADING.FLOWCHART_PER_UNIT : 2) + bonus) : 0;
+      }
+      if (key === 'scratch') {
+        return Number(((m.scratch || {}).unitStars || {})[unitId]) || 0;
+      }
+      return 0;
+    }
+
+    function unitMatrixHtml(student) {
+      const cols = unitColumns();
+      if (!cols.length) return '';
+      const rows = Math.max.apply(null, cols.map(c => c.units.length));
+      const bar = (n, cap) => '★'.repeat(Math.max(0,n)) + '☆'.repeat(Math.max(0, cap - n));
+
+      let head = '<th class="px-3 py-2 text-sm text-slate-400 font-bold">關</th>';
+      cols.forEach(c => {
+        const got = c.units.reduce((a, u) => a + unitStarOf(student, c.key, u.id), 0);
+        const max = c.units.length * c.cap;
+        head += `<th class="px-3 py-2.5 text-center border-l border-slate-100">
+            <div class="font-black text-slate-700 text-lg">${c.name}</div>
+            <div class="text-sm font-bold ${got >= max ? 'text-emerald-600' : 'text-slate-400'}">${got} / ${max}⭐</div>
+          </th>`;
+      });
+
+      let body = '';
+      for (let i = 0; i < rows; i++) {
+        body += `<tr class="${i % 2 ? 'bg-slate-50/60' : ''}">
+          <td class="px-3 py-1.5 text-center text-sm font-mono text-slate-400">${i + 1}</td>`;
+        cols.forEach(c => {
+          const u = c.units[i];
+          if (!u) { body += '<td class="border-l border-slate-100"></td>'; return; }
+          const n = unitStarOf(student, c.key, u.id);
+          /* ⚠️ 三種狀態要一眼分得出來：滿星／有進度／還沒開始。
+             只用顏色深淺的話，投影出來看不出差別。 */
+          const tone = n >= c.cap ? 'text-amber-500 font-black'
+                     : n > 0 ? 'text-amber-400'
+                     : 'text-slate-300';
+          body += `<td class="px-3 py-1.5 border-l border-slate-100 whitespace-nowrap" title="${c.name}　${u.label}　${n} / ${c.cap}⭐">
+              <span class="text-sm font-mono text-slate-400 mr-1.5">${u.label}</span>
+              <span class="${tone} text-xl tracking-tight">${bar(n, c.cap)}</span>
+            </td>`;
+        });
+        body += '</tr>';
+      }
+
+      return `
+        <div class="mb-5 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="bg-slate-50 px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+            <h4 class="font-black text-slate-700 text-base">📊 各科關卡進度</h4>
+            <span class="text-xs text-slate-400">★ 含老師審核的加分；滑鼠移上去看該關明細</span>
+          </div>
+          <div class="overflow-x-auto"><table class="w-full text-base border-collapse">
+            <thead><tr class="border-b border-slate-200">${head}</tr></thead>
+            <tbody>${body}</tbody>
+          </table></div>
+        </div>`;
+    }
+
+    function renderModalTasks() {
+      const container = document.getElementById('modal-tasks-container');
+      const student = spreadsheetData[activeSheet].find(s => s.id === currentEditingStudentId);
+      const groupedSubjects = {};
+      subjects.forEach(sub => { if (!groupedSubjects[sub.group]) groupedSubjects[sub.group] = []; groupedSubjects[sub.group].push(sub); });
+
+      /* ★ 矩陣放最上面（一眼看出進度），科目卡收進可展開的區塊 ——
+         它們還有用（可編輯的星星、逐筆歷程），只是不必一開啟就佔滿畫面。 */
+      let html = unitMatrixHtml(student);
+      let cards = '';
+      Object.keys(groupedSubjects).forEach((groupName) => {
+        if (activeCategory !== 'all' && activeCategory !== groupName) return;
+        const groupTasks = groupedSubjects[groupName];
+        let groupTotalStars = 0; let groupMaxStars = groupTasks.reduce((a, s) => a + subjMax(s.key), 0);
+        groupTasks.forEach(sub => { let val = parseInt(student[sub.key]); if (!isNaN(val) && val > 0) groupTotalStars += val;
+          groupTotalStars += bonusOf(student, sub.key); });   // ★ 同上
+        const isGroupComplete = (groupTotalStars === groupMaxStars && groupMaxStars > 0);
+
+        cards += `
+          <div class="mb-6 bg-white rounded-2xl shadow-sm border ${isGroupComplete ? 'border-yellow-300' : 'border-gray-200'} overflow-hidden transition-colors">
+            <div class="${isGroupComplete ? 'bg-yellow-50' : 'bg-blue-50'} px-5 py-3 border-b ${isGroupComplete ? 'border-yellow-200' : 'border-blue-100'} flex justify-between items-center transition-colors">
+              <h4 class="font-bold ${isGroupComplete ? 'text-yellow-700' : 'text-blue-800'} text-lg flex items-center gap-2">
+                ${isGroupComplete ? '🏆' : '📁'} ${groupName}
+              </h4>
+              <div class="flex items-center gap-2">
+                ${!isGroupComplete ? `<button onclick="fillGroupStars('${groupName}')" title="一鍵滿星" class="text-blue-400 hover:text-blue-600 bg-white hover:bg-blue-100 p-1.5 rounded-full transition-colors shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></button>` : ''}
+                <div class="text-sm font-bold ${isGroupComplete ? 'text-yellow-600' : 'text-blue-600'} bg-white px-3 py-1 rounded-full shadow-sm">${groupTotalStars} / ${groupMaxStars}</div>
+              </div>
+            </div><div class="p-4 space-y-3">
+        `;
+
+        groupTasks.forEach((sub, taskIndex) => {
+          const max = subjMax(sub.key);
+          let currentStars = parseInt(student[sub.key]); if (isNaN(currentStars) || currentStars < 0) currentStars = 0;
+          let controlHTML;
+          const meta = (student.__modules && student.__modules[sub.key]) || {};
+          let lvlNote = '', detailHTML = '';
+          if (max > 3) {
+            // 自動累加型（運算思維／資訊倫理）：唯讀顯示星數 + 可展開明細
+            const RULE = { ethics:'每章 1–3★', thinking:'每關 2★', flowchart:'每關 2★', scratch:'每關 2–3★' };
+const __bn = bonusOf(student, sub.key);
+            /* 顯示成「原始 + 加分」兩段，不要合成一個數字 ——
+               合起來就看不出加分給了沒，老師會找不到為什麼是這個數。 */
+            controlHTML = `<span class="font-bold text-yellow-500 text-lg">⭐ ${currentStars}${__bn ? `<span class="text-emerald-600"> ＋${__bn} 加分</span>` : ''} <span class="text-xs text-gray-400 font-normal">/ ${max}</span></span>`
+                        + `<span class="text-[11px] text-gray-400 ml-2">自動${RULE[sub.key] ? '（' + RULE[sub.key] + '）' : ''}</span>`;
+            // 程式設計改用「實際拿到星數的關卡」計算，避免舊資料（只自述完成、未經批改）顯示假的完成數
+            let doneCount = meta.level;
+            if (sub.key === 'scratch') {
+              // 一律以「實際拿到星數的關卡」為準；舊資料沒有 unitStars 就是 0（沒經過批改）
+              doneCount = Object.values(meta.unitStars || {}).filter(v => Number(v) > 0).length;
+            }
+            if (doneCount != null) {
+              const unit = sub.key === 'ethics' ? '章節' : '關';
+              lvlNote = `<div class="text-[11px] text-gray-400 mt-0.5">已完成 ${doneCount} ${unit}`
+                      + (sub.key === 'scratch' && meta.level != null && meta.level !== doneCount
+                          ? `<span class="text-amber-500">（另有 ${meta.level - doneCount} 關已交但未達 2⭐）</span>` : '')
+                      + `</div>`;
+            }
+            // 程式設計：列出各關的星數與分數，方便對照（也能看出是否為未經批改的舊資料）
+            let unitTable = '';
+            if (sub.key === 'scratch') {
+              const us = meta.unitStars || {}, sc = meta.unitScores || {};
+              const keys = Object.keys(Object.assign({}, us, sc));
+              unitTable = keys.length
+                ? `<div class="px-3 py-2 border-b border-gray-100 bg-slate-50">
+                     <div class="text-[11px] font-bold text-slate-500 mb-1">各關成績</div>
+                     ${keys.sort().map(k => {
+                       const st = Number(us[k] || 0), s2 = sc[k];
+                       return `<div class="flex justify-between text-xs py-0.5">
+                         <span class="font-mono text-slate-600">${k}</span>
+                         <span class="${st > 0 ? 'text-amber-600 font-bold' : 'text-red-500'}">${st > 0 ? '★'.repeat(st) + ' ' + st + '⭐' : '0⭐ 未達標'}${s2 != null ? `　<span class="text-slate-400 font-normal">${s2} 分</span>` : ''}</span>
+                       </div>`;
+                     }).join('')}
+                   </div>`
+                : `<div class="px-3 py-2 border-b border-gray-100 bg-amber-50 text-[11px] text-amber-700">
+                     ⚠️ 沒有各關成績資料（unitStars）：還沒有上傳過作品評分，請學生到程式設計頁上傳 .sb3。
+                   </div>`;
+            }
+            detailHTML = `
+              <details class="mt-2">
+                <summary class="text-xs text-blue-500 cursor-pointer select-none">📋 查看星星明細與獲取歷程</summary>
+                <div class="mt-1 bg-white rounded-lg border border-gray-100 max-h-64 overflow-y-auto">${unitTable}${moduleHistoryHtml(sub.key, student)}</div>
+              </details>`;
+          } else {
+            if (currentStars > 3) currentStars = 3;
+            let starsHTML = '';
+            for (let i = 1; i <= 3; i++) {
+              const isFilled = i <= currentStars;
+              const starClasses = isFilled ? 'text-yellow-400 fill-yellow-400 drop-shadow-sm' : 'text-gray-300 fill-transparent hover:text-yellow-200 hover:fill-yellow-200 transition-colors duration-200';
+              starsHTML += `<svg onclick="handleStarClick('${sub.key}', ${currentStars === i ? 0 : i}, this)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-10 h-10 cursor-pointer transition-all active:scale-90 ${starClasses}"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+            }
+            controlHTML = starsHTML;
+          }
+          cards += `
+            <div class="bg-gray-50 rounded-xl p-3 border border-gray-100 hover:bg-blue-50/50 hover:border-blue-200 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3"><div class="w-7 h-7 rounded-full bg-white shadow-sm text-gray-500 flex items-center justify-center font-bold text-xs border border-gray-200">${taskIndex + 1}</div><div><span class="font-bold text-gray-700 text-md">${sub.displayLabel}</span>${lvlNote}</div></div>
+                <div class="flex items-center gap-1">${controlHTML}</div>
+              </div>
+              ${detailHTML}
+            </div>
+          `;
+        });
+        cards += `</div></div>`;
+      });
+      html += `
+        <details class="mb-2">
+          <summary class="cursor-pointer select-none text-sm font-bold text-slate-500 hover:text-blue-600 px-1 py-2">
+            ▸ 各科總星數與逐筆歷程（可編輯）
+          </summary>
+          <div class="mt-2">${cards}</div>
+        </details>`;
+      container.innerHTML = html;
+    }
+
+    function renderStudentChart() {
+      const canvas = document.getElementById('student-progress-chart');
+      const ctx = canvas.getContext('2d');
+      if (studentChartInstance) studentChartInstance.destroy();
+
+      // 用學生真實的過關歷程（history）畫「星數成長曲線」：每一天累積到多少星
+      const stu = spreadsheetData[activeSheet].find(s => s.id === currentEditingStudentId) || {};
+      const hist = (stu.history || [])
+        .filter(h => Number(h.at))
+        .sort((a, b) => Number(a.at) - Number(b.at));
+
+      const byDay = {};                       // 日期 → 當天新增星數
+      hist.forEach(h => {
+        const d = new Date(Number(h.at));
+        const key = `${d.getMonth() + 1}/${d.getDate()}`;
+        byDay[key] = (byDay[key] || 0) + (Number(h.stars) || 0);
+      });
+
+      const labels = Object.keys(byDay);
+      let run = 0;
+      const dataPoints = labels.map(k => (run += byDay[k]));
+
+      // 沒有歷程時，至少顯示目前總星數一個點
+      if (!labels.length) {
+        labels.push('目前');
+        dataPoints.push(calculateTotalStars(stu));
+      }
+
+      studentChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+              labels: labels,
+              datasets: [{
+                  label: '任務總星數',
+                  data: dataPoints,
+                  borderColor: '#3B82F6',
+                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                  borderWidth: 3,
+                  pointBackgroundColor: '#FBBF24',
+                  pointBorderColor: '#fff',
+                  pointBorderWidth: 2,
+                  pointRadius: 6,
+                  pointHoverRadius: 8,
+                  fill: true,
+                  tension: 0.4
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              /* 縱軸上限用各科分母加起來的總星數，刻度也跟著資料量走（不然滿分附近整片糊掉） */
+              scales: { y: { beginAtZero: true, suggestedMax: sumSubjMax(subjects),
+                             ticks: { maxTicksLimit: 8 } } },
+              plugins: { legend: { display: false } }
+          }
+      });
+    }
+
+    window.handleSearch = function(value) { searchTerm = value; renderCards(); };
+
+    window.handleStarClick = function(subjectKey, newValue, element) {
+      if (!currentEditingStudentId) return;
+      const studentIndex = spreadsheetData[activeSheet].findIndex(s => s.id === currentEditingStudentId);
+      if (studentIndex > -1) {
+        const student = spreadsheetData[activeSheet][studentIndex];
+        const previousTotal = calculateTotalStars(student);
+        let displaySubjects = activeCategory === 'all' ? subjects : subjects.filter(sub => sub.group === activeCategory);
+        student[subjectKey] = newValue;
+        const newTotal = calculateTotalStars(student);
+        element.classList.add('star-pop'); setTimeout(() => element.classList.remove('star-pop'), 300);
+        if (newTotal === displaySubjects.length * 3 && previousTotal < displaySubjects.length * 3) triggerConfetti();
+        renderModalTasks(); 
+      }
+    };
+
+    function triggerConfetti() { confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#FBBF24', '#3B82F6', '#10B981', '#EF4444', '#8B5CF6'], zIndex: 9999 }); }
+
+    let toastTimeout;
+    function showToast(message, isWarning) {
+      const toast = document.getElementById('toast'); document.getElementById('toast-message').innerText = message;
+      toast.classList.remove('hidden'); toast.style.display = 'flex';
+      if(isWarning) {
+        toast.classList.remove('border-emerald-500'); toast.classList.add('border-amber-500');
+        toast.querySelector('svg').outerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+      } else {
+        toast.classList.remove('border-amber-500'); toast.classList.add('border-emerald-500');
+        toast.querySelector('svg').outerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      }
+      clearTimeout(toastTimeout); toastTimeout = setTimeout(() => { toast.style.display = 'none'; toast.classList.add('hidden'); }, 4000);
+    }
+  </script>
+
+  <!-- ==================================================================
+       📡 本節課即時看板：即時顯示全班集星實況（適合投影）
+       ================================================================== -->
+  <div id="liveModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/80 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[94vh] overflow-y-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
+        <div class="flex items-center gap-3">
+          <h3 class="text-xl font-black text-slate-800">📡 本節課即時看板</h3>
+          <select id="lvClass" onchange="startLive()" class="text-sm border border-slate-300 rounded-lg px-2 py-1.5"></select>
+          <span class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>即時同步中
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-bold text-slate-600">起算時間</label>
+          <input id="lvSince" type="time" class="text-sm border border-slate-300 rounded-lg px-2 py-1.5">
+          <button onclick="lvSetNow()" class="text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg transition">從現在開始</button>
+          <button onclick="closeLiveModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none ml-2">&times;</button>
+        </div>
+      </div>
+
+      <div class="p-6">
+        <div id="lvStats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5"></div>
+        <div id="lvBoard" class="text-sm text-slate-500">請選擇班級。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================
+       🗓️ 上課日設定：每班上課星期 + 停課／補課（供每週評分判斷）
+       ================================================================== -->
+  <div id="schedModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 p-3">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[94vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-3 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+        <div class="flex items-center gap-3 flex-wrap">
+          <h3 class="text-lg font-black text-slate-800">🗓️ 課表與停課設定</h3>
+          <div class="flex items-center gap-1">
+            <button onclick="scWeek(-1)" class="px-2 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg font-bold">◀</button>
+            <span id="scWeekLabel" class="text-sm font-bold text-slate-700 min-w-[150px] text-center"></span>
+            <button onclick="scWeek(1)" class="px-2 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg font-bold">▶</button>
+            <button onclick="scWeek(0)" class="ml-1 px-2 py-1 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-bold">回本週</button>
+          </div>
+          <label class="flex items-center gap-1.5 text-sm font-bold text-slate-600 cursor-pointer">
+            <input type="checkbox" id="scEdit" onchange="scRender()" class="w-4 h-4"> 編輯課表
+          </label>
+        </div>
+        <button onclick="closeSchedModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+      </div>
+      <div class="p-5">
+        <p id="scHint" class="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 leading-relaxed"></p>
+        <div id="scGrid" class="overflow-x-auto"></div>
+
+        <!-- 模組開放日：還沒到日期的模組在闖關基地畫成灰色、點不進去，並寫明預計哪一天開放。
+             ★ 存在同一份 schedule 文件的 open_json 欄位 ——
+               學生端讀得到的 config **只有 schedule 這一個**，
+               另開一份就得改安全規則、重新發布。
+             ⚠️ 要再加別的模組，照下面那一行複製（id 要和
+                hub.html 的 MODULES[].id 一樣，打錯不會報錯、只是沒作用）。 -->
+        <div class="mt-5 pt-4 border-t border-slate-200">
+          <h4 class="text-sm font-black text-slate-700 mb-1">🔒 模組開放日</h4>
+          <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+            還沒到日期的模組，在學生的闖關基地上會是**灰色、點不進去**，
+            並顯示「預計於 ○○○○/○○/○○ 開放」。<b>留空 ＝ 立刻開放。</b><br>
+            ⚠️ 這是把入口藏起來，不是把頁面鎖起來 —— 知道網址的人照樣打得開。
+          </p>
+          <div class="flex items-center gap-3 flex-wrap">
+            <label class="text-sm font-bold text-slate-700 w-44">💡 智慧家居機電專題</label>
+            <input type="date" id="scOpen-arduino"
+                   class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <button onclick="document.getElementById('scOpen-arduino').value=''"
+                    class="text-xs text-slate-400 hover:text-slate-600 underline">清空（立刻開放）</button>
+          </div>
+        </div>
+
+        <!-- 📋 班級上課日查詢：某個班級到目前為止的上課日
+             ★ 停課的也列出來（灰色）：放假後要確認的正是「那天有沒有標到停課」。
+             ★ 算法走 shared/schedule.js 的 classLessons —— 和出席紀錄、每週評分同一份規則。 -->
+        <div class="mt-5 pt-4 border-t border-slate-200">
+          <h4 class="text-sm font-black text-slate-700 mb-1">📋 班級上課日查詢</h4>
+          <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+            列出這個班從學期第 1 週到今天的每一堂課，停課的也會列出來（灰色），方便放假後確認有沒有標漏。<br>
+            以上面<b>目前畫面上的設定</b>計算 —— 剛點的停課還沒按儲存也會算進去。
+          </p>
+          <div class="flex items-center gap-2 flex-wrap">
+            <select id="scDaysCls" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"></select>
+            <button onclick="scListDays()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg text-sm transition">查詢</button>
+          </div>
+          <div id="scDaysOut" class="mt-3"></div>
+        </div>
+
+        <div class="flex items-center gap-3 mt-4">
+          <button onclick="saveSchedule()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-sm transition">💾 儲存</button>
+          <span id="scStatus" class="text-sm font-bold"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================
+       📅 每週評分：依 history 的時間戳統計「每週取得星數」→ 折算百分
+       ================================================================== -->
+  <div id="weeklyModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+        <h3 class="text-lg font-black text-slate-800">📅 每週評分</h3>
+        <button onclick="closeWeeklyModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+      </div>
+      <div class="p-6">
+        <div class="flex flex-wrap items-end gap-3 mb-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">班級</label>
+            <select id="wkyClass" class="text-sm border border-slate-300 rounded-lg px-2 py-1.5"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">學期開始日（第 1 週的星期一）</label>
+            <input id="wkyStart" type="date" class="text-sm border border-slate-300 rounded-lg px-2 py-1.5">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">基本分</label>
+            <input id="wkyBase" type="number" min="0" max="100" value="60" class="w-20 text-sm border border-slate-300 rounded-lg px-2 py-1.5">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">每顆星加分</label>
+            <input id="wkyPer" type="number" min="1" max="40" value="4" class="w-20 text-sm border border-slate-300 rounded-lg px-2 py-1.5">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">顯示週數</label>
+            <input id="wkyWeeks" type="number" min="1" max="25" value="10" class="w-20 text-sm border border-slate-300 rounded-lg px-2 py-1.5">
+          </div>
+          <button onclick="loadWeekly()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-sm transition">計算</button>
+          <button onclick="exportWeeklyCsv()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-sm transition">匯出 CSV</button>
+        </div>
+        <p class="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 leading-relaxed">
+分數 ＝ <b>基本分 ＋ 該週星數 × 每顆星加分</b>（預設 60 ＋ 星數×4，最高 100 分）；<b>0 星＝基本分</b>。
+          ⚠️ 學生端的「本週成績卡」在 0 星時<b>刻意顯示 0 分</b>（避免以為沒做也有分），這裡才是實際登記用的分數。
+          星數只計「<b>當週新增</b>」的部分：
+          重做同一關沒有進步不會重複計分；資訊倫理重考只算進步的星數。
+        </p>
+        <div id="wkyTable" class="overflow-x-auto text-sm text-slate-500">設定後按「計算」。</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* 作品的分數與檔案看教師後台「🐱 作品評分」，評分範本在「📗 評分範本」。 */
+
+    /* 下面的即時看板、上課日、每週評分共用這一個 */
+    function _gdDb() { return firebase.firestore(); }
+
+    // ===== 📡 本節課即時看板 =====
+    let _lvUnsubs = [], _lvRoster = [], _lvSince = null, _lvData = {};
+    const LV_MOD = { flowchart:['🧩','emerald'], scratch:['🐱','orange'], ethics:['⚖️','pink'], thinking:['🧠','green'] };
+
+    async function openLiveModal(){
+      const m = document.getElementById('liveModal');
+      m.classList.remove('hidden'); m.classList.add('flex');
+      const sel = document.getElementById('lvClass');
+      if(!sel.options.length){
+        try{
+          const snap = await _gdDb().collection(window.CONFIG.COLLECTIONS.ROSTER).get();
+          const set = new Set(); snap.forEach(d=>{ const c=d.data().cls; if(c) set.add(String(c)); });
+          sel.innerHTML = [...set].sort().map(c=>`<option value="${c}">${c} 班</option>`).join('');
+        }catch(e){ sel.innerHTML='<option value="">（讀取班級失敗）</option>'; }
+      }
+      if(!document.getElementById('lvSince').value) lvSetNow(false);
+      startLive();
+    }
+    function closeLiveModal(){
+      _lvUnsubs.forEach(u=>{ try{u();}catch(e){} }); _lvUnsubs=[];
+      const m=document.getElementById('liveModal'); m.classList.add('hidden'); m.classList.remove('flex');
+    }
+    function lvSetNow(repaint){
+      const d=new Date();
+      document.getElementById('lvSince').value =
+        String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      if(repaint!==false) paintLive();
+    }
+    function lvSinceTs(){
+      const v=document.getElementById('lvSince').value;
+      const d=new Date();
+      if(v){ const [h,mi]=v.split(':').map(Number); d.setHours(h,mi,0,0); }
+      else d.setHours(0,0,0,0);
+      return d.getTime();
+    }
+    async function startLive(){
+      _lvUnsubs.forEach(u=>{ try{u();}catch(e){} }); _lvUnsubs=[]; _lvData={};
+      const cls=document.getElementById('lvClass').value;
+      const board=document.getElementById('lvBoard');
+      if(!cls){ board.textContent='請選擇班級。'; return; }
+      board.textContent='連線中…';
+      try{
+        const rs=await _gdDb().collection(window.CONFIG.COLLECTIONS.ROSTER).where('cls','==',cls).get();
+        _lvRoster=rs.docs.map(d=>d.data()).sort((a,b)=>(Number(a.no)||0)-(Number(b.no)||0));
+        if(!_lvRoster.length){ board.textContent='此班尚無名冊資料。'; return; }
+        // 每位學生一個即時監聽（人數不多，直接訂閱最即時）
+        _lvRoster.forEach(s=>{
+          const un=_gdDb().collection(window.CONFIG.COLLECTIONS.PROGRESS).doc(s.studentId)
+            .onSnapshot(d=>{ _lvData[s.studentId]= d.exists ? d.data() : null; paintLive(); },
+                        e=>console.warn('即時監聽失敗', s.studentId, e.message));
+          _lvUnsubs.push(un);
+        });
+      }catch(e){ board.textContent='讀取失敗（需教師帳號登入）：'+e.message; }
+    }
+    function paintLive(){
+      const since=lvSinceTs();
+      const rows=_lvRoster.map(s=>{
+        const d=_lvData[s.studentId];
+        const mods=(d&&d.modules)||{};
+        const total=['ethics','thinking','flowchart','scratch']
+          .reduce((a,k)=>a+(Number((mods[k]||{}).stars)||0),0);
+        const hist=(window.GRADING&&GRADING.statHistory)?GRADING.statHistory(d||{}):((d&&d.history)||[]);
+        const recent=hist.filter(h=>Number(h.at)>=since);
+        const gained=recent.reduce((a,h)=>a+(Number(h.stars)||0),0);
+        const last=recent.length?recent.reduce((a,b)=>(Number(a.at)>Number(b.at)?a:b)):null;
+        // 今天的登入時間（出席）
+        const t=new Date();
+        const dayKey=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+        const signIn=(d&&d.attendance&&d.attendance[dayKey])||0;
+        return { s, total, gained, last, count:recent.length, signIn };
+      });
+      // 統計列
+      const active=rows.filter(r=>r.gained>0).length;
+      const sumGained=rows.reduce((a,r)=>a+r.gained,0);
+      const sumTotal=rows.reduce((a,r)=>a+r.total,0);
+      const stat=(label,val,color)=>`<div class="bg-${color}-50 border border-${color}-200 rounded-xl p-3 text-center">
+          <div class="text-xs font-bold text-${color}-700">${label}</div>
+          <div class="text-2xl font-black text-${color}-600">${val}</div></div>`;
+      const signedIn=rows.filter(r=>r.signIn).length;
+      document.getElementById('lvStats').innerHTML =
+        stat('今日出席', signedIn+' / '+rows.length+' 人','sky') +
+        stat('本節有進度', active+' / '+rows.length+' 人','violet') +
+        stat('本節新增星數', sumGained+' ⭐','amber') +
+        stat('全班累積星數', sumTotal+' ⭐','emerald');
+
+      // 依本節新增星數排序（多的在前），同分依座號
+      const sorted=[...rows].sort((a,b)=> b.gained-a.gained || (Number(a.s.no)||0)-(Number(b.s.no)||0));
+      const fmt=t=>{ const d=new Date(Number(t)); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+      const now=Date.now();
+      const maxGain=Math.max(0,...rows.map(r=>r.gained));
+
+      // 名次：只有本節有進度的人才排名（同分同名次）
+      let rank=0, prev=null;
+      sorted.forEach((r,i)=>{ if(r.gained>0){ if(r.gained!==prev){ rank=i+1; prev=r.gained; } r.rank=rank; } else r.rank=null; });
+
+      document.getElementById('lvBoard').innerHTML=`
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+          ${sorted.map(r=>{
+            const hot   = r.gained>0;
+            const fresh = r.last && (now-Number(r.last.at) < 120000);   // 2 分鐘內剛拿到
+            const medal = r.rank===1?'🥇':r.rank===2?'🥈':r.rank===3?'🥉':r.rank&&r.rank<=5?'🏅':'';
+            const isTop = r.gained>0 && r.gained===maxGain;
+            const src   = r.last ? (LV_MOD[r.last.module]||['',''])[0] : '';
+
+            // 狀態標註
+            let badge='', badgeCls='';
+            if(fresh){ badge='🔥 剛完成'; badgeCls='bg-rose-500 text-white'; }
+            else if(r.count>=3){ badge='⚡ 連闖'+r.count+'關'; badgeCls='bg-violet-500 text-white'; }
+            else if(hot){ badge='✓ 有進度'; badgeCls='bg-emerald-500 text-white'; }
+            else { badge='待開始'; badgeCls='bg-slate-200 text-slate-500'; }
+
+            const cardCls = fresh ? 'bg-gradient-to-b from-amber-50 to-white border-amber-400 shadow-lg scale-[1.03]'
+                          : isTop ? 'bg-gradient-to-b from-yellow-50 to-white border-yellow-400 shadow-md'
+                          : hot   ? 'bg-white border-emerald-300'
+                          :         'bg-slate-50 border-slate-200';
+
+            return `<div class="relative rounded-xl border-2 p-2 text-center transition-all duration-500 ${cardCls}">
+              ${medal?`<div class="absolute -top-2 -right-1 text-xl drop-shadow">${medal}</div>`:''}
+              <div class="text-[10px] font-mono ${hot?'text-slate-500':'text-slate-300'}">${r.s.no||''}</div>
+              <div class="text-sm font-black text-slate-800 truncate leading-tight">${r.s.name||''}</div>
+              <div class="my-1 leading-none">
+                <span class="text-2xl font-black ${hot?'text-amber-500':'text-slate-300'}">${hot?'+'+r.gained:'0'}</span>
+                <span class="text-[10px] ${hot?'text-amber-400':'text-slate-300'}">⭐</span>
+              </div>
+              <div class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeCls} truncate">${badge}</div>
+              <div class="text-[10px] text-slate-400 mt-1 truncate">累積 ${r.total}★ ${src}${r.last?' '+fmt(r.last.at):''}</div>
+              <div class="text-[10px] mt-0.5 truncate ${r.signIn?'text-sky-600 font-bold':'text-slate-300'}">${r.signIn?'🚪 '+fmt(r.signIn):'未登入'}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+    window.openLiveModal=openLiveModal; window.closeLiveModal=closeLiveModal;
+    window.startLive=startLive; window.lvSetNow=lvSetNow;
+
+
+    // ===== 🗓️ 課表與停課（存 {TERM}-config/schedule）=====
+    //  base : { "星期-節次": "班級" }        例如 { "3-2": "801" } = 週三第2節上801
+    //  off  : { "YYYY-MM-DD": ["3-2", ...] } 該日期哪幾節停課
+    //  move : { "YYYY-MM-DD": { "3-2": "5-4" } } 該週把某節課調到別的時段
+    const SC_COL=window.CONFIG.COLLECTIONS.CONFIG, SC_DOC='schedule';
+    const SC_DAYS=['一','二','三','四','五'], SC_PERIODS=7;
+    let _sched={ base:{}, off:{}, move:{} };
+    let _scMonday=null, _scClasses=[];
+
+    function scMondayOf(d){ const x=new Date(d); const wd=(x.getDay()+6)%7; x.setHours(0,0,0,0); return new Date(x.getTime()-wd*86400000); }
+    function scKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+    function scDateOf(wd){ return new Date(_scMonday.getTime()+(wd-1)*86400000); }   // wd:1~5
+
+    async function loadSchedule(){
+      try{
+        const s=await _gdDb().collection(SC_COL).doc(SC_DOC).get();
+        const d=(s.exists && s.data())||{};
+        _sched={ base:d.base||{}, off:d.off||{}, move:d.move||{},
+                 open_json:d.open_json||'' };
+      }catch(e){ _sched={ base:{}, off:{}, move:{}, open_json:'' }; }
+      return _sched;
+    }
+    async function openSchedModal(){
+      const m=document.getElementById('schedModal');
+      m.classList.remove('hidden'); m.classList.add('flex');
+      if(!_scClasses.length){
+        try{
+          const snap=await _gdDb().collection(window.CONFIG.COLLECTIONS.ROSTER).get();
+          const set=new Set(); snap.forEach(x=>{ const c=x.data().cls; if(c) set.add(String(c)); });
+          _scClasses=[...set].sort();
+        }catch(e){ _scClasses=[]; }
+      }
+      _scMonday=scMondayOf(new Date());
+      scFillDaysCls();
+      await loadSchedule();
+      /* 把已經設好的開放日填回輸入框。
+         ⚠️ 不填的話，老師打開只是想改課表、按了儲存，
+            開放日就會被一個空字串洗掉 —— 而且完全沒有徵兆。 */
+      try{
+        const _op=(window.SCHEDULE&&SCHEDULE.openMap)?SCHEDULE.openMap(_sched):{};
+        const _el=document.getElementById('scOpen-arduino');
+        if(_el) _el.value=_op.arduino||'';
+      }catch(e){}
+      scRender();
+    }
+    /* 📋 班級上課日查詢 —— 規則在 shared/schedule.js 的 classLessons。 */
+    function scFillDaysCls(){
+      const sel=document.getElementById('scDaysCls');
+      if(!sel) return;
+      const cur=sel.value;
+      sel.innerHTML='<option value="">選班級</option>'+_scClasses.map(c=>`<option value="${c}">${c}</option>`).join('');
+      if(cur) sel.value=cur;
+    }
+    function scListDays(){
+      const out=document.getElementById('scDaysOut');
+      const cls=document.getElementById('scDaysCls').value;
+      if(!cls){ out.innerHTML='<div class="text-sm text-slate-400">請先選班級。</div>'; return; }
+      if(!(window.SCHEDULE && SCHEDULE.classLessons)){
+        out.innerHTML='<div class="text-sm text-red-600">讀不到 shared/schedule.js，請重新整理頁面。</div>'; return;
+      }
+      /* 起點和「出席紀錄」「每週評分」一致：老師在每週評分改過學期開始日就用那個，沒有就用 config.js */
+      let startStr=window.CONFIG.TERM_START;
+      try{ startStr=localStorage.getItem('wky_start')||startStr; }catch(e){}
+      const start=new Date(startStr+'T00:00:00');
+      const rows=SCHEDULE.classLessons(_sched, cls, start, new Date());
+      if(!rows.length){
+        out.innerHTML=`<div class="text-sm text-slate-400">${startStr} 到今天，課表裡沒有排到 ${cls} 的課。（先勾「編輯課表」確認有沒有把這個班放進時段）</div>`;
+        return;
+      }
+      const startMon=SCHEDULE.mondayOf(start).getTime();
+      const live=rows.filter(r=>!r.off);
+      const days=[...new Set(live.map(r=>r.date))];
+      const offN=rows.length-live.length, mvN=rows.filter(r=>r.movedIn).length;
+      const body=rows.map(r=>{
+        const d=new Date(r.date+'T00:00:00');
+        const wk=Math.floor((SCHEDULE.mondayOf(d).getTime()-startMon)/SCHEDULE.WEEK_MS)+1;
+        const st=r.off?'<span class="text-slate-400">停課</span>'
+               :r.movedIn?'<span class="text-violet-700 font-bold">調課</span>'
+               :'<span class="text-emerald-700 font-bold">上課</span>';
+        return `<tr class="${r.off?'bg-slate-50 text-slate-400':''}">
+          <td class="border border-slate-200 px-2 py-1 text-center">第${wk}週</td>
+          <td class="border border-slate-200 px-2 py-1 text-center font-mono">${r.date.slice(5)}（${SC_DAYS[r.wd-1]}）</td>
+          <td class="border border-slate-200 px-2 py-1 text-center">第${r.period}節</td>
+          <td class="border border-slate-200 px-2 py-1 text-center">${st}</td></tr>`;
+      }).join('');
+      out.innerHTML=`<div class="text-sm font-bold text-slate-700 mb-2">${cls}：上課 <span class="text-emerald-700">${days.length}</span> 天（${live.length} 節）
+          ・停課 <span class="${offN?'text-red-600':''}">${offN}</span> 節・調課 ${mvN} 節
+          <span class="text-xs font-normal text-slate-400">（${startStr} ～ 今天）</span></div>
+        <div class="max-h-80 overflow-y-auto"><table class="w-full text-sm border-collapse">
+          <thead class="sticky top-0 bg-slate-100"><tr>
+            <th class="border border-slate-200 px-2 py-1">週次</th><th class="border border-slate-200 px-2 py-1">日期</th>
+            <th class="border border-slate-200 px-2 py-1">節次</th><th class="border border-slate-200 px-2 py-1">狀態</th></tr></thead>
+          <tbody>${body}</tbody></table></div>`;
+    }
+    window.scListDays = scListDays;
+
+    function closeSchedModal(){
+      const m=document.getElementById('schedModal');
+      m.classList.add('hidden'); m.classList.remove('flex');
+    }
+    function scWeek(n){
+      if(n===0) _scMonday=scMondayOf(new Date());
+      else _scMonday=new Date(_scMonday.getTime()+n*7*86400000);
+      scRender();
+    }
+    // 這一週、這個時段實際要上的班級（考慮調課）；停課回傳 null
+    function scCellInfo(wd,period){
+      const slot=`${wd}-${period}`, dateKey=scKey(scDateOf(wd));
+      // 被調走
+      const movedAway=Object.entries(_sched.move[dateKey]||{}).some(([from])=>from===slot);
+      // 從別處調來
+      let movedIn=null;
+      Object.entries(_sched.move).forEach(([dk,mp])=>{
+        Object.entries(mp||{}).forEach(([from,to])=>{
+          if(to===slot){ const wdFrom=Number(from.split('-')[0]);
+            if(scKey(scDateOf(wdFrom))===dk) movedIn=_sched.base[from]||null; }
+        });
+      });
+      const cls = movedIn || (movedAway?null:(_sched.base[slot]||null));
+      const off = (_sched.off[dateKey]||[]).includes(slot);
+      return { cls, off, slot, dateKey, movedIn:!!movedIn, movedAway };
+    }
+    function scRender(){
+      const edit=document.getElementById('scEdit').checked;
+      const sun=new Date(_scMonday.getTime()+4*86400000);
+      document.getElementById('scWeekLabel').textContent =
+        `${_scMonday.getMonth()+1}/${_scMonday.getDate()} ～ ${sun.getMonth()+1}/${sun.getDate()}`;
+      document.getElementById('scHint').innerHTML = edit
+        ? '<b>編輯課表模式</b>：用下拉選單把班級放進時段，這是<b>每週固定</b>的課表（不綁日期）。編輯完記得按儲存。'
+        : '<b>本週檢視</b>：日期會依實際週次自動變動。<b>點一下格子＝該日停課</b>（變灰、不計分），再點一下取消；<b>拖曳格子</b>可把那一節課調到別的時段（只影響這一週）。';
+
+      let html='<table class="w-full text-sm border-collapse select-none"><thead><tr class="bg-slate-50">'
+             + '<th class="border border-slate-200 px-2 py-1 w-16">節次</th>';
+      for(let wd=1; wd<=5; wd++){
+        const d=scDateOf(wd);
+        const isToday=scKey(d)===scKey(new Date());
+        html+=`<th class="border border-slate-200 px-2 py-1 ${isToday?'bg-amber-100':''}">星期${SC_DAYS[wd-1]}
+                 <div class="text-[11px] font-normal ${isToday?'text-amber-700 font-bold':'text-slate-400'}">${d.getMonth()+1}/${d.getDate()}${isToday?' 今天':''}</div></th>`;
+      }
+      html+='</tr></thead><tbody>';
+      for(let p=1;p<=SC_PERIODS;p++){
+        html+=`<tr><td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-500 bg-slate-50">第${p}節</td>`;
+        for(let wd=1; wd<=5; wd++){
+          const info=scCellInfo(wd,p);
+          if(edit){
+            const cur=_sched.base[`${wd}-${p}`]||'';
+            html+=`<td class="border border-slate-200 p-1">
+              <select onchange="scSetBase('${wd}-${p}', this.value)" class="w-full text-xs border border-slate-200 rounded px-1 py-1">
+                <option value="">—</option>
+                ${_scClasses.map(c=>`<option value="${c}" ${c===cur?'selected':''}>${c}</option>`).join('')}
+              </select></td>`;
+          }else if(info.cls){
+            const cls2 = info.off ? 'bg-slate-200 text-slate-400 line-through'
+                       : info.movedIn ? 'bg-violet-100 text-violet-800 border-violet-300'
+                       : 'bg-indigo-50 text-indigo-800';
+            html+=`<td class="border border-slate-200 p-1">
+              <div draggable="true" ondragstart="scDragStart(event,'${info.slot}')" ondragover="event.preventDefault()"
+                   ondrop="scDrop(event,'${info.slot}')" onclick="scToggleOff('${info.slot}')"
+                   title="${info.off?'已停課，點一下恢復':'點一下＝停課；拖曳＝調到別的時段'}"
+                   class="cursor-pointer rounded-lg px-2 py-2 text-center font-bold border ${cls2} hover:shadow transition">
+                ${info.cls}${info.off?'<div class="text-[10px] font-normal">停課</div>':(info.movedIn?'<div class="text-[10px] font-normal">調課</div>':'')}
+              </div></td>`;
+          }else{
+            html+=`<td class="border border-slate-200 p-1" ondragover="event.preventDefault()" ondrop="scDrop(event,'${wd}-${p}')">
+                     <div class="h-9 rounded-lg bg-slate-50"></div></td>`;
+          }
+        }
+        html+='</tr>';
+      }
+      html+='</tbody></table>';
+      document.getElementById('scGrid').innerHTML=html;
+    }
+    function scSetBase(slot,cls){ if(cls) _sched.base[slot]=cls; else delete _sched.base[slot]; }
+    function scToggleOff(slot){
+      const wd=Number(slot.split('-')[0]);
+      const dk=scKey(scDateOf(wd));
+      const list=_sched.off[dk]||[];
+      _sched.off[dk] = list.includes(slot) ? list.filter(x=>x!==slot) : [...list, slot];
+      if(!_sched.off[dk].length) delete _sched.off[dk];
+      scRender();
+    }
+    let _scDrag=null;
+    function scDragStart(e,slot){ _scDrag=slot; e.dataTransfer.effectAllowed='move'; }
+    function scDrop(e,toSlot){
+      e.preventDefault();
+      if(!_scDrag || _scDrag===toSlot) return;
+      const wd=Number(_scDrag.split('-')[0]);
+      const dk=scKey(scDateOf(wd));
+      _sched.move[dk]=Object.assign({}, _sched.move[dk], { [_scDrag]: toSlot });
+      _scDrag=null;
+      scRender();
+    }
+    async function saveSchedule(){
+      const st=document.getElementById('scStatus');
+      st.textContent='儲存中…'; st.className='text-sm font-bold text-slate-500';
+      try{
+        /* 模組開放日：整份 open_json 一次覆蓋（見 shared/schedule.js 的說明）。
+           ⚠️ 讀的是**畫面上的輸入框**，不是 _sched —— 老師改了日期但
+              沒重新載入時，以畫面上看到的為準。 */
+        const _openEl = document.getElementById('scOpen-arduino');
+        const _open = {};
+        if (_openEl && _openEl.value) _open.arduino = _openEl.value;
+        await _gdDb().collection(SC_COL).doc(SC_DOC).set(
+          { base:_sched.base, off:_sched.off, move:_sched.move,
+            open_json: JSON.stringify(_open),
+            updated_at:new Date().toISOString() }, { merge:true });
+        _sched.open_json = JSON.stringify(_open);
+        st.textContent='✅ 已儲存'; st.className='text-sm font-bold text-emerald-600';
+      }catch(e){
+        st.textContent='儲存失敗（需教師帳號登入）：'+e.message;
+        st.className='text-sm font-bold text-red-600';
+      }
+    }
+    // 供每週評分使用：某班在某一週實際的上課日期（可能多節；全部停課回傳空陣列）
+    /* 規則在 shared/schedule.js，這裡只轉呼叫（學生端的本週成績卡也用同一支）。
+       ⚠️ 上面那些 sc* 函式是**課表編輯畫面**在用的，
+          它們吃 _scMonday 這個全域狀態，不適合給別人呼叫。 */
+    function classDatesOfWeek(cls, weekStart){
+      return window.SCHEDULE ? SCHEDULE.classDatesOfWeek(_sched, cls, weekStart) : [];
+    }
+    window.openSchedModal=openSchedModal; window.closeSchedModal=closeSchedModal;
+    window.saveSchedule=saveSchedule; window.scRender=scRender; window.scWeek=scWeek;
+    window.scSetBase=scSetBase; window.scToggleOff=scToggleOff;
+    window.scDragStart=scDragStart; window.scDrop=scDrop;
+
+    // ===== 📅 每週評分 =====
+    let _wkyRows = [], _wkyWeeks = 0, _wkyDates = [];
+    async function openWeeklyModal() {
+      const m = document.getElementById('weeklyModal');
+      m.classList.remove('hidden'); m.classList.add('flex');
+      const sel = document.getElementById('wkyClass');
+      if (!sel.options.length) {
+        try {
+          const snap = await _gdDb().collection(window.CONFIG.COLLECTIONS.ROSTER).get();
+          const set = new Set();
+          snap.forEach(d => { const c = d.data().cls; if (c) set.add(String(c)); });
+          sel.innerHTML = [...set].sort().map(c => `<option value="${c}">${c} 班</option>`).join('');
+        } catch (e) { sel.innerHTML = '<option value="">（讀取班級失敗）</option>'; }
+      }
+      // 學期開始日：預設值來自 config.js 的 TERM_START，可自行調整並記住
+      const saved = localStorage.getItem('wky_start');
+      if (saved) document.getElementById('wkyStart').value = saved;
+      else document.getElementById('wkyStart').value = window.CONFIG.TERM_START;
+      const b = localStorage.getItem('wky_base'); if (b) document.getElementById('wkyBase').value = b;
+      const pv = localStorage.getItem('wky_per'); if (pv) document.getElementById('wkyPer').value = pv;
+    }
+    function closeWeeklyModal() {
+      const m = document.getElementById('weeklyModal');
+      m.classList.add('hidden'); m.classList.remove('flex');
+    }
+    // 事件星數：新資料有 stars 欄位；舊資料用模組預設推算
+    function _evStars(ev) {
+      if (typeof ev.stars === 'number') return ev.stars;
+      if (ev.module === 'flowchart' || ev.module === 'thinking') return 2;
+      if (ev.module === 'ethics' && window.GRADING) return window.GRADING.ethicsStar(ev.score);
+      return 0;
+    }
+    async function loadWeekly() {
+      const box = document.getElementById('wkyTable');
+      const cls = document.getElementById('wkyClass').value;
+      const startStr = document.getElementById('wkyStart').value;
+      const base = Math.max(0, Math.min(100, Number(document.getElementById('wkyBase').value) || 0));
+      const per  = Math.max(1, Number(document.getElementById('wkyPer').value) || 4);
+      const weeks = Math.max(1, Math.min(25, Number(document.getElementById('wkyWeeks').value) || 10));
+      if (!cls || !startStr) { box.textContent = '請先選擇班級並填入學期開始日。'; return; }
+      localStorage.setItem('wky_start', startStr);
+      localStorage.setItem('wky_base', String(base));
+      localStorage.setItem('wky_per', String(per));
+      box.textContent = '計算中…';
+      try {
+        const start = new Date(startStr + 'T00:00:00');
+        const rs = await _gdDb().collection(window.CONFIG.COLLECTIONS.ROSTER).where('cls', '==', cls).get();
+        const students = rs.docs.map(d => d.data()).sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0));
+        if (!students.length) { box.textContent = '此班尚無名冊資料。'; return; }
+
+        await loadSchedule();
+        // 每一週該班實際的上課日（可能不只一天；全部停課則為 null）
+        const classDateList = Array.from({ length: weeks }, (_, i) =>
+          classDatesOfWeek(cls, new Date(start.getTime() + i * 7 * 86400000)));
+        const classDates = classDateList.map(a => a.length ? a[0] : null);
+
+        _wkyRows = await Promise.all(students.map(async s => {
+          const wk = new Array(weeks).fill(0);
+          const att = new Array(weeks).fill(false);
+          try {
+            const p = await _gdDb().collection(window.CONFIG.COLLECTIONS.PROGRESS).doc(s.studentId).get();
+            const data = p.exists ? p.data() : {};
+            const hist = (window.GRADING && GRADING.statHistory) ? GRADING.statHistory(data) : (data.history || []);
+            hist.forEach(ev => {
+              const at = Number(ev.at); if (!at) return;
+              const idx = Math.floor((at - start.getTime()) / (7 * 86400000));
+              if (idx >= 0 && idx < weeks) wk[idx] += _evStars(ev);
+            });
+            const attMap = data.attendance || {};
+            // 該週任何一次上課日有登入就算出席
+            classDateList.forEach((days, i) => { if (days.some(d => attMap[d])) att[i] = true; });
+          } catch (e) {}
+          return { s, wk, att };
+        }));
+        _wkyWeeks = weeks;
+        _wkyDates = classDates;
+
+        const head = Array.from({ length: weeks }, (_, i) => {
+          const d = classDates[i];
+          return `<th class="border border-slate-200 px-2 py-1 text-center ${d ? '' : 'bg-slate-100 text-slate-400'}">第${i + 1}週${d ? `<div class="text-[10px] font-normal text-slate-400">${d.slice(5)}</div>` : '<div class="text-[10px] font-normal">停課</div>'}</th>`;
+        }).join('');
+        const body = _wkyRows.map(({ s, wk, att }) => {
+          const tds = wk.map((st, i) => {
+            if (!classDates[i]) return `<td class="border border-slate-200 px-2 py-1 text-center bg-slate-50 text-slate-300">—</td>`;
+            /* 這週有登入但沒拿星才給基本分，缺席維持零分（規則在 shared/schedule.js，和學生端同一支） */
+            const score = window.SCHEDULE
+              ? SCHEDULE.weekScore(st, att[i], base, per)
+              : Math.min(100, base + st * per);
+            const cls2 = score === 0 ? 'text-slate-300' : (st === 0 ? 'text-slate-400' : (score >= 100 ? 'text-emerald-700 font-bold' : 'text-slate-700 font-bold'));
+            const mark = att[i] ? '' : '<span class="text-red-400" title="該日未登入">·</span>';
+            const why = st > 0 ? `${st} 星 → ${base} + ${st}×${per}`
+                      : (att[i] ? `0 星，但該日有登入 → 基本分 ${base}`
+                                : '0 星，而且該日沒有登入 → 0 分');
+            return `<td class="border border-slate-200 px-2 py-1 text-center ${cls2}" title="${why}">${score}${mark}</td>`;
+          }).join('');
+          const totalStars = wk.reduce((a, b) => a + b, 0);
+          return `<tr>
+            <td class="border border-slate-200 px-2 py-1 text-center font-mono">${s.no || ''}</td>
+            <td class="border border-slate-200 px-2 py-1 whitespace-nowrap">${s.name || ''}</td>
+            ${tds}
+            <td class="border border-slate-200 px-2 py-1 text-center font-bold text-amber-600">${totalStars}★</td>
+          </tr>`;
+        }).join('');
+        box.innerHTML = `<table class="w-full text-xs border-collapse">
+          <thead><tr class="bg-slate-50">
+            <th class="border border-slate-200 px-2 py-1">座號</th>
+            <th class="border border-slate-200 px-2 py-1">姓名</th>
+            ${head}
+            <th class="border border-slate-200 px-2 py-1">總星</th>
+          </tr></thead><tbody>${body}</tbody></table>
+          <p class="text-[11px] text-slate-400 mt-2">表格內為<b>實際登記分數</b>＝ ${base} ＋ 星數×${per}（滑鼠移上去看計算過程）；0 星但該日有登入 → 基本分 ${base}；0 星又沒有登入紀錄 → 0 分（紅點）；標「停課」的週不計分。紅點「·」代表該次上課日沒有登入紀錄。</p>`;
+      } catch (e) {
+        box.textContent = '計算失敗（需教師帳號登入）：' + e.message;
+      }
+    }
+    function exportWeeklyCsv() {
+      if (!_wkyRows.length) { showToast('請先按「計算」', true); return; }
+      const base = Math.max(0, Math.min(100, Number(document.getElementById('wkyBase').value) || 0));
+      const per  = Math.max(1, Number(document.getElementById('wkyPer').value) || 4);
+      const head = ['座號', '姓名', ...Array.from({ length: _wkyWeeks }, (_, i) => `第${i + 1}週`), '總星數'];
+      const lines = [head.join(',')];
+      /* ★ 這裡才是真正抄進成績簿的數字 —— 規則一定要和畫面同一支 */
+      _wkyRows.forEach(({ s, wk, att }) => {
+        const scores = wk.map((st, i) => !_wkyDates[i] ? ''            // 停課週留空
+          : (window.SCHEDULE ? SCHEDULE.weekScore(st, att[i], base, per)
+                             : Math.min(100, base + st * per)));
+        lines.push([s.no || '', s.name || '', ...scores, wk.reduce((a, b) => a + b, 0)].join(','));
+      });
+      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `每週評分_${document.getElementById('wkyClass').value}班.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+    window.openWeeklyModal = openWeeklyModal;
+    window.closeWeeklyModal = closeWeeklyModal;
+    window.loadWeekly = loadWeekly;
+    window.exportWeeklyCsv = exportWeeklyCsv;
+
+  </script>
+
+<script>
+/* 帶時間戳開啟教師工具頁：HTML 本身也會被 GitHub Pages 快取 10 分鐘，
+   網址多一個參數，瀏覽器就當成不同的網址，不會拿到舊版。
+   （放在 body 結尾，DOM 已經在了才抓得到連結。） */
+(function () {
+  var t = String(Date.now());
+  var list = document.querySelectorAll('a[data-bust]');
+  for (var i = 0; i < list.length; i++) {
+    var a = list[i];
+    a.href += (a.href.indexOf('?') < 0 ? '?' : '&') + 'v=' + t;
+  }
+})();
+</script>
+</body>
+</html>

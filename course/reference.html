@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>程式設計單元 · 參考說明</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+    body{ font-family:'Noto Sans TC',sans-serif; background:#f8fafc; color:#1e293b; }
+    html{ scroll-behavior:smooth; }
+    details>summary{ list-style:none; } details>summary::-webkit-details-marker{ display:none; }
+    details[open] .chev{ transform:rotate(90deg); }
+  </style>
+<style>
+/* === 全站紙膠帶手作風套件（以 hub 為準，勿重複注入） === */
+body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba(120,113,108,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(120,113,108,.06) 1px,transparent 1px) !important; background-size:26px 26px !important; }
+.tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08);background:rgba(250,204,21,.3);z-index:5}
+.underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
+/* 螢光筆畫重點（與流程圖闖關頁一致） */
+.hl{background:linear-gradient(transparent 52%, rgba(250,204,21,.65) 52%);font-weight:800;padding:0 1px;border-radius:2px}
+.hl-b{background:linear-gradient(transparent 52%, rgba(147,197,253,.7) 52%);font-weight:800;padding:0 1px;border-radius:2px}
+</style>
+  <!-- 身分守門：未從闖關基地登入者導回入口 -->
+  <script src="config.js"></script>
+<script src="../shared/guard.js"></script>
+</head>
+<body class="min-h-screen">
+
+  <!-- 返回基地 -->
+  <a href="hub.html" title="返回闖關基地" class="fixed top-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800 text-white font-bold text-sm px-3.5 py-2 rounded-full shadow-lg hover:bg-slate-700 transition">← 返回基地</a>
+
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+
+    <header class="text-center mb-8">
+      <span class="inline-block bg-amber-200 text-amber-900 text-xs font-bold px-4 py-1.5 rounded-full border border-amber-300 mb-4">📘 程式設計單元</span>
+      <h1 class="text-3xl sm:text-4xl font-black mb-3"><span class="underline-doodle px-1">程式設計 參考說明</span></h1>
+      <p class="text-slate-500 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">這是流程圖與 Scratch 程式共用的說明書。學習動線：<b class="text-slate-700">① 讀懂情境 → ② 畫出流程圖（先通關）→ ③ 依流程圖寫程式</b>。</p>
+    </header>
+
+    <!-- 動線提示 -->
+    <div class="grid grid-cols-3 gap-2 sm:gap-3 mb-8 text-center">
+      <div class="bg-white rounded-xl border border-slate-200 p-3 shadow-sm"><div class="text-2xl mb-1">📖</div><div class="text-xs sm:text-sm font-bold">① 讀情境</div></div>
+      <div class="bg-white rounded-xl border border-purple-200 p-3 shadow-sm"><div class="text-2xl mb-1">🧩</div><div class="text-xs sm:text-sm font-bold text-purple-700">② 畫流程圖<br><span class="font-normal text-[11px] text-slate-400">通關 +2★</span></div></div>
+      <div class="bg-white rounded-xl border border-orange-200 p-3 shadow-sm"><div class="text-2xl mb-1">🐱</div><div class="text-xs sm:text-sm font-bold text-orange-700">③ 寫程式<br><span class="font-normal text-[11px] text-slate-400">依完成度 +2~3★</span></div></div>
+    </div>
+
+    <!-- 單元快速跳轉 -->
+    <div id="unit-nav" class="flex flex-wrap gap-2 mb-8 justify-center"></div>
+
+    <!-- 單元說明 -->
+    <div id="units" class="space-y-4"></div>
+
+    <footer class="mt-12 text-center text-xs text-slate-400">資訊科技課程</footer>
+  </div>
+
+  <script>
+    // 自動畫重點：「」內的關鍵詞上黃色螢光；數量詞上藍色（與流程圖闖關頁同一套規則）
+    function mark(t){
+      return String(t||'')
+        .replace(/「([^」]+)」/g, '<span class="hl">「$1」</span>')
+        .replace(/(\d+(?:\s*[～~-]\s*\d+)?\s*(?:張|次|項|個|人|拍|秒|分))/g, '<span class="hl-b">$1</span>');
+    }
+
+    // 10 個程式設計單元（資料來源：Scratch 進階程式設計）
+    const UNITS = [
+      { id:'2-1-1A', no:1, title:'班級置物櫃', subtitle:'陣列概念與基礎操作', difficulty:2,
+        desc:'學習清單（陣列）的資料結構概念。透過「班級置物櫃」情境，練習清單專屬積木，實作新增、刪除、插入與取代，模擬日常置物櫃的資料管理應用。',
+        steps:['概念建立：清單為整體置物櫃，索引值為格子編號，項目資料為存放物品。','新增與插入：以「添加」將物品放至最後空位，或「插入」特定編號觀察後方推移。','替換與更新：使用「取代」定位指定格子，模擬拿出舊物換成新物，理解資料覆蓋。','刪除與重置：使用「刪除」清空特定格子，並以「全部刪除」進行程式初始化。'] },
+      { id:'2-1-1B', no:2, title:'集合點名', subtitle:'清單查詢與邏輯判斷', difficulty:2,
+        desc:'學習清單（陣列）的讀取與判斷功能。透過模擬「集合點名」情境，練習檢查名單中是否存在特定資料，實作定位資料、獲取長度與回報出席狀況的自動化邏輯。',
+        steps:['讀取與定位：使用「第幾項」取得內容，或反向查詢「資料位在第幾項」理解索引對應。','長度統計：利用「長度」積木即時掌握班級總人數，作為後續自動化點名的基礎數據。','存在性判斷：應用「包含某人嗎」積木，判斷特定學生是否在名單內以確認出席狀態。','綜合回報：整合查詢與判斷結果，讓角色說出名單總人數與點名資訊，完成資訊化管理。'] },
+      { id:'2-1-2', no:3, title:'演奏小星星', subtitle:'陣列應用與清單播放', difficulty:3,
+        desc:'學習清單（陣列）的序列播放應用。透過將音樂簡譜資料匯入清單，練習連續資料的儲存方法，實作結合計次迴圈依序取出資料執行播放的高效管理邏輯。',
+        steps:['外部匯入：將音階數值文字檔匯入清單，快速建立連續資料序列供程式讀取。','陣列儲存：利用單一清單結構，集中管理整首音樂的所有音階數值。','迴圈讀取：依據清單長度執行計次迴圈，逐項取出音階資料並執行音效播放。','索引控制：建立變數作為清單的索引值，精準控制當前演奏進度與讀取項次。'] },
+      { id:'2-1-3', no:4, title:'計算成績', subtitle:'陣列應用與資料運算', difficulty:3,
+        desc:'學習清單（陣列）與計次迴圈的數值運算。透過匯入學生成績資料，練習利用變數記錄總分與索引項次，實作連續讀取、自動加總與計算平均分數的程式邏輯。',
+        steps:['外部匯入：將成績數值文字檔批次匯入清單，快速建立可用於計算的連續資料序列。','索引控制：利用自訂的「第幾項」變數作為索引值，精準定位並讀取清單中的特定成績。','迴圈加總：依據清單長度設定迴圈次數，逐一取出清單成績並累加至總分變數中。','算術運算：待迴圈結束後，將總分變數除以清單長度，計算出平均值並由角色說出結果。'] },
+      { id:'2-1-4', no:5, title:'抽號碼', subtitle:'陣列應用與隨機抽籤', difficulty:4,
+        desc:'學習清單（陣列）與隨機取數的綜合應用。透過建立全班座號清單，練習資料初始化與不重複抽籤邏輯，實作從大量資料中隨機挑選特定人數的程式運算。',
+        steps:['資料建立：利用計次迴圈配合變數累加，將 1 至特定號碼依序添加至清單中建立名單。','隨機抽籤：結合隨機取數積木，從 1 到「目前的清單長度」中隨機抽出一個索引值。','防重複法：將已被抽出的座號從清單中「刪除」，確保剩餘的抽籤過程絕對不會重複。','迴圈控制：設定重複執行的次數來決定要抽出多少個號碼，並由角色依序宣告結果。'] },
+      { id:'2-1-5', no:6, title:'撲克發牌', subtitle:'陣列洗牌與依序發牌', difficulty:5,
+        desc:'學習清單（陣列）的動態操作與資料移轉。透過模擬發牌過程，練習雙重迴圈初始化牌組、隨機抽取洗牌，實作依序更換造型與刪除項次的完整發牌邏輯。',
+        steps:['資料建立：利用雙重迴圈（花色與數字）將 52 張撲克牌資料完整存入牌堆清單。','洗牌演算：從原始牌堆隨機抽取項次，移至新的洗牌清單中，直到原始牌堆完全清空。','發牌動畫：點擊角色後廣播發牌訊息，使撲克牌角色依據清單首項內容更換對應造型。','動態刪除：發出卡牌後同步刪除清單第一項，確保牌組不重複，並在清單為空時隱藏角色。'] },
+      { id:'2-2-1', no:7, title:'動物點點名', subtitle:'變數範圍與應用', difficulty:4,
+        desc:'學習變數的「有效範圍」與資料共享概念。透過點擊動物角色的互動操作，練習建立全域與角色變數，實作並觀察兩者在計數累加與資料獨立性上的邏輯差異。',
+        steps:['變數範圍：認識「全域變數」（所有角色共用讀寫）與「角色變數」（單一角色專屬私有）的屬性差異。','全域共用：使用全域變數讓多個角色共用。依序點擊不同動物時，數字會接續累加，體驗資料共享特性。','角色獨立：使用角色變數。當畫面上有多隻同款小貓時，點擊不同小貓會觸發各自獨立的計數器，互不干擾。','場景比較：理解全域變數適用於「遊戲總分」等整體數據；角色變數適用於「個別生命值」等獨立紀錄。'] },
+      { id:'2-2-2', no:8, title:'戰車王', subtitle:'獨立變數與碰撞偵測', difficulty:5,
+        desc:'學習「角色變數」的進階應用與碰撞偵測。透過雙人對戰遊戲，練習鍵盤控制與子彈發射，實作利用獨立變數分別記錄每輛敵機受擊次數的狀態管理邏輯。',
+        steps:['變數應用：新增「僅適用當前角色」的血量變數，使每輛敵機能夠獨立記錄與扣減各自的生命值。','位移控制：偵測玩家按下的方向鍵，控制我方戰車能夠精準轉換面朝方向並平滑平移。','發射偵測：按下空白鍵廣播發射訊息，產生子彈分身並使其由戰車當下位置朝前方快速移動。','碰撞判斷：持續偵測子彈與敵機的碰撞事件，觸發時切換爆炸造型、刪除子彈，並獨立扣減該敵機的血量。'] },
+      { id:'2-3-1', no:9, title:'分身小貓', subtitle:'分身機制與私有變數', difficulty:4,
+        desc:'學習「分身」機制與「角色變數」的結合應用。透過動態生成多隻小貓，練習賦予分身獨立編號（ID），實作多個分身同時行動且能個別回報自身狀態的進階功能。',
+        steps:['複製隱藏：利用迴圈快速建立多個分身，並在程式啟動時將本尊隱藏，確保舞台僅呈現受控的分身群。','獨立行為：使用「當分身產生」積木定義動作邏輯，讓所有分身能同時執行走路等指令，大幅精簡程式碼。','變數繼承：利用角色變數特性，在建立分身前累加數值，使分身產生瞬間「繼承」該數值作為專屬 ID。','報數實作：讓分身在行走過程中說出自己的專屬編號，實作外觀相同但擁有獨立資料屬性的物件行為。'] },
+      { id:'2-3-2', no:10, title:'螞蟻搬乳酪', subtitle:'分身應用與同步偵測', difficulty:5,
+        desc:'學習「分身」的目標追蹤與狀態切換。透過模擬螞蟻覓食行為，練習利用分身大量複製角色，實作偵測目標、同步搬運（跟隨）以及達陣得分重置的綜合邏輯判斷。',
+        steps:['大量複製：利用分身積木產生大量螞蟻群，不僅大幅精簡程式碼，更能營造群體行動的視覺效果。','導向移動：結合「面朝角色」與隨機轉向角度，模擬螞蟻自動搜尋目標並朝向乳酪前進的覓食行為。','搬運邏輯：當螞蟻碰到乳酪後改變自身狀態，並透過迴圈與座標定位，使乳酪緊緊跟隨該螞蟻移動。','得分判斷：持續偵測搬運中的螞蟻是否抵達蟻穴，若成功達陣則增加玩家分數變數，並將乳酪重置回起點。'] }
+    ];
+
+    const stars = (n) => '⭐'.repeat(n) + '☆'.repeat(5 - n);
+
+    // 快速跳轉
+    document.getElementById('unit-nav').innerHTML = UNITS.map(u =>
+      `<a href="#u${u.no}" class="text-xs font-bold bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 px-3 py-1.5 rounded-full shadow-sm transition">${u.no}. ${u.title}</a>`
+    ).join('');
+
+    // 單元卡片
+    document.getElementById('units').innerHTML = UNITS.map(u => `
+      <details id="u${u.no}" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-20" ${u.no === 1 ? 'open' : ''}>
+        <summary class="cursor-pointer p-5 flex items-center gap-4 hover:bg-slate-50 transition">
+          <div class="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-lg font-black flex-shrink-0">${u.no}</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-black text-lg leading-tight">${u.title} <span class="text-slate-400 font-mono text-xs">${u.id}</span></div>
+            <div class="text-sm text-slate-500">${u.subtitle}　<span class="text-amber-500 text-xs">難度 ${stars(u.difficulty)}</span></div>
+          </div>
+          <svg class="chev w-5 h-5 text-slate-400 flex-shrink-0 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <div class="px-6 sm:px-8 pb-6 border-t border-slate-100">
+          <div class="mt-5 mb-5">
+            <div class="text-sm font-black text-indigo-500 mb-2">📖 情境說明</div>
+            <p class="text-lg sm:text-xl text-slate-800 leading-loose bg-indigo-50/60 border-l-4 border-indigo-300 rounded-r-xl px-4 py-3">${mark(u.desc)}</p>
+          </div>
+          <div>
+            <div class="text-sm font-black text-purple-500 mb-3">🧩 完成步驟（畫流程圖時的順序參考）</div>
+            <ol class="space-y-3">
+              ${u.steps.map((s, i) => `<li class="flex gap-3 items-start text-lg sm:text-xl text-slate-800 bg-white border border-slate-100 rounded-xl px-3 py-2.5 shadow-sm"><span class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-700 text-base font-black flex items-center justify-center mt-0.5">${i + 1}</span><span class="leading-loose">${mark(s)}</span></li>`).join('')}
+            </ol>
+            <p class="text-xs text-slate-400 mt-4">💡 <span class="hl">黃色</span>是關鍵動作、<span class="hl-b">藍色</span>是數量。</p>
+          </div>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <a href="flowchart.html" class="text-xs font-bold bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">🧩 去畫流程圖</a>
+            <a href="flowchart.html" class="text-xs font-bold bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition">🐱 去寫程式</a>
+          </div>
+        </div>
+      </details>
+    `).join('');
+  </script>
+</body>
+</html>

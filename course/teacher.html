@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教師管理後台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="config.js"></script>
+  <script src="../shared/auth.js"></script>
+  <style>
+    body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
+    .tab-frame { width: 100%; height: calc(100dvh - var(--top, 190px)); min-height: 480px; border: 0; display: block; background: #f8fafc; }
+    .tab-btn[aria-selected="true"] { background: #4f46e5; color: #fff; box-shadow: 0 6px 14px -6px rgba(79,70,229,.7); }
+    .nav-scroll { scrollbar-width: none; } .nav-scroll::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800">
+  <!-- =====================================================================
+       教師管理後台 —— 所有教師功能集中在這一頁
+       ---------------------------------------------------------------------
+       版型參考 byte-core-su/cs-11507 的 shared/teacher.html：登入一次，上方一排分頁切換。
+
+       ★ 每個分頁是一支獨立的頁面（dashboard.html、shared/*.html），放在 iframe 裡：
+         · 登入只在這裡做一次。分頁和這一頁同網域、同一個瀏覽器分頁，
+           Firebase 的登入狀態（存在 sessionStorage）自動共用，不必每頁再登入。
+         · 那些頁面在 iframe 裡會自己藏起「回教師端」連結和各自的標頭（嵌入模式）。
+         · 第一次點到才載入，之後切換不會重新載入（填到一半的東西不會不見）。
+       ★ 為什麼不把它們全部寫進同一個檔案：成績總覽一支就 25 萬字元，
+         合在一起任何一處出錯，整個後台都會一起壞；分開來壞一頁只影響一頁。
+
+       分頁（「作品評分」「評分範本」「排行賽」只在 config.js 有設 GRADER_URL 時出現）：
+         📊 成績總覽　🐱 作品評分　📗 評分範本　📥 繳交審核　📈 題目分析　🏆 排行賽　🔍 可疑紀錄　👥 學生帳號
+       ===================================================================== -->
+  <main class="min-h-screen p-3 sm:p-5">
+    <!-- 登入 -->
+    <section id="login-view" class="hidden min-h-[calc(100vh-2.5rem)] grid place-items-center">
+      <form id="login-form" class="w-full max-w-md space-y-5 rounded-3xl bg-white p-8 shadow-xl">
+        <div class="text-center">
+          <p class="text-xs font-black tracking-[.2em] text-indigo-600" data-school></p>
+          <h1 class="mt-2 text-2xl font-black">資訊科技闖關系統</h1>
+          <p class="mt-1 text-sm font-bold text-slate-500">教師管理後台</p>
+        </div>
+        <label class="block text-sm font-bold">教師信箱
+          <input id="teacher-email" type="email" autocomplete="username" required class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"></label>
+        <label class="block text-sm font-bold">密碼
+          <input id="teacher-password" type="password" autocomplete="current-password" required class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"></label>
+        <p id="login-message" class="text-sm text-slate-500 min-h-[1.25rem]" role="status"></p>
+        <button id="login-go" class="w-full rounded-xl bg-indigo-600 py-3 font-bold text-white hover:bg-indigo-700 disabled:bg-slate-400">登入</button>
+        <p class="text-xs text-slate-400 leading-relaxed text-center">教師帳號是 Firebase 裡建立的「電子郵件／密碼」帳號（config.js 的 SCHOOL.TEACHER_EMAIL）。</p>
+      </form>
+    </section>
+
+    <!-- 載入中 -->
+    <section id="loading-view" class="min-h-[60vh] grid place-items-center text-slate-500 font-bold">正在確認登入狀態…</section>
+
+    <!-- 後台 -->
+    <section id="admin-view" class="hidden mx-auto max-w-[1400px]">
+      <header id="admin-head" class="mb-3 flex flex-col gap-3 rounded-2xl bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-xs font-black tracking-[.2em] text-indigo-600" data-school></p>
+          <h1 class="mt-1 text-xl sm:text-2xl font-black">資訊科技闖關系統｜教師管理</h1>
+          <p class="mt-0.5 text-xs text-slate-500">登入身分：<span id="who"></span></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="hub.html" target="_blank" rel="noopener" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">學生入口 ↗</a>
+          <button id="logout" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">登出</button>
+        </div>
+      </header>
+      <nav id="tabs" class="nav-scroll mb-3 flex gap-1.5 overflow-x-auto rounded-2xl bg-white p-1.5 shadow-sm" role="tablist" aria-label="教師功能"></nav>
+      <div id="panels" class="overflow-hidden rounded-2xl bg-white shadow-sm"></div>
+    </section>
+  </main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const C = window.CONFIG || {};
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+/* 老師的登入只留在這個瀏覽器分頁：學生也用同一個 Firebase 專案，
+   留在整個瀏覽器的話，下一個打開學生頁的人會被當成老師。 */
+const persistReady = setPersistence(auth, browserSessionPersistence).catch(() => {});
+
+const GRADER = !!String(C.GRADER_URL || '').trim();
+/* 分頁清單 —— 加一個功能就加一列 */
+const TABS = [
+  { id: 'overview', label: '📊 成績總覽', src: 'dashboard.html',       desc: '全班星數、每週評分、出席、上課日、即時看板' },
+  { id: 'works',    label: '🐱 作品評分', src: '../shared/works.html', desc: '每一關的作品分數、開作品、手動調整星數、相同作品', when: GRADER },
+  { id: 'refs',     label: '📗 評分範本', src: '../shared/refs.html',  desc: '各關的參考解答與空白範本', when: GRADER },
+  { id: 'shots',    label: '🧠 通關截圖', src: '../shared/shots.html', desc: '運算思維每一關的通關截圖、相同截圖', when: GRADER },
+  { id: 'review',   label: '📥 繳交審核', src: '../shared/review.html', desc: '流程圖圖片加分' },
+  { id: 'qstat',    label: '📈 題目分析', src: '../shared/qstat.html',  desc: '資訊倫理哪幾題全班一直錯' },
+  { id: 'arena',    label: '🏆 排行賽',   src: '../shared/arenaboard.html', desc: '資訊倫理闖關排行賽：匯入題庫、全部排名、退回次數', when: GRADER && C.ARENA !== false },
+  { id: 'audit',    label: '🔍 可疑紀錄', src: '../shared/audit.html',  desc: '沒有作答過程、作答太快的測驗紀錄' },
+  { id: 'accounts', label: '👥 學生帳號', src: '../shared/codes.html',  desc: '匯入名冊、驗證碼查看與重設' }
+].filter(t => t.when !== false);
+
+const $ = id => document.getElementById(id);
+const show = v => { ['login-view', 'loading-view', 'admin-view'].forEach(x => $(x).classList.toggle('hidden', x !== v)); };
+document.querySelectorAll('[data-school]').forEach(el => {
+  el.textContent = [(C.SCHOOL || {}).NAME, (C.SCHOOL || {}).GRADE, C.TERM].filter(Boolean).join(' · ');
+});
+$('teacher-email').value = AUTH.TEACHER_EMAIL || '';
+
+/* ── 分頁 ── */
+const loaded = {};
+function readTab() {
+  const h = location.hash.replace('#', '');
+  if (TABS.some(t => t.id === h)) return h;
+  try { const s = localStorage.getItem('admin-tab'); if (TABS.some(t => t.id === s)) return s; } catch (e) {}
+  return TABS[0].id;
+}
+function fitFrames() {
+  const top = $('panels').getBoundingClientRect().top + window.scrollY + 12;
+  document.documentElement.style.setProperty('--top', Math.round(top) + 'px');
+}
+function openTab(id, reload) {
+  const t = TABS.find(x => x.id === id) || TABS[0];
+  document.querySelectorAll('.tab-btn').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t.id)));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.tab !== t.id));
+  const frame = $('frame-' + t.id);
+  if (!loaded[t.id] || reload) {
+    frame.src = t.src + (t.src.includes('?') ? '&' : '?') + 'v=' + Date.now();   // 每次都拿最新版（GitHub Pages 會快取 10 分鐘）
+    loaded[t.id] = true;
+  }
+  if (location.hash !== '#' + t.id) history.replaceState(null, '', '#' + t.id);
+  try { localStorage.setItem('admin-tab', t.id); } catch (e) {}
+  fitFrames();
+}
+function buildTabs() {
+  $('tabs').innerHTML = TABS.map(t =>
+    `<button class="tab-btn shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 transition" role="tab" data-tab="${t.id}" title="${t.desc}" aria-selected="false">${t.label}</button>`).join('') +
+    `<button id="reload-tab" class="ml-auto shrink-0 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-400 hover:bg-slate-100" title="重新載入這一頁的資料">↻ 重新整理</button>`;
+  $('panels').innerHTML = TABS.map(t =>
+    `<div class="tab-panel hidden" data-tab="${t.id}"><iframe id="frame-${t.id}" class="tab-frame" title="${t.label}"></iframe></div>`).join('');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.tab-btn'); if (b) { openTab(b.dataset.tab); return; }
+  if (e.target.closest('#reload-tab')) { openTab(readTab(), true); }
+});
+window.addEventListener('hashchange', () => openTab(readTab()));
+window.addEventListener('resize', fitFrames);
+/* 分頁裡的頁面可以叫後台切換分頁（例如成績總覽的「名冊管理」→ 學生帳號） */
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin) return;
+  const d = e.data || {};
+  if (d.type === 'admin-open' && TABS.some(t => t.id === d.tab)) openTab(d.tab, !!d.reload);
+});
+
+/* ── 登入 ── */
+let started = false;
+onAuthStateChanged(auth, user => {
+  if (user && user.email && AUTH.isTeacherEmail(user.email)) {
+    $('who').textContent = user.email;
+    show('admin-view');
+    if (!started) { started = true; buildTabs(); openTab(readTab()); }
+    return;
+  }
+  /* 沒登入，或登入的是學生（這台電腦剛有學生用過）—— 一律請老師登入 */
+  show('login-view');
+  if (user && !user.isAnonymous && user.email) {
+    $('login-message').textContent = '這個瀏覽器目前登入的是 ' + user.email + '（不是教師帳號），請用教師帳號登入。';
+  }
+});
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = $('teacher-email').value.trim(), pw = $('teacher-password').value;
+  const msg = $('login-message');
+  if (!AUTH.isTeacherEmail(email)) { msg.textContent = '這不是教師帳號（config.js 的 SCHOOL.TEACHER_EMAIL）。'; return; }
+  $('login-go').disabled = true; msg.textContent = '登入中…';
+  try {
+    await persistReady;
+    await signInWithEmailAndPassword(auth, email, pw);
+    msg.textContent = '';
+  } catch (err) {
+    const c = (err && err.code) || '';
+    msg.textContent = /invalid|wrong|not-found/.test(c)
+      ? '信箱或密碼不對。（教師帳號要先在 Firebase Console → Authentication 建立）'
+      : AUTH.hintFor(c || 'unknown');
+  } finally { $('login-go').disabled = false; }
+});
+$('logout').addEventListener('click', async () => {
+  try { await signOut(auth); } catch (e) {}
+  location.replace(location.pathname);
+});
+</script>
+</body>
+</html>

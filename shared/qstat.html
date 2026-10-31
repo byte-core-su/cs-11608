@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ★ 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」與標頭 -->
+  <script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+  <style>.embedded [data-standalone] { display: none !important; }</style>
+<title>題目分析 · 資訊科技課程</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!--
+  這一頁回答一句話：**這一節我下次該重講什麼？**
+
+  「這次挑戰答對 85%」只告訴你學生大概懂了，
+  卻沒告訴你他不懂的是哪一件事 —— 而那才是備課要用的。
+-->
+<script>
+(function () {
+  /* ?v=… 防快取：老師的工具頁一天開不了幾次，永遠拿最新的最划算。 */
+  var v = '?v=' + Date.now();
+  document.write('<scr' + 'ipt src="../course/config.js' + v + '"></scr' + 'ipt>');
+  document.write('<scr' + 'ipt src="../course/content/ethics.js' + v + '"></scr' + 'ipt>');
+  /* ⚠️ anskey.js 一定要載：題庫裡的答案是雜湊，
+     教師端要靠它反查「哪一個選項才是對的」。 */
+  ['auth.js', 'anskey.js', 'qstat.js'].forEach(function (f) {
+    document.write('<scr' + 'ipt src="' + f + v + '"></scr' + 'ipt>');
+  });
+})();
+</script>
+
+<style>
+  html,body,button,input,select{font-family:'Noto Sans TC',system-ui,sans-serif}
+  body{background:#e7e5e4}
+  .pop{animation:pop .3s ease both}
+  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .bar{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:999px}
+</style>
+</head>
+<body class="min-h-screen text-slate-800">
+
+<main class="max-w-5xl mx-auto px-4 py-8">
+  <header class="mb-6">
+    <a href="#" id="back-teacher" data-standalone class="text-sm font-bold text-slate-400 hover:text-slate-700">← 回教師端</a>
+    <h1 class="text-2xl sm:text-3xl font-black mt-2">📊 題目分析</h1>
+    <p class="text-slate-500 text-sm mt-2 leading-relaxed">
+      全班一直答錯的題目排在最前面 —— 那幾題就是下一節要重講的東西。<br>
+      <span class="text-slate-400 text-xs">
+        ⚠️ 這裡的「次數」是<b>這一題被抽到幾次</b>，不是幾個學生做過。
+        題目是從該節題庫隨機抽的，答錯還會重新洗牌（避免背題序），
+        所以同一個人可能遇到同一題好幾次。
+        拿來看「哪幾題全班卡住」很準；<b>不能</b>當成考卷的鑑別度。
+      </span>
+    </p>
+  </header>
+  <div id="app"><p class="text-slate-400 text-sm">載入中…</p></div>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged,
+         setPersistence, browserSessionPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const C = window.CONFIG || {};
+const TERM = C.TERM || '11501';
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const PROGRESS = (C.COLLECTIONS && C.COLLECTIONS.PROGRESS) || (TERM + '-progress');
+const ROSTER = (C.COLLECTIONS && C.COLLECTIONS.ROSTER) || 'roster';
+const MODULE = 'ethics';          // 章節測驗掛在這個模組代號底下
+
+const el = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+{ const b = el('back-teacher'); if (b) b.href = '../course/teacher.html'; }
+
+/* 名冊的欄位是 cls／no。沒填班級的學生歸在「未分班」（和 review.html 同一套）。 */
+function clsOf(sid, r) {
+  return String((r && r.cls) || '').trim() || '未分班';
+}
+
+const state = { who: null, cls: '', minN: 5, open: '', students: [], err: '' };
+const BANK = window.QSTAT ? QSTAT.bank(window.QUIZ_CONTENT) : {};
+
+/* ── 登入：只有老師 ─────────────────────────────────
+   ⚠️ 不能只判斷「有沒有人登入」。教師端和學生頁同一個 Firebase 專案、
+      同一個網域，登入狀態整個瀏覽器共用 —— 這台電腦開過學生頁的話，
+      user 就是非 null，直接放行會變成「畫面進得去但每一筆讀取都被規則擋下」。 */
+function isTeacher(u) {
+  return !!(u && u.email && window.AUTH && AUTH.isTeacherEmail(u.email));
+}
+/* 持久性要和教師端一致（SESSION ＝ sessionStorage），而且要在
+   掛上 onAuthStateChanged 之前設好 —— 否則會變成「又要登入一次」。 */
+await setPersistence(auth, browserSessionPersistence).catch(() => {});
+onAuthStateChanged(auth, async (u) => {
+  state.who = isTeacher(u) ? u : null;
+  if (!state.who) { draw(); return; }
+  await load();
+  draw();
+});
+
+async function load() {
+  try {
+    const [rs, ps] = await Promise.all([
+      getDocs(collection(db, ROSTER)),
+      getDocs(collection(db, PROGRESS))
+    ]);
+    const roster = {};
+    rs.forEach(d => { roster[d.id] = d.data(); });
+    const prog = {};
+    ps.forEach(d => { prog[d.id] = d.data() || {}; });
+
+    /* ★ 名單以**名冊**為準，不是以進度文件為準：
+       還沒有人做過測驗的班級也要出現在下拉選單（那正是最需要看到的班）。
+       進度文件只回答「他做過什麼」，沒做過就是空的，不是不存在。 */
+    state.students = Object.keys(roster).sort().map(sid => {
+      const p = prog[sid] || {};
+      const mod = ((p.modules || {})[MODULE]) || {};
+      return {
+        id: sid,
+        name: (roster[sid] || {}).name || p.name || sid,
+        cls: clsOf(sid, roster[sid]),
+        qstat: mod.qstat || {}
+      };
+    });
+    /* 一載入就選好第一個班（和教師成績登錄系統、繳交審核頁一樣，
+       一開啟就有一個班在作用中，不必先點一下才看得到東西）。 */
+    const cs = [...new Set(state.students.map(s => s.cls))].sort();
+    if (!state.cls && cs.length) state.cls = cs[0];
+    state.err = '';
+  } catch (e) {
+    /* 讀不到就講清楚是什麼問題 —— 「載入失敗」四個字幫不上任何忙。 */
+    state.err = (e && e.code === 'permission-denied')
+      ? '安全規則擋下了整批讀取。這一頁只有教師帳號能用；' +
+        '如果你確定是用老師帳號登入的，請確認 firestore.rules 已經重新發布。'
+      : ('讀取失敗：' + ((e && e.message) || e));
+    console.error('[qstat] 讀取失敗', e);
+  }
+}
+
+function draw() {
+  const box = el('app');
+
+  if (!state.who) {
+    box.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 shadow p-8 text-center pop">
+      <p class="font-black text-lg mb-1">請用教師帳號登入</p>
+      <p class="text-slate-500 text-sm mb-5">這一頁看得到全班的作答統計，只有老師能開。</p>
+      <button id="login" class="px-6 py-3 bg-indigo-600 text-white font-black rounded-xl">教師登入</button>
+    </div>`;
+    el('login').onclick = () => (async () => { const c = await AUTH.askTeacherPassword(); if (c) await signInWithEmailAndPassword(auth, c.email, c.password); })().catch(e => {
+      state.err = '登入失敗：' + ((e && e.message) || e); draw();
+    });
+    if (state.err) box.insertAdjacentHTML('beforeend',
+      `<p class="text-rose-600 text-sm mt-4 text-center">${esc(state.err)}</p>`);
+    return;
+  }
+  if (state.err) {
+    box.innerHTML = `<div class="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-rose-800 pop">
+      <p class="font-black mb-1">讀不到資料</p><p class="text-sm leading-relaxed">${esc(state.err)}</p></div>`;
+    return;
+  }
+
+  const classes = [...new Set(state.students.map(s => s.cls))].sort();
+  const grouped = QSTAT.byClass(state.students);
+  const total = grouped[state.cls] || {};
+  const rows = QSTAT.rank(total, BANK, state.minN);
+  /* 「有作答紀錄」只算目前這一班 —— 切到 801 卻看到全校的人數，
+     那個數字對不上眼前的清單，只會讓人懷疑資料是不是錯的。 */
+  const inCls = state.students.filter(s => !state.cls || s.cls === state.cls);
+  const done = inCls.filter(s => Object.keys(s.qstat || {}).length).length;
+
+  /* 班級：一排藥丸分頁，和教師成績登錄系統、繳交審核頁同一套操作。
+     ★ 不加「班級：」字樣，px 也收窄一點 —— 十二個班要排得下一行。
+       多那三個字就會擠掉最後一班，然後 812 自己掉到第二行。
+     ★ 也不顯示人數：這一列是用來切換的，不是用來讀數字的。
+       每顆按鈕後面掛一個括號，眼睛要多過濾一次才找得到班號。 */
+  const pill = (val, label, on) => `
+    <button data-cls="${esc(val)}" class="px-4 py-2 rounded-full text-sm transition-all duration-200
+      ${on ? 'font-bold bg-blue-600 text-white shadow-md transform hover:scale-105'
+           : 'font-medium bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 hover:shadow-sm'}">
+      ${esc(label)}</button>`;
+
+  box.innerHTML = `
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-4 pop">
+      <div class="flex items-center gap-2 flex-wrap">
+        ${classes.length
+          ? classes.map(c => pill(c, c, state.cls === c)).join('') + pill('', '全部', state.cls === '')
+          : '<span class="text-sm text-slate-400">名冊是空的 —— 先到教師端建立名冊</span>'}
+      </div>
+      <div class="flex items-center gap-3 flex-wrap mt-4 pt-4 border-t border-slate-100">
+        <label class="text-sm font-bold text-slate-600">至少被抽到</label>
+        <select id="minN" class="border-2 border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold">
+          ${[1, 5, 10, 20].map(n => `<option value="${n}" ${state.minN === n ? 'selected' : ''}>${n} 次</option>`).join('')}
+        </select>
+        <span class="text-xs text-slate-400 ml-auto">
+          ${state.cls ? esc(state.cls) + ' 班' : '全部'}：有作答紀錄 ${done} / ${inCls.length} 人
+        </span>
+      </div>
+    </div>`;
+
+  if (!rows.length) {
+    box.insertAdjacentHTML('beforeend', `
+      <div class="bg-white rounded-2xl border border-slate-200 shadow p-8 text-center text-slate-500 pop">
+        <p class="font-bold mb-1">${state.cls ? esc(state.cls) + ' 班還沒有資料' : '還沒有資料'}</p>
+        <p class="text-sm leading-relaxed">
+          ${state.cls ? '上面可以切到別的班看看。<br>' : ''}
+          逐題統計要等學生做過章節測驗才會有東西。<br>
+          <span class="text-slate-400 text-xs">若已經上過課還是空的：F12 看主控台有沒有
+          <code>[qstat]</code> 開頭的警告 —— 學生端寫不進去的話這裡就會是空的。</span>
+        </p></div>`);
+    wire();
+    return;
+  }
+
+  /* ★ 排行：答對率低的在最上面。
+     ⚠️ 「找不到對應題目」（題目被改寫過）不會被丟掉，會標出來 ——
+        安靜丟掉的話，你不會知道統計少了一塊。 */
+  box.insertAdjacentHTML('beforeend', `<div class="space-y-2">${rows.map((r, i) => {
+    const col = r.rate < 40 ? '#ef4444' : r.rate < 70 ? '#f59e0b' : '#10b981';
+    const opened = state.open === r.id;
+    return `
+    <div class="bg-white rounded-2xl border ${r.rate < 40 ? 'border-rose-200' : 'border-slate-200'} shadow-sm p-4 pop">
+      <div class="flex items-start gap-3">
+        <span class="text-xs font-black text-slate-300 mt-1 w-6 shrink-0">${i + 1}</span>
+        <div class="min-w-0 flex-1">
+          <p class="font-bold leading-relaxed">${r.q ? esc(r.q) : '<span class="text-slate-400">（題庫裡找不到這一題 —— 題目文字被改寫過，這是它改寫前的統計）</span>'}</p>
+          ${r.where && r.where.length ? `<p class="text-[11px] text-slate-400 mt-1">${esc(r.where.join('、'))}</p>` : ''}
+          <div class="bar mt-2"><i style="width:${r.rate}%;background:${col}"></i></div>
+          <p class="text-xs text-slate-500 mt-1">
+            答對率 <b style="color:${col}">${r.rate}%</b>
+            　被抽到 ${r.n} 次，答對 ${r.ok} 次
+          </p>
+        </div>
+        <button data-q="${r.id}" class="text-xs font-bold text-indigo-600 shrink-0 mt-1">${opened ? '收起' : '看是誰'}</button>
+      </div>
+      ${opened ? who(r) : ''}
+    </div>`;
+  }).join('')}</div>`);
+  wire();
+}
+
+/* 點開一題：這一題是哪幾個學生一直錯。
+   ★ 排行看的是「題目出問題沒有」，這裡看的是「誰要補」—— 兩件事都要。 */
+function who(r) {
+  const list = QSTAT.forQuestion(state.students, r.id, state.cls);
+  const opts = (r.options || []).map((t, i) =>
+    `<li class="${i === r.correct ? 'font-black text-emerald-700' : 'text-slate-500'}">${i === r.correct ? '✓ ' : '　'}${esc(t)}</li>`).join('');
+  return `<div class="mt-3 pt-3 border-t border-slate-100 grid sm:grid-cols-2 gap-4">
+    <div>
+      <p class="text-xs font-black text-slate-400 mb-1">選項</p>
+      <ol class="text-sm leading-relaxed">${opts || '<li class="text-slate-400">（題庫裡找不到）</li>'}</ol>
+    </div>
+    <div>
+      <p class="text-xs font-black text-slate-400 mb-1">遇到這一題的學生（答對率低的在前）</p>
+      ${list.length ? `<ul class="text-sm space-y-0.5">${list.map(s =>
+        `<li class="flex justify-between gap-2">
+           <span>${esc(s.cls)} ${esc(s.name)}</span>
+           <span class="${s.rate < 50 ? 'text-rose-600 font-bold' : 'text-slate-500'}">${s.ok}/${s.n}</span>
+         </li>`).join('')}</ul>`
+        : '<p class="text-sm text-slate-400">這一班沒有人遇到這一題。</p>'}
+    </div>
+  </div>`;
+}
+
+function wire() {
+  document.querySelectorAll('[data-cls]').forEach(b => {
+    b.onclick = () => { state.cls = b.dataset.cls; state.open = ''; draw(); };
+  });
+  const m = el('minN'); if (m) m.onchange = () => { state.minN = +m.value; draw(); };
+  document.querySelectorAll('[data-q]').forEach(b => {
+    b.onclick = () => { state.open = (state.open === b.dataset.q) ? '' : b.dataset.q; draw(); };
+  });
+}
+</script>
+</body>
+</html>

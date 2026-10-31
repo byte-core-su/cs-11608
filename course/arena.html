@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資訊倫理 闖關排行賽</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 載入順序固定：config → guard（沒從闖關基地登入就導回去） -->
+  <script src="config.js"></script>
+  <script src="../shared/guard.js"></script>
+  <script src="../shared/auth.js"></script>
+</head>
+<body>
+  <!-- =====================================================================
+       🏆 資訊倫理 闖關排行賽
+       ---------------------------------------------------------------------
+       ★ 畫面、規則、計分流程全部在 shared/arena.js。
+       ★ 題目由 Apps Script 出（gas/grader.gs，和程式設計評分同一個部署）：
+         題庫是老師在教師後台「🏆 排行賽」從 content/ethics.js 匯入的。
+       ⚠️ config.js 的 GRADER_URL 沒填就不能玩（闖關基地也不會出現這張卡片）。
+       ===================================================================== -->
+  <script>
+    window.ARENA_CONTENT = {
+      name: '資訊倫理',
+      subtitle: '資訊倫理與相關法律',
+      chapterPage: 'cyberethics.html'        // 沒資格時「去闖關 →」連到這裡
+    };
+  </script>
+  <!-- 共用引擎（一定要在 body 裡：它會把畫面畫進 body） -->
+  <script src="../shared/arena.js"></script>
+
+  <!-- 登入狀態：學生在闖關基地登入過，這裡只是拿同一個身分的 idToken 給 Apps Script 確認 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    const auth = getAuth(initializeApp(window.CONFIG.FIREBASE));
+    let done = false;
+    onAuthStateChanged(auth, u => {
+      if (done) return;
+      done = true;
+      const sid = (u && u.email) ? AUTH.sidFromEmail(u.email) : '';
+      window.ARENA_SET_AUTH({ sid, token: () => auth.currentUser.getIdToken() });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+rules_version = '2';
+/* =====================================================================
+   資訊科技闖關系統 · Firestore 安全規則
+   ---------------------------------------------------------------------
+   ★ 移植時只改最上面「學校設定」那三個函式，要和 course/config.js 的
+     SCHOOL／TERM／FIREBASE.projectId 對得上（安全規則沒辦法讀 JS，所以兩邊各一份）。
+   ★ 改完要到 Firebase Console → Firestore Database → 規則，整份貼上後按「發布」，
+     親眼看到「已發佈」才算數 —— 只改這個檔案，線上什麼都不會變。
+
+   登入方式（不用 Google 帳號，參考 byte-core-su/cs-11507）
+     學生：學號＋六位數驗證碼。Firebase 帳號是 Email／密碼帳號，
+           email ＝ {學號}@students.{專案 ID}.firebaseapp.com，密碼 ＝ 驗證碼。
+     老師：Firebase 的 Email／密碼帳號（TEACHER_EMAIL）。
+     ⚠️ Firebase Console → Authentication → 登入方式，要開「電子郵件／密碼」與「匿名」。
+
+   誰能做什麼（一句話版）
+     老師（TEACHER_EMAIL 那一個帳號）：全部都能讀寫。
+     學生：只能寫「自己那一份」進度，而且學號要在名冊裡；
+           老師給的加分、作品星，學生自己改不動；別人的驗證碼看不到。
+   ===================================================================== */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ================= 學校設定【必改】=================
+    //   ⚠️ 要和 course/config.js 對得上（一律用小寫）
+    function TEACHER_EMAIL() { return 'teacher@example.com'; }                     // = SCHOOL.TEACHER_EMAIL
+    function DOMAIN()        { return '@students.your_project.firebaseapp.com'; }  // = '@students.' + FIREBASE.projectId + '.firebaseapp.com'
+    function TERM()          { return '11501'; }                                   // = TERM
+
+    // ================= 共用判斷 =================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    /** Email／密碼帳號（匿名登入沒有 email，不算數） */
+    function passwordUser() {
+      return request.auth != null
+          && request.auth.token.firebase.sign_in_provider == 'password'
+          && request.auth.token.email is string;
+    }
+    /** 老師 = 唯一的教師帳號 */
+    function isTeacher() {
+      return passwordUser()
+          && request.auth.token.email.lower() == TEACHER_EMAIL();
+    }
+    /** 這個帳號是不是「學號 sid 本人」（email 由學號直接組出來） */
+    function isOwner(sid) {
+      return passwordUser()
+          && request.auth.token.email.lower() == sid + DOMAIN();
+    }
+    /** 學號在名冊裡。⚠️ 名冊沒建好，全班都寫不進去 —— 開學前先在教師端匯入名冊 */
+    function inRoster(sid) {
+      return exists(/databases/$(database)/documents/roster/$(sid));
+    }
+
+    /* ── 老師給的加分與退件：學生寫不動 ──────────────────
+       modules.flowchart.imgUnits／imgReview（交流程圖圖片 +1★）
+       modules.scratch.vidUnits／vidReview（交程式錄影 +1★，目前沒有用到，保留欄位保護）
+       由 shared/review.html 以老師身分寫入。不擋的話，學生按 F12 就能把加分塞滿。 */
+    function imgUnitsOf(d)  { return d.get('modules', {}).get('flowchart', {}).get('imgUnits', {}); }
+    function vidUnitsOf(d)  { return d.get('modules', {}).get('scratch', {}).get('vidUnits', {}); }
+    function imgReviewOf(d) { return d.get('modules', {}).get('flowchart', {}).get('imgReview', {}); }
+    function vidReviewOf(d) { return d.get('modules', {}).get('scratch', {}).get('vidReview', {}); }
+    function bonusEmpty() {
+      return imgUnitsOf(request.resource.data).size() == 0
+          && vidUnitsOf(request.resource.data).size() == 0
+          && imgReviewOf(request.resource.data).size() == 0
+          && vidReviewOf(request.resource.data).size() == 0;
+    }
+    function bonusUnchanged() {
+      return imgUnitsOf(request.resource.data) == imgUnitsOf(resource.data)
+          && vidUnitsOf(request.resource.data) == vidUnitsOf(resource.data)
+          && imgReviewOf(request.resource.data) == imgReviewOf(resource.data)
+          && vidReviewOf(request.resource.data) == vidReviewOf(resource.data);
+    }
+
+    /* ── Scratch 作品星與比對線索、運算思維截圖：學生寫不動 ──
+       這些格子只由 Apps Script 評分服務（gas/grader.gs，用老師的身分）或老師的後台寫入，
+       學生頁面從來不寫 ⇒ 鎖起來：
+         · 星數、分數 —— 不然主控台一行 setDoc 就能灌星星
+         · unitPrint（指紋）、revoked（老師取消過的作品）、blocked —— 不然可以把抄襲的線索擦掉
+         · unitFiles、teacherSet —— 作品連結、老師手動改分的紀錄
+         · modules.thinking.shots —— 通關截圖的連結（不然可以換成別人的圖） */
+    function scratchStarsOf(d) {
+      let s = d.get('modules', {}).get('scratch', {});
+      return [s.get('unitStars', null), s.get('unitScores', null),
+              s.get('stars', null), s.get('level', null), s.get('status', null),
+              s.get('unitPrint', null), s.get('revoked', null), s.get('blocked', null),
+              s.get('unitFiles', null), s.get('teacherSet', null),
+              d.get('modules', {}).get('thinking', {}).get('shots', null)];
+    }
+    function scratchStarsEmpty() {
+      return scratchStarsOf(request.resource.data) == [null, null, null, null, null, null, null, null, null, null, null];
+    }
+    function scratchStarsUnchanged() {
+      return scratchStarsOf(request.resource.data) == scratchStarsOf(resource.data);
+    }
+
+    // ###################################################################
+    // ##  名冊與全站設定
+    // ###################################################################
+
+    /* 名冊：姓名／班級／座號，加一個 hasCode（設定過驗證碼沒有）。
+       ★ 登入前就要讀（確認有這個人、要不要先設定驗證碼），所以匿名登入也能單筆讀；
+         不能整批下載。⚠️ 也因此名冊裡**不可以**放驗證碼。
+       學生本人只能把自己的 hasCode 從「沒有」改成 true，其他欄位都動不了。 */
+    match /roster/{sid} {
+      allow get: if isSignedIn();
+      allow list, create, delete: if isTeacher();
+      allow update: if isTeacher()
+        || (isOwner(sid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasCode'])
+            && request.resource.data.hasCode == true);
+    }
+
+    /* 驗證碼：只有老師讀得到（驗證碼管理頁要查看、重設）。
+       學生第一次設定時寫一次（只能建立、不能改），之後改驗證碼要找老師。
+       ★ 登入本身不讀這裡 —— 密碼是 Firebase Authentication 在比對。 */
+    match /codes/{sid} {
+      allow read, update, delete: if isTeacher();
+      allow create: if isTeacher()
+        || (isOwner(sid)
+            && request.resource.data.keys().hasOnly(['code', 'at'])
+            && request.resource.data.code is string
+            && request.resource.data.code.matches('^[0-9]{6}$'));
+    }
+
+    // 全站開關（學生讀得到 ⇒ 只能放公開也無所謂的設定）
+    match /config/{docId} {
+      allow read:  if true;
+      allow write: if isTeacher();
+    }
+
+    // ###################################################################
+    // ##  這個學期（{TERM}-config、{TERM}-progress）
+    // ###################################################################
+    //   ★ 用萬用字元比對集合名稱，換學期只要改上面的 TERM()，不必改這裡。
+    match /{col}/{docId} {
+      /* 課程設定（成績簿、快照、上課日）：只有老師。
+         例外：上課日 schedule 開放單筆讀 —— 學生端的「本週成績卡」要用它判出席。 */
+      allow read, write: if col == TERM() + '-config' && isTeacher();
+      allow get: if col == TERM() + '-config' && docId == 'schedule' && isSignedIn();
+
+      /* 程式設計的評分範本（參考解答／空白範本的虛擬碼）：只有老師。
+         ★ Apps Script 評分服務用老師的 Google 帳號讀寫，不經過這些規則；
+           開給老師是讓他在 Firebase Console 之外也看得到。
+         ⚠️ 學生**絕對不可以**讀到這裡 —— 那就是答案。 */
+      allow read, write: if col == TERM() + '-grader' && isTeacher();
+
+      /* 闖關排行賽：最佳成績、每一場的紀錄 —— 只有老師讀得到（教師後台「🏆 排行賽」）。
+         ★ 寫入只有 Apps Script（用老師的 Google 帳號，不經過這些規則）；
+           學生看排行走 Apps Script，只拿得到前 30 名的學號和分數。
+         ⚠️ 不開寫入：連老師的網頁都不直接改成績。{TERM}-arena-days（每天的分級）誰都不開。 */
+      allow read: if (col == TERM() + '-arena-board' || col == TERM() + '-arena-runs') && isTeacher();
+
+      /* 闖關進度與星星（文件 id ＝ 學號） */
+      allow get:  if col == TERM() + '-progress' && isSignedIn();
+      allow list: if col == TERM() + '-progress' && isTeacher();   // 學生不可整批下載全班成績
+      allow create: if col == TERM() + '-progress'
+                    && (isTeacher()
+                        || (isOwner(docId) && inRoster(docId) && bonusEmpty() && scratchStarsEmpty()));
+      allow update: if col == TERM() + '-progress'
+                    && (isTeacher()
+                        || (isOwner(docId) && inRoster(docId) && bonusUnchanged() && scratchStarsUnchanged()));
+      allow delete: if col == TERM() + '-progress' && isTeacher();
+    }
+
+    // ###################################################################
+    // ##  運算思維與舊測驗紀錄
+    // ###################################################################
+
+    /* 運算思維：文件 id 是「班級_座號_姓名」，不是學號。
+       學生每次寫入都帶 sid 欄位，規則拿它去名冊組出「你應該用的文件 id」，
+       對得上才准寫 ⇒ 改不到別人的紀錄。
+       「班級過關紀錄查詢」要讀全班，所以登入者都能讀。 */
+    function ctKeyOf(sid) {
+      let r = get(/databases/$(database)/documents/roster/$(sid)).data;
+      return string(r.cls) + '_' + string(r.no) + '_' + string(r.name);
+    }
+    function ctOwnDoc(docId) {
+      let sid = request.resource.data.get('sid', '');
+      return sid is string && isOwner(sid) && ctKeyOf(sid) == docId;
+    }
+    match /artifacts/{appId}/public/data/progress/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isTeacher() || ctOwnDoc(docId);
+      allow delete: if isTeacher();
+    }
+
+    // 舊版章節測驗紀錄：教師端「清除學生進度」會來找、刪
+    match /artifacts/{appId}/public/data/quiz_records/{recId} {
+      allow read, delete: if isTeacher();
+    }
+
+    // ###################################################################
+    // ##  其他一律拒絕
+    // ###################################################################
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

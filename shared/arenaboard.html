@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ★ 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」與標頭 -->
+<script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+<style>.embedded [data-standalone] { display: none !important; }</style>
+<title>闖關排行賽 · 教師端</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../course/config.js"></script>
+<script src="auth.js"></script>
+<script src="arenarank.js"></script>
+<!-- 匯入題庫用：老師的瀏覽器從章節測驗的題目抽出排行賽題庫 -->
+<script src="qstat.js"></script>
+<script src="../course/content/ethics.js"></script>
+<script src="arenabank.js"></script>
+<style>
+  html,body,button{font-family:'Noto Sans TC',system-ui,sans-serif}
+  body{background:#fdf2f8}
+  th{position:sticky;top:0;background:#fff}
+</style>
+</head>
+<body class="min-h-screen text-slate-800">
+<!-- =====================================================================
+     🏆 闖關排行賽（老師專用）
+     ---------------------------------------------------------------------
+     ① 題庫：排行賽的對錯由 Apps Script 判，它要有自己的一份題庫。
+        這一頁從 content/ethics.js 抽出題目，按「匯入題庫」送過去
+        （存在 {TERM}-grader/arena_bank，只有老師讀得到）。
+        改了 ethics.js 的題目，這裡會顯示「網站上的題目改過了」，再按一次就好。
+     ② 排行：全部參賽者的最佳成績（學生頁面只看得到前 30 名的學號）。
+        資料直接從 Firestore 讀（規則開給老師讀 {TERM}-arena-board／-arena-runs）。
+     ③ 斷線白白用掉一次機會：該列按「退回 1 次」（經 Apps Script 改，學生改不到）。
+     ===================================================================== -->
+<main class="max-w-6xl mx-auto px-4 py-8">
+  <header class="mb-6">
+    <a href="../course/teacher.html" data-standalone class="text-sm font-bold text-slate-400 hover:text-slate-700">← 回教師端</a>
+    <h1 class="text-2xl sm:text-3xl font-black mt-2">🏆 闖關排行賽</h1>
+    <p class="text-slate-500 text-sm mt-2 leading-relaxed">
+      20 題、★1 起跳、答對升級答錯降級，全對 1000 分；一天 2 次；資訊倫理 10 章全部通關才能玩。<br>
+      排序和學生看到的一樣：<b>分數高 → 用時短 → 先達成</b>。</p>
+  </header>
+  <div id="bank" class="mb-5"></div>
+  <div id="app"></div>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserSessionPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const C = window.CONFIG || {};
+const TERM = C.TERM || '11501';
+const URL_ = String(C.GRADER_URL || '').trim();
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+const db = getFirestore(app);
+setPersistence(auth, browserSessionPersistence).catch(() => {});   // 老師的登入只留在這個分頁
+const ROSTER = (C.COLLECTIONS || {}).ROSTER || 'roster';
+const BOARD = TERM + '-arena-board', RUNS = TERM + '-arena-runs';
+
+const el = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtSec = s => { s = Math.round(Number(s) || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+const state = { who: null, busy: '', msg: '', rows: [], klass: '', today: '', runsN: 0, todayN: 0,
+                bank: undefined, bankMsg: '', bankBusy: false, err: '' };
+
+/* 網站上的題庫（從 ethics.js 抽）＋指紋（和 Apps Script 存的比，知道有沒有改過） */
+const LOCAL = (window.ARENABANK && window.QUIZ_CONTENT && window.QSTAT) ? ARENABANK.build(window.QUIZ_CONTENT, window.QSTAT, TERM) : null;
+const LOCAL_TEXT = LOCAL ? JSON.stringify(LOCAL) : '';
+async function sha256(text) {
+  if (!(window.crypto && crypto.subtle)) return '';
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+const LOCAL_SIG = LOCAL_TEXT ? sha256(LOCAL_TEXT) : Promise.resolve('');
+
+async function call(body) {
+  const idToken = await auth.currentUser.getIdToken();
+  const r = await fetch(URL_, { method: 'POST', body: JSON.stringify(Object.assign({ idToken }, body)) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || j.message || '失敗');
+  return j;
+}
+
+onAuthStateChanged(auth, async u => {
+  state.who = (u && u.email && AUTH.isTeacherEmail(u.email)) ? u : null;
+  render();
+  if (!state.who) return;
+  await Promise.all([loadBank(), loadAll()]);
+  render();
+});
+
+async function loadBank() {
+  if (!URL_) return;
+  try { state.bank = (await call({ kind: 'arenaInfo' })).bank; state.bankMsg = ''; }
+  catch (e) { state.bank = undefined; state.bankMsg = '連不上 Apps Script：' + e.message; }
+}
+async function loadAll() {
+  state.busy = '讀取排行、每一場的紀錄與名冊…'; state.msg = ''; render();
+  try {
+    const [bs, rs, ro] = await Promise.all([
+      getDocs(collection(db, BOARD)), getDocs(collection(db, RUNS)), getDocs(collection(db, ROSTER))]);
+    const board = {}; bs.forEach(d => { board[d.id] = d.data() || {}; });
+    const runs = []; rs.forEach(d => runs.push(d.data() || {}));
+    const roster = {}; ro.forEach(d => { roster[d.id] = d.data() || {}; });
+    state.today = ARENARANK.todayTW();
+    state.rows = ARENARANK.build(board, runs, roster, state.today);
+    state.runsN = runs.length;
+    state.todayN = runs.filter(r => r.day === state.today).length;
+  } catch (e) {
+    state.msg = '讀不到排行賽的資料：' + e.message
+      + (/permission/i.test(e.message) ? '　→ 請到 Firebase Console 發布最新的 firestore.rules。' : '');
+  }
+  state.busy = '';
+}
+
+window.arenaLogin = async () => {
+  const c = await AUTH.askTeacherPassword(); if (!c) return;
+  try { await signInWithEmailAndPassword(auth, c.email, c.password); }
+  catch (e) { state.err = '登入失敗：' + (e.code || e.message); render(); }
+};
+window.arenaReload = async () => { await Promise.all([loadBank(), loadAll()]); render(); };
+window.arenaClass = k => { state.klass = k; render(); };
+window.arenaImport = async () => {
+  if (!LOCAL_TEXT) return;
+  state.bankBusy = true; render();
+  try { const r = await call({ kind: 'arenaSetBank', bankText: LOCAL_TEXT }); state.bankMsg = '✅ ' + r.message; await loadBank(); }
+  catch (e) { state.bankMsg = '⚠️ 匯入失敗：' + e.message; }
+  state.bankBusy = false; render();
+};
+window.arenaGrant = async (sid) => {
+  if (!confirm('把 ' + sid + ' 今天用掉的次數退回 1 次？\n（例如斷線、電腦當掉，白白用掉一次機會）')) return;
+  try { const r = await call({ kind: 'arenaGrant', sid }); alert(r.message); await loadAll(); }
+  catch (e) { alert('沒有成功：' + e.message); }
+  render();
+};
+
+async function renderBank() {
+  const box = el('bank');
+  if (!URL_) {
+    box.innerHTML = `<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm text-amber-900 leading-relaxed">
+      排行賽要用 Apps Script（和程式設計評分同一個部署）—— <span class="font-mono">course/config.js</span> 的
+      <span class="font-mono">GRADER_URL</span> 還是空的。部署步驟見 <span class="font-mono">gas/README.md</span>。</div>`;
+    return;
+  }
+  if (!state.who) { box.innerHTML = ''; return; }
+  const b = state.bank, sig = await LOCAL_SIG;
+  const same = b && sig && b.sig === sig;
+  let line, tone, btn;
+  if (b === undefined) { line = state.bankMsg || '讀取題庫狀態…'; tone = 'slate'; btn = ''; }
+  else if (!b) { line = '還沒有匯入題庫 —— 學生現在按不了開始。'; tone = 'rose'; btn = '匯入題庫'; }
+  else if (same) { line = `✅ 題庫 ${b.count} 題（${esc(b.at)} 匯入），和網站上的 ethics.js 一致。`; tone = 'emerald'; btn = ''; }
+  else { line = `⚠️ 網站上的題目改過了（目前用的是 ${esc(b.at)} 匯入的 ${b.count} 題）。按「重新匯入」換成新的。`; tone = 'amber'; btn = '重新匯入'; }
+  const cls = { slate: 'bg-white border-slate-200 text-slate-600', rose: 'bg-rose-50 border-rose-200 text-rose-800',
+                emerald: 'bg-emerald-50 border-emerald-200 text-emerald-800', amber: 'bg-amber-50 border-amber-200 text-amber-900' }[tone];
+  box.innerHTML = `<div class="border rounded-2xl p-4 text-sm flex flex-wrap items-center gap-3 justify-between ${cls}">
+      <div><b>題庫</b>　${line}${LOCAL ? `<span class="text-xs opacity-70">（網站上：${LOCAL.count} 題、參賽要通關 ${LOCAL.units.length} 個章節）</span>` : '<br>⚠️ 讀不到 content/ethics.js'}
+        ${state.bankMsg && b !== undefined ? `<div class="mt-1">${esc(state.bankMsg)}</div>` : ''}</div>
+      ${btn && LOCAL ? `<button onclick="arenaImport()" ${state.bankBusy ? 'disabled' : ''} class="px-4 py-2 bg-slate-800 text-white font-bold rounded-xl disabled:opacity-50">${state.bankBusy ? '匯入中…' : btn}</button>` : ''}
+      ${same ? `<button onclick="arenaImport()" ${state.bankBusy ? 'disabled' : ''} class="text-xs underline opacity-60">${state.bankBusy ? '匯入中…' : '重新匯入'}</button>` : ''}
+    </div>`;
+}
+
+function render() {
+  renderBank();
+  const app = el('app');
+  if (!state.who) {
+    app.innerHTML = `<div class="bg-white rounded-2xl p-6 shadow-sm">
+      <p class="text-sm text-slate-600 mb-4">這一頁要讀全部學生的排行賽成績，只有老師帳號可以開。</p>
+      <button onclick="arenaLogin()" class="px-5 py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700">教師登入</button>
+      ${state.err ? `<p class="text-rose-600 text-sm mt-3">${esc(state.err)}</p>` : ''}</div>`;
+    return;
+  }
+  if (state.busy) { app.innerHTML = `<div class="bg-white rounded-2xl p-6 shadow-sm text-slate-500">${esc(state.busy)}</div>`; return; }
+  if (state.msg) { app.innerHTML = `<div class="bg-white rounded-2xl p-6 shadow-sm text-rose-600">${esc(state.msg)}</div>`; return; }
+
+  const all = state.rows;
+  const cls = ARENARANK.classes(all);
+  const rows = state.klass ? all.filter(r => r.cls === state.klass) : all;
+  const ranked = rows.filter(r => r.best), rest = rows.filter(r => !r.best);
+  const medal = n => n === 1 ? '🥇' : n === 2 ? '🥈' : n === 3 ? '🥉' : n;
+  const tr = r => `<tr class="border-t border-slate-100 ${r.robot ? 'bg-rose-50' : ''}">
+      <td class="px-2 py-2 text-center font-black">${r.rank ? medal(r.rank) : '—'}</td>
+      ${state.klass ? `<td class="px-2 py-2 text-center font-bold text-pink-700">${r.clsRank || '—'}</td>` : ''}
+      <td class="px-2 py-2 whitespace-nowrap">${esc(r.cls)}</td>
+      <td class="px-2 py-2 text-center">${esc(r.no)}</td>
+      <td class="px-2 py-2 whitespace-nowrap font-bold">${esc(r.name || '（名冊沒有）')}</td>
+      <td class="px-2 py-2 font-mono text-xs text-slate-500">${esc(r.sid)}</td>
+      <td class="px-2 py-2 text-right font-black text-lg">${r.best ? r.best.score : '—'}</td>
+      <td class="px-2 py-2 text-right">${r.best ? fmtSec(r.best.seconds) : '—'}</td>
+      <td class="px-2 py-2 text-center whitespace-nowrap">${r.best && r.best.correct != null ? r.best.correct + '/20 ・' + '★'.repeat(r.best.max_tier || 1) : '—'}</td>
+      <td class="px-2 py-2 text-xs text-slate-500 whitespace-nowrap">${esc(r.best ? r.best.at.slice(5, 16) : '')}</td>
+      <td class="px-2 py-2 text-center">${r.runs}</td>
+      <td class="px-2 py-2 text-center whitespace-nowrap">${r.todayUsed ? `${r.todayUsed} 次 <button onclick="arenaGrant('${esc(r.sid)}')" class="ml-1 text-xs px-2 py-0.5 border border-slate-300 rounded-full text-slate-500 hover:bg-slate-50">退回 1 次</button>` : '<span class="text-slate-300">0</span>'}</td>
+      <td class="px-2 py-2 text-center text-xs">${r.leaves ? '👀 ' + r.leaves : ''}${r.leaves && r.timeouts ? '　' : ''}${r.timeouts ? '⏰ ' + r.timeouts : ''}</td>
+      <td class="px-2 py-2 text-center text-xs font-bold text-rose-600">${r.robot ? '⚠️ ' + r.robot + ' 場' : ''}</td>
+    </tr>`;
+  app.innerHTML = `
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4 text-sm text-slate-600">
+      <span>參賽 <b>${ranked.length}</b> 人有成績${rest.length ? `、${rest.length} 人還沒有成績` : ''}｜共 <b>${state.runsN}</b> 場（今天 ${state.todayN} 場）</span>
+      <button onclick="arenaReload()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-600 hover:bg-slate-50">重新整理</button>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button onclick="arenaClass('')" class="px-3 py-1.5 rounded-full text-sm font-bold ${!state.klass ? 'bg-pink-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}">全部</button>
+      ${cls.map(c => `<button onclick="arenaClass('${esc(c)}')" class="px-3 py-1.5 rounded-full text-sm font-bold ${state.klass === c ? 'bg-pink-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}">${esc(c)}</button>`).join('')}
+    </div>
+    <section class="bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
+      ${rows.length ? `<table class="w-full text-sm">
+        <thead class="text-left text-slate-400 text-xs"><tr>
+          <th class="px-2 py-2 text-center">名次</th>${state.klass ? '<th class="px-2 py-2 text-center">班內</th>' : ''}
+          <th class="px-2 py-2">班級</th><th class="px-2 py-2 text-center">座號</th><th class="px-2 py-2">姓名</th><th class="px-2 py-2">學號</th>
+          <th class="px-2 py-2 text-right">最佳</th><th class="px-2 py-2 text-right">用時</th><th class="px-2 py-2 text-center">答對・最高級</th>
+          <th class="px-2 py-2">達成時間</th><th class="px-2 py-2 text-center">完成場數</th><th class="px-2 py-2 text-center">今天用掉</th><th class="px-2 py-2 text-center">離開／超時</th><th class="px-2 py-2 text-center">像腳本</th>
+        </tr></thead>
+        <tbody>${rows.map(tr).join('')}</tbody></table>`
+      : '<p class="text-slate-400 text-sm p-4">還沒有人參加排行賽。</p>'}
+    </section>
+    <p class="text-xs text-slate-400 mt-3 leading-relaxed">
+      名次是<b>全部參賽者</b>的名次（選了班級時，「班內」是這一班裡的名次）。
+      「離開／超時」是所有場次加總的題數（每一題都算答錯）。
+      「像腳本」＝每一題都在 1 秒內作答的場次：照樣記錄，但<b>不進排行</b>（紅底）。
+      完成場數只算有做完的；按了開始但沒做完的那一次機會不會出現在這裡 —— 斷線白白用掉的，用「退回 1 次」補給他。</p>`;
+}
+
+render();
+</script>
+</body>
+</html>

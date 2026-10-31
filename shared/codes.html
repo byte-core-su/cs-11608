@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ★ 嵌入模式：放在教師管理後台（course/teacher.html）的分頁裡時，藏起自己的「回教師端」與標頭 -->
+  <script>try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); }</script>
+  <style>.embedded [data-standalone] { display: none !important; }</style>
+  <title>學生帳號</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="../course/config.js"></script>
+  <script src="auth.js"></script>
+  <style>
+    body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
+    .pop { animation: pop .25s ease-out; } @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <!-- =====================================================================
+       👥 學生帳號（老師專用）—— 名冊與驗證碼都在這一頁
+       ---------------------------------------------------------------------
+       名冊：每行「學號,班級,座號,姓名」（直接從 Excel 複製四欄貼上也可以）。
+         ★ 班級、座號直接填，不從學號推算 —— 每間學校的學號編法不一樣。
+         ★ 重複匯入同一個學號 ＝ 更新姓名／班級／座號，不會動到驗證碼（一律 merge 寫入）。
+         ⚠️ 名冊沒建好，學生登不進去（安全規則要求學號在名冊裡）。
+
+       學生用「學號＋六位數驗證碼」登入。驗證碼其實就是那個學生 Firebase 帳號的密碼，
+       另外在 codes/{學號} 存一份給老師查看（只有老師讀得到，見 firestore.rules）。
+
+       能做的事
+         ① 看每位學生設定了沒、驗證碼是多少（點一下才顯示，避免投影時被看到）
+         ② 重設：用舊驗證碼登入那個學生的帳號，把密碼改成新的 —— 學生改用新驗證碼
+         ③ 清除設定：舊驗證碼不知道（或被別人搶先設定）時用。
+            ⚠️ 要先到 Firebase Console → Authentication 刪掉那個學生的帳號，
+               再回來按這顆，學生下次登入就能重新設定。
+       ===================================================================== -->
+  <div class="max-w-5xl mx-auto px-4 py-8">
+    <a href="../course/teacher.html" data-standalone class="text-sm font-bold text-slate-500 hover:text-slate-800">← 回教師端</a>
+    <p class="font-bold text-indigo-600 text-sm mt-2">STUDENT ACCOUNTS</p>
+    <h1 class="text-2xl sm:text-3xl font-black">👥 學生帳號</h1>
+    <p class="text-sm text-slate-500 mt-1 leading-relaxed">匯入名冊、查看或重設學生的驗證碼。驗證碼要點一下才會顯示 —— 投影的時候小心。</p>
+    <div id="app" class="mt-6"></div>
+  </div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, onAuthStateChanged, updatePassword, signOut }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, writeBatch }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const C = window.CONFIG || {};
+const ROSTER = (C.COLLECTIONS && C.COLLECTIONS.ROSTER) || 'roster';
+const app = initializeApp(C.FIREBASE);
+const auth = getAuth(app);
+/* ★ 老師的登入只留在這個分頁（和 teacher.html 一樣）。學生也用同一個 Firebase 專案，
+     老師的身分留在整個瀏覽器的話，下一個開學生頁的人會被當成老師。 */
+setPersistence(auth, browserSessionPersistence).catch(() => {});
+const db = getFirestore(app);
+/* ★ 重設要「以學生身分」改密碼，又不能把老師登出 ⇒ 開第二個 Firebase 實例專門做這件事 */
+const helper = initializeApp(C.FIREBASE, 'code-reset');
+const helperAuth = getAuth(helper);
+
+const el = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
+const state = { who: null, rows: [], codes: {}, klass: '', shown: {}, msg: '', err: '', busy: '' };
+
+function isTeacher(u) { return !!(u && u.email && AUTH.isTeacherEmail(u.email)); }
+
+onAuthStateChanged(auth, async u => {
+  state.who = isTeacher(u) ? u : null;
+  if (state.who) await load();
+  draw();
+});
+
+async function load() {
+  state.busy = '讀取名冊與驗證碼…'; draw();
+  try {
+    const [rs, cs] = await Promise.all([getDocs(collection(db, ROSTER)), getDocs(collection(db, 'codes'))]);
+    state.rows = rs.docs.map(d => ({ sid: d.id, ...(d.data() || {}) }))
+      .sort((a, b) => String(a.cls).localeCompare(String(b.cls)) || (Number(a.no) || 0) - (Number(b.no) || 0));
+    state.codes = {}; cs.forEach(d => { state.codes[d.id] = (d.data() || {}).code || ''; });
+    if (!state.klass && state.rows.length) state.klass = String(state.rows[0].cls || '');
+    state.err = '';
+  } catch (e) {
+    state.err = '讀不到資料：' + (e.code || e.message) + '（安全規則發布了嗎？登入的是教師帳號嗎？）';
+  }
+  state.busy = '';
+}
+
+/* ── 名冊匯入：每行 學號,班級,座號,姓名（逗號或 Tab 分隔） ── */
+function parseRoster(text) {
+  const rows = [], bad = [];
+  String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach((line, i) => {
+    const p = line.split(/[,\t，]/).map(x => x.trim());
+    if (i === 0 && !C.isSid(p[0])) return;                 // 第一行是標題就跳過
+    const [sid, cls, no, name] = p;
+    if (!C.isSid(sid) || !cls || !no || !name || !/^\d+$/.test(no)) { bad.push(line); return; }
+    rows.push({ sid, cls: String(cls), no: String(parseInt(no, 10)), name });
+  });
+  return { rows, bad };
+}
+async function importRoster() {
+  const { rows, bad } = parseRoster(el('roster-text').value);
+  if (!rows.length) { state.err = '沒有可以匯入的資料。格式：學號,班級,座號,姓名（一行一位）' + (bad.length ? '；格式不對的有 ' + bad.length + ' 行。' : ''); draw(); return; }
+  state.busy = '匯入中…'; state.err = ''; draw();
+  try {
+    for (let i = 0; i < rows.length; i += 400) {
+      const b = writeBatch(db);
+      rows.slice(i, i + 400).forEach(r => b.set(doc(db, ROSTER, r.sid),
+        /* ⚠️ 一定要 merge：名冊上還有 hasCode 等不是這裡管的欄位 */
+        { studentId: r.sid, cls: r.cls, no: r.no, name: r.name, key: r.cls + '_' + r.no + '_' + r.name, updatedAt: Date.now() }, { merge: true }));
+      await b.commit();
+    }
+    state.msg = '✅ 匯入 ' + rows.length + ' 位' + (bad.length ? '；略過 ' + bad.length + ' 行格式不對的：' + bad.slice(0, 3).join('／') + (bad.length > 3 ? '…' : '') : '') + '。';
+    state.klass = rows[0].cls;
+    el('roster-text').value = '';
+    await load();
+  } catch (e) { state.err = '匯入失敗：' + (e.code || e.message); }
+  state.busy = ''; draw();
+}
+async function deleteStudent(sid) {
+  const r = state.rows.find(x => x.sid === sid) || {};
+  if (!confirm('從名冊刪除 ' + sid + ' ' + (r.name || '') + '？\n\n他的闖關進度會保留（重新匯入就會接回來），但刪除後他就登不進去了。\n要連帳號一起刪，請到 Firebase Console → Authentication 刪掉 ' + AUTH.emailFromSid(sid) + '。')) return;
+  state.busy = '刪除中…'; draw();
+  try {
+    await deleteDoc(doc(db, ROSTER, sid));
+    await deleteDoc(doc(db, 'codes', sid)).catch(() => {});
+    state.msg = '✅ 已從名冊刪除 ' + sid + '。';
+    await load();
+  } catch (e) { state.err = '刪除失敗：' + (e.code || e.message); }
+  state.busy = ''; draw();
+}
+
+async function resetCode(sid) {
+  const old = state.codes[sid];
+  if (!old) { state.err = '沒有這位學生的舊驗證碼紀錄，沒辦法直接重設 —— 請用「清除設定」。'; draw(); return; }
+  const nu = prompt('學號 ' + sid + ' 的新驗證碼（6 位數字）：', '');
+  if (nu === null) return;
+  if (!/^\d{6}$/.test(nu.trim())) { state.err = '新驗證碼要是 6 位數字。'; draw(); return; }
+  state.busy = '重設中…'; state.err = ''; draw();
+  try {
+    const cred = await signInWithEmailAndPassword(helperAuth, AUTH.emailFromSid(sid), old);
+    await updatePassword(cred.user, nu.trim());
+    await signOut(helperAuth);
+    await setDoc(doc(db, 'codes', sid), { code: nu.trim(), at: Date.now() });
+    state.codes[sid] = nu.trim();
+    state.msg = '✅ 學號 ' + sid + ' 的驗證碼已改成新的。請學生用新驗證碼登入。';
+  } catch (e) {
+    try { await signOut(helperAuth); } catch (_) {}
+    state.err = '重設失敗（' + (e.code || e.message) + '）。如果學生自己改過、或紀錄對不上，請改用「清除設定」。';
+  }
+  state.busy = ''; draw();
+}
+
+async function clearSetup(sid) {
+  if (!confirm('清除學號 ' + sid + ' 的驗證碼設定？\n\n⚠️ 請先到 Firebase Console → Authentication，刪掉帳號\n' +
+               AUTH.emailFromSid(sid) + '\n\n沒刪的話，學生重新設定時會看到「已經有人設定過」。')) return;
+  state.busy = '清除中…'; state.err = ''; draw();
+  try {
+    await deleteDoc(doc(db, 'codes', sid));
+    await setDoc(doc(db, ROSTER, sid), { hasCode: false }, { merge: true });
+    delete state.codes[sid];
+    const r = state.rows.find(x => x.sid === sid); if (r) r.hasCode = false;
+    state.msg = '✅ 已清除。學生下次登入時，系統會請他重新設定驗證碼。';
+  } catch (e) {
+    state.err = '清除失敗：' + (e.code || e.message);
+  }
+  state.busy = ''; draw();
+}
+
+function draw() {
+  const box = el('app');
+  if (!state.who) {
+    box.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 shadow p-8 text-center pop">
+      <p class="font-black text-lg mb-1">請用教師帳號登入</p>
+      <p class="text-slate-500 text-sm mb-5">這一頁看得到全班的名冊和驗證碼，只有老師能開。</p>
+      <button id="login" class="px-6 py-3 bg-slate-800 text-white font-black rounded-xl">教師登入</button>
+      ${state.err ? `<p class="text-rose-600 text-sm mt-4">${esc(state.err)}</p>` : ''}</div>`;
+    el('login').onclick = async () => {
+      const c = await AUTH.askTeacherPassword(); if (!c) return;
+      try { await signInWithEmailAndPassword(auth, c.email, c.password); }
+      catch (e) { state.err = '登入失敗：' + (e.code || e.message); draw(); }
+    };
+    return;
+  }
+  const classes = [...new Set(state.rows.map(r => String(r.cls || '')))].filter(Boolean).sort();
+  const list = state.rows.filter(r => String(r.cls || '') === state.klass);
+  const done = list.filter(r => r.hasCode).length;
+  box.innerHTML = `
+    <details class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-4" ${state.rows.length ? '' : 'open'}>
+      <summary class="font-black cursor-pointer">📥 匯入名冊 <span class="text-xs font-normal text-slate-500">（新學生、改姓名或座號都用這個）</span></summary>
+      <p class="text-xs text-slate-500 mt-3 leading-relaxed">一行一位：<code class="bg-slate-100 px-1 rounded">學號,班級,座號,姓名</code>，例如 <code class="bg-slate-100 px-1 rounded">1410101,801,1,王小明</code>。
+        從 Excel 選四欄複製直接貼上也可以。學號格式：${esc((C.SCHOOL || {}).SID_HINT || '')}。重複匯入同一個學號＝更新資料，不會動到驗證碼。</p>
+      <textarea id="roster-text" rows="6" class="mt-2 w-full border-2 border-slate-200 rounded-lg p-2 font-mono text-sm" placeholder="1410101,801,1,王小明"></textarea>
+      <button id="import-go" class="mt-2 px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg">匯入</button>
+    </details>
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+      ${classes.map(c => `<button data-klass="${esc(c)}" class="px-4 py-1.5 rounded-full text-sm ${c === state.klass ? 'bg-blue-600 text-white font-bold' : 'bg-white border border-slate-200 text-slate-600'}">${esc(c)}</button>`).join('') || '<span class="text-sm text-slate-400">名冊是空的 —— 用上面的「匯入名冊」。</span>'}
+      <button id="reload" class="ml-auto px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-600">重新整理</button>
+    </div>
+    ${state.busy ? `<p class="text-sm text-slate-500 mb-3">${esc(state.busy)}</p>` : ''}
+    ${state.msg ? `<p class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-3">${esc(state.msg)}</p>` : ''}
+    ${state.err ? `<p class="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-3">${esc(state.err)}</p>` : ''}
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto pop">
+      <div class="px-4 py-3 text-sm text-slate-500 border-b border-slate-100">${esc(state.klass)} 班：已設定 <b class="text-slate-800">${done}</b> / ${list.length} 人</div>
+      <table class="w-full text-sm">
+        <thead class="text-left text-slate-400 text-xs"><tr>
+          <th class="px-4 py-2">座號</th><th class="px-4 py-2">姓名</th><th class="px-4 py-2">學號</th>
+          <th class="px-4 py-2">驗證碼</th><th class="px-4 py-2"></th></tr></thead>
+        <tbody>${list.map(r => {
+          const code = state.codes[r.sid];
+          const cell = !r.hasCode ? '<span class="text-slate-400">還沒設定</span>'
+            : !code ? '<span class="text-amber-600">已設定（沒有紀錄）</span>'
+            : state.shown[r.sid] ? `<span class="font-mono font-black tracking-widest">${esc(code)}</span>`
+            : `<button data-show="${esc(r.sid)}" class="text-blue-600 underline">顯示</button>`;
+          return `<tr class="border-t border-slate-100">
+            <td class="px-4 py-2">${esc(r.no)}</td><td class="px-4 py-2 font-bold">${esc(r.name)}</td>
+            <td class="px-4 py-2 font-mono text-slate-500">${esc(r.sid)}</td><td class="px-4 py-2">${cell}</td>
+            <td class="px-4 py-2 text-right whitespace-nowrap">${r.hasCode ? `
+              ${code ? `<button data-reset="${esc(r.sid)}" class="px-2.5 py-1 rounded-lg bg-slate-800 text-white text-xs font-bold">重設</button>` : ''}
+              <button data-clear="${esc(r.sid)}" class="px-2.5 py-1 rounded-lg border border-rose-300 text-rose-700 text-xs font-bold">清除設定</button>` : ''}
+              <button data-del="${esc(r.sid)}" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 text-xs" title="從名冊刪除">🗑</button></td></tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <p class="text-xs text-slate-400 mt-4 leading-relaxed">
+      「清除設定」之前，要先到 Firebase Console → Authentication → 使用者，刪掉 <span class="font-mono">學號@${esc(AUTH.DOMAIN)}</span> 那一個帳號。<br>
+      驗證碼是學生自己設定的。還沒設定的學號，任何知道學號的人都能搶先設定 —— 有學生說「已經有人設定過」時，照上面的步驟清除後請他重設。</p>`;
+}
+
+document.addEventListener('click', e => {
+  const k = e.target.closest('[data-klass]'); if (k) { state.klass = k.dataset.klass; state.msg = state.err = ''; draw(); return; }
+  const s = e.target.closest('[data-show]'); if (s) { state.shown[s.dataset.show] = true; draw(); return; }
+  const r = e.target.closest('[data-reset]'); if (r) { resetCode(r.dataset.reset); return; }
+  const c = e.target.closest('[data-clear]'); if (c) { clearSetup(c.dataset.clear); return; }
+  const d = e.target.closest('[data-del]'); if (d) { deleteStudent(d.dataset.del); return; }
+  if (e.target.closest('#import-go')) { importRoster(); return; }
+  if (e.target.closest('#reload')) { state.msg = state.err = ''; load().then(draw); }
+});
+
+draw();
+</script>
+</body>
+</html>

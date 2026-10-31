@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scratch 清單互動學習機</title>
+    <!-- 引入特定且穩定的版本以避免不預期的錯誤 -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone@7.24.4/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* 統一字型：Noto Sans TC（台灣用語） */
+        html, body, button, input, select, textarea { font-family:'Noto Sans TC', system-ui, sans-serif; }
+        /* 隱藏數字輸入框的上下箭頭 */
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        .scratch-list-color { background-color: #ff661a; }
+        .scratch-reporter { background-color: #ff661a; border-radius: 9999px; }
+        .scratch-boolean { background-color: #ff661a; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%); padding-left: 15px; padding-right: 15px;}
+        
+        /* 自訂捲軸樣式 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-15px) scale(0.95); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+<style>
+/* === 全站紙膠帶手作風套件（以 hub 為準，勿重複注入） === */
+body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba(120,113,108,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(120,113,108,.06) 1px,transparent 1px) !important; background-size:26px 26px !important; }
+.tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08);background:rgba(250,204,21,.3);z-index:5}
+.underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
+</style>
+  <!-- 身分守門：未從闖關基地登入者導回入口 -->
+  <script src="config.js"></script>
+<script src="../shared/guard.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+    <div id="root"></div>
+
+    <!-- 加入 data-type="module" 以解決 Babel 在特定環境下附加 script 標籤時發生的 import 錯誤 -->
+    <script type="text/babel" data-type="module">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        /* 洗牌（Fisher–Yates）：每一關的三個積木選項打亂順序，不然正解永遠排在同一個位置。 */
+        function shuffled(arr) {
+          const a = arr.slice();
+          for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+          }
+          return a;
+        }
+
+        // ==========================================
+        // 元件 1：右側的「背包顯示器」與「貓咪老師」 (共用元件)
+        // ==========================================
+        const BackpackDisplay = ({ list, message, highlightIndex = -1 }) => {
+            const listEndRef = useRef(null);
+            const prevList = useRef(list);
+            const [flash, setFlash] = useState(null);
+
+            useEffect(() => {
+                if (listEndRef.current) {
+                    listEndRef.current.scrollTop = listEndRef.current.scrollHeight;
+                }
+            }, [list]);
+
+            // 長度即時回饋：比對前後清單，閃 +N / −N / 不變(替換)
+            useEffect(() => {
+                const p = prevList.current;
+                let f = null;
+                if (list.length > p.length) f = `+${list.length - p.length}`;
+                else if (list.length < p.length) f = `${list.length - p.length}`;
+                else if (JSON.stringify(list) !== JSON.stringify(p)) f = '不變';
+                prevList.current = list;
+                if (f) { setFlash(f); const t = setTimeout(() => setFlash(null), 1300); return () => clearTimeout(t); }
+            }, [list]);
+
+            return (
+                <div className="w-full flex flex-col h-full z-10">
+                    {/* 清單顯示器 */}
+                    <div className="bg-slate-200 border-2 border-slate-400 rounded-lg shadow-xl flex flex-col flex-grow mb-4 overflow-hidden relative min-h-[300px]">
+                        <div className="bg-slate-300 text-center py-1 font-bold text-slate-700 text-sm border-b border-slate-400">
+                            我的背包
+                        </div>
+                        <div className="flex-grow p-2 overflow-y-auto space-y-1 bg-white relative" ref={listEndRef}>
+                            {list.length === 0 ? (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 italic">
+                                    <div className="text-4xl mb-2 opacity-50">🎒</div>
+                                    背包現在是空的
+                                </div>
+                            ) : (
+                                list.map((item, index) => {
+                                    const hot = index === highlightIndex;
+                                    return (
+                                    <div key={`${index}-${item}`} className="flex items-center text-sm group animate-[slideIn_0.2s_ease-out]">
+                                        <div className={`w-6 text-right mr-2 font-bold shrink-0 ${hot ? 'text-teal-600' : 'text-slate-500'}`}>{index + 1}</div>
+                                        <div className={`text-white px-2 py-1.5 rounded w-full shadow-sm font-bold truncate transition-all ${hot ? 'bg-teal-500 scale-105 ring-4 ring-teal-200' : 'bg-[#ff661a] group-hover:scale-[1.02]'}`}>
+                                            {item}
+                                        </div>
+                                        {hot && <div className="ml-2 shrink-0 text-xs font-black text-teal-700 bg-teal-100 border border-teal-300 rounded-full px-2 py-0.5 whitespace-nowrap">👈 編號 {index + 1}</div>}
+                                    </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                        <div className="bg-slate-300 border-t border-slate-400 px-3 py-1.5 text-xs text-slate-700 font-bold flex justify-between items-center rounded-b-lg">
+                            <span>長度</span>
+                            <span className="flex items-center gap-2">
+                                {flash && <span className={`px-2 py-0.5 rounded-full font-black animate-[fadeIn_0.2s_ease-out] ${flash === '不變' ? 'bg-slate-500 text-white' : flash.startsWith('+') ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>{flash === '不變' ? '長度不變' : flash}</span>}
+                                <span className="bg-white px-2 rounded border border-slate-400">{list.length}</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* 貓咪老師 */}
+                    <div className="bg-white rounded-2xl p-4 shadow-xl border-4 border-yellow-400 relative shrink-0 transition-all duration-300">
+                        <div className="absolute -top-6 -left-2 w-16 h-16 bg-yellow-400 rounded-full flex items-center justify-center shadow-md">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3.1-9-7.56c0-1.25.5-2.4 1.1-3.48 0 0-1.9-6.42-.5-7 1.39-.58 4.69.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/>
+                                <path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/>
+                            </svg>
+                        </div>
+                        <div className="ml-14">
+                            <h3 className="text-sm text-yellow-700 font-extrabold mb-1">貓咪老師說：</h3>
+                            <p className="text-slate-800 font-medium min-h-[3.5rem] flex items-center leading-snug">
+                                {message}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 元件 2：第一階段 - 遊戲互動特訓 (Tutorial Mode)
+        // ==========================================
+        const TutorialMode = ({ list, setList, setMessage, onComplete }) => {
+            const [step, setStep] = useState(0);
+            const [stepCompleted, setStepCompleted] = useState(false);
+
+            const steps = [
+                {
+                    title: "🐾 任務一：收集物資 (添加)",
+                    desc: "冒險即將開始，村長給了你一顆蘋果當作糧食。請點擊按鈕，把它放進背包裡。",
+                    btnText: "撿起 🍎 蘋果",
+                    action: () => {
+                        setList([...list, '🍎 蘋果']);
+                        setMessage("很好！「添加」動作會自動把新物品放在背包的最下面（最後一項）。");
+                    },
+                    hint: "在程式裡，這就是把新資料排進名單／清單的「最後一格」。",
+                    choices: [
+                        { text: "🧱 添加 [🍎 蘋果] 到 [背包]", correct: true },
+                        { text: "🧱 刪除 [背包] 的第 1 項", correct: false, why: "「刪除」是把東西拿掉，不是放進去喔！" },
+                        { text: "🧱 替換 [背包] 的第 1 項為 [🍎 蘋果]", correct: false, why: "背包現在是空的，沒有第 1 項可以替換！" }
+                    ]
+                },
+                {
+                    title: "🐾 任務二：緊急防禦 (插入)",
+                    desc: "警告！前方出現怪物！你需要馬上裝備盾牌。請將「🛡️ 木盾」【插入】到背包的第 1 個位置，這樣才能最快拿到！",
+                    btnText: "把 🛡️ 木盾 插入第 1 項",
+                    action: () => {
+                        const newList = [...list];
+                        newList.splice(0, 0, '🛡️ 木盾');
+                        setList(newList);
+                        setMessage("漂亮！「插入」會把東西硬擠進指定位置，原本在後面的東西（像是蘋果）都會乖乖往後退一格。");
+                    },
+                    hint: "點名時想把某人插到第 1 號，也是用「插入」。",
+                    choices: [
+                        { text: "🧱 插入 [🛡️ 木盾] 到 [背包] 的第 1 項", correct: true },
+                        { text: "🧱 添加 [🛡️ 木盾] 到 [背包]", correct: false, why: "「添加」會排到最後面，你會來不及拿盾牌！要「插入」到第 1 項。" },
+                        { text: "🧱 替換 [背包] 的第 1 項為 [🛡️ 木盾]", correct: false, why: "「替換」會把原本第 1 項的蘋果丟掉！我們是要多一個盾，不是丟蘋果。" }
+                    ]
+                },
+                {
+                    title: "🐾 任務三：裝備升級 (替換)",
+                    desc: "戰鬥中，神仙教母出現了！她把你的木盾施了魔法。請將第 1 項的木盾直接【替換】為「✨ 勇者之盾」。",
+                    btnText: "替換第 1 項為 ✨ 勇者之盾",
+                    action: () => {
+                        const newList = [...list];
+                        newList[0] = '✨ 勇者之盾';
+                        setList(newList);
+                        setMessage("太帥了！「替換」會直接把該位置原本的東西丟掉，換成新的東西，背包總數量不會改變。");
+                    },
+                    hint: "替換不會改變長度，只是把某一格的內容換掉。",
+                    choices: [
+                        { text: "🧱 替換 [背包] 的第 1 項為 [✨ 勇者之盾]", correct: true },
+                        { text: "🧱 插入 [✨ 勇者之盾] 到 [背包] 的第 1 項", correct: false, why: "「插入」會多一格、把木盾往後擠；我們是要把木盾「升級」成勇者之盾。" },
+                        { text: "🧱 添加 [✨ 勇者之盾] 到 [背包]", correct: false, why: "「添加」會排到最後面，木盾還在。要「替換」直接把第 1 項換掉。" }
+                    ]
+                },
+                {
+                    title: "🐾 任務四：消耗補給 (刪除)",
+                    desc: "戰鬥結束，你受傷了需要補血。請吃掉背包裡的「🍎 蘋果」（將它從背包中刪除）。",
+                    btnText: "吃掉(刪除) 🍎 蘋果",
+                    action: () => {
+                        // 尋找蘋果的索引並刪除它
+                        const appleIndex = list.indexOf('🍎 蘋果');
+                        const newList = [...list];
+                        if(appleIndex > -1) newList.splice(appleIndex, 1);
+                        setList(newList);
+                        setMessage("美味！「刪除」會把指定的物品拿掉，它後面的所有物品都會自動往前遞補空位喔。");
+                    },
+                    hint: "算平均前把不要的資料刪掉，後面會自動遞補。",
+                    choices: [
+                        { text: "🧱 刪除 [背包] 裡的 [🍎 蘋果]", correct: true },
+                        { text: "🧱 替換 [🍎 蘋果] 為空白", correct: false, why: "替換只是換內容，蘋果的位置還佔著；要「刪除」才會整格拿掉、後面遞補。" },
+                        { text: "🧱 添加 [🍎 蘋果] 到 [背包]", correct: false, why: "這樣會多一顆蘋果，不是吃掉它！" }
+                    ]
+                },
+                {
+                    title: "🎉 清單特訓完成！",
+                    desc: "你已經親手體驗了清單的四大核心功能：添加、插入、替換、刪除。最後來個結業測驗——抽 3 題，全部答對就能解鎖後面的 10 個程式關卡！",
+                    btnText: "📝 開始結業測驗",
+                    action: () => {
+                        setMessage("最後一關！仔細想清楚再選，要 3 題全對才算過關喔。");
+                        onComplete();
+                    }
+                }
+            ];
+
+            const current = steps[step];
+            /* 綁 step：同一關內重繪（例如選錯給提示）順序不會跳動，
+               換關才重洗。順序一直跳的話學生會以為畫面壞了。 */
+            const choices = useMemo(
+              () => (current.choices ? shuffled(current.choices) : null),
+              [step]
+            );
+
+            // 冒險地圖的地點設定
+            const mapNodes = [
+                { icon: '🏡', name: '村莊' },
+                { icon: '🌲', name: '森林' },
+                { icon: '🧚', name: '泉水' },
+                { icon: '⛺', name: '營地' },
+                { icon: '📝', name: '結業測驗' }
+            ];
+
+            const handleAction = () => {
+                current.action();
+                if (step < steps.length - 1) {
+                    setStepCompleted(true);
+                }
+            };
+
+            const handleChoice = (choice) => {
+                if (choice.correct) {
+                    handleAction();
+                } else {
+                    setMessage("🤔 " + (choice.why || "再想想看，這個積木做的事情不太對喔！"));
+                }
+            };
+
+            const handleNext = () => {
+                setStep(step + 1);
+                setStepCompleted(false);
+                setMessage("任務更新！請看左側的新指示完成挑戰。");
+            };
+
+            return (
+                <div className="bg-white rounded-3xl shadow-lg p-8 md:p-10 border-t-8 border-green-500 animate-[fadeIn_0.5s_ease-out] min-h-[500px] flex flex-col justify-center">
+                    <h2 className="text-3xl font-black text-slate-800 mb-4"><span className="underline-doodle">{current.title}</span></h2>
+                    <p className="text-xl text-slate-700 mb-3 leading-relaxed bg-green-50 p-5 rounded-2xl border border-green-100">
+                        {current.desc}
+                    </p>
+                    {current.hint && (
+                        <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-xl px-4 py-2 mb-8">🎯 真實應用：{current.hint}</p>
+                    )}
+
+                    <div className="flex flex-col items-center justify-center gap-6 bg-slate-50 p-8 rounded-2xl border-2 border-dashed border-slate-300 min-h-[160px]">
+                        {!stepCompleted ? (
+                            current.choices ? (
+                                <div className="w-full">
+                                    <p className="text-center text-sm font-bold text-slate-500 mb-4">🤔 想一想，這個任務要用哪一個積木？點下去試試看！</p>
+                                    <div className="flex flex-col gap-3 items-stretch max-w-xl mx-auto">
+                                        {choices.map((c, ci) => (
+                                            <button key={ci} onClick={() => handleChoice(c)}
+                                                className="bg-white hover:bg-teal-50 border-2 border-slate-300 hover:border-teal-400 text-slate-800 text-lg font-bold py-3 px-5 rounded-2xl shadow-sm transition-all active:scale-95 text-left">
+                                                {c.text}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                            <button
+                                onClick={handleAction}
+                                className="bg-green-500 hover:bg-green-600 text-white text-2xl font-bold py-4 px-8 rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2 hover:-translate-y-1"
+                            >
+                                {current.btnText}
+                            </button>
+                            )
+                        ) : (
+                            <div className="flex flex-col items-center gap-5 animate-[fadeIn_0.3s_ease-out]">
+                                <div className="text-green-600 font-extrabold text-2xl flex items-center gap-2">
+                                    ✅ 任務達成！請看右邊貓咪老師的解說。
+                                </div>
+                                <button
+                                    onClick={handleNext}
+                                    className="bg-teal-500 hover:bg-teal-600 text-white text-xl font-bold py-3 px-8 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-2 animate-bounce mt-2"
+                                >
+                                    前往下一課 ➡️
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 冒險地圖 */}
+                    <div className="mt-10 pt-6 border-t-2 border-dashed border-slate-200 w-full animate-[fadeIn_0.5s_ease-out]">
+                        <h3 className="text-sm font-bold text-slate-400 mb-8 text-center tracking-widest">🗺️ 冒險地圖進度</h3>
+                        <div className="flex items-center w-full px-2 md:px-8">
+                            {mapNodes.map((node, i) => {
+                                const isPast = i < step;
+                                const isCurrent = i === step;
+                                return (
+                                    <React.Fragment key={i}>
+                                        {/* 節點 */}
+                                        <div className="flex flex-col items-center relative z-10">
+                                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-xl md:text-2xl border-4 transition-all duration-500 bg-white ${
+                                                isPast ? 'border-green-500 scale-95' :
+                                                isCurrent ? 'border-teal-500 scale-110 shadow-lg shadow-blue-200 ring-4 ring-teal-50' :
+                                                'border-slate-300 opacity-50 grayscale'
+                                            }`}>
+                                                {isPast && i !== mapNodes.length - 1 ? '✔️' : node.icon}
+                                            </div>
+                                            <span className={`absolute top-12 md:top-14 text-xs font-bold whitespace-nowrap transition-colors duration-300 ${
+                                                isCurrent ? 'text-teal-700 font-extrabold' :
+                                                isPast ? 'text-green-600' : 'text-slate-400'
+                                            }`}>
+                                                {node.name}
+                                            </span>
+                                        </div>
+
+                                        {/* 連接線 */}
+                                        {i < mapNodes.length - 1 && (
+                                            <div className="flex-1 h-1.5 mx-1 md:mx-2 relative z-0 rounded-full overflow-hidden">
+                                                <div className="absolute inset-0 bg-slate-200"></div>
+                                                <div className={`absolute inset-0 bg-green-500 transition-transform duration-700 ease-in-out origin-left ${
+                                                    i < step ? 'scale-x-100' : 'scale-x-0'
+                                                }`}></div>
+                                            </div>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </div>
+                        <div className="h-6 md:h-8"></div> {/* 為絕對定位的文字保留空間 */}
+                    </div>
+
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 元件 2.5：結業測驗（Quiz Mode）
+        // ------------------------------------------
+        // 為什麼要考：教學模式選錯只會給提示、不會有代價，硬猜也走得完。
+        // 這關是「前導教材過了沒」的唯一憑據，後面 10 個程式關卡都靠它開門，
+        // 所以改成從題庫抽 3 題、全對才算過，錯了就整組重抽。
+        // 規則刻意與程式設計關卡的自我檢核測驗一致，學生不必重新學規則。
+        // ==========================================
+        const QUIZ_BANK = [
+            { q:'Scratch 清單裡，第一個項目的編號（索引）是多少？',
+              o:['0','1','-1','看清單長度而定'], a:1,
+              why:'Scratch 從 1 開始數，和背包的第 1 格一樣。' },
+            { q:'要把新物品放到清單的「最後一個空位」，用哪個積木？',
+              o:['插入 ... 到第 1 項','添加 ... 到清單','替換第 1 項','刪除第 1 項'], a:1,
+              why:'「添加」是往後接；「插入」才是指定位置。' },
+            { q:'想把第 2 項的東西「直接換成」別的，用哪個積木？',
+              o:['替換第 2 項內容','插入到第 2 項','添加到最後','刪除第 2 項'], a:0,
+              why:'插入會把原本第 2 項往後推，數量變多；替換才是原地換掉。' },
+            { q:'把物品「插入到第 2 項」，原本的第 2 項會怎樣？',
+              o:['被覆蓋掉','往後移到第 3 項','被刪除','移到最後面'], a:1,
+              why:'插入會把它後面的通通往後推一格，清單長度 +1。' },
+            { q:'「刪除清單的第 2 項」之後，原本的第 3 項會變成第幾項？',
+              o:['還是第 3 項','第 2 項','第 4 項','消失了'], a:1,
+              why:'刪除後面的會自動往前遞補，這就是為什麼抽號碼不會重複。' },
+            { q:'要清空整個背包，該用哪個積木？',
+              o:['刪除第 1 項','刪除清單的所有項目','隱藏清單','替換第 1 項為空白'], a:1,
+              why:'一項一項刪太慢；「刪除全部」一次重置。' },
+            { q:'要知道清單裡目前有幾樣東西，用什麼？',
+              o:['清單的長度','清單包含 ... 嗎？','項目 ... 的位置','隨機取數'], a:0,
+              why:'長度＝資料筆數，點名算人數、成績算平均都要用它。' },
+            { q:'要「依序讀出清單的每一項」，迴圈通常要重複幾次？',
+              o:['10 次','無限次','清單的長度 次','1 次'], a:2,
+              why:'重複「清單長度」次，才會剛好每一項都讀到、不多不少。' },
+            { q:'要檢查「小明」在不在名單裡，最直接的是？',
+              o:['清單包含 小明 嗎？','清單的長度','刪除 小明','添加 小明'], a:0,
+              why:'「包含…嗎？」回答是或否，正好給「如果…那麼」用。' }
+        ];
+        const QUIZ_PICK = 3;
+
+        const QuizMode = ({ onPass }) => {
+            const pick = () => {
+                const a = QUIZ_BANK.slice();
+                for (let i = a.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [a[i], a[j]] = [a[j], a[i]];
+                }
+                return a.slice(0, QUIZ_PICK);
+            };
+            /* 選項也洗過：題目雖然是抽的，但選項順序固定的話，
+               同一題重複出現時記位置就好，不必真的懂。 */
+            const withShuffledOptions = (qs) => qs.map(q => {
+              const order = shuffled(q.o.map((text, i) => ({ text, i })));
+              return { ...q, o: order.map(x => x.text),
+                            a: order.findIndex(x => x.i === q.a) };
+            });
+            const [set, setSet] = useState(() => withShuffledOptions(pick()));
+            const [idx, setIdx] = useState(0);
+            const [picked, setPicked] = useState(null);
+            const [score, setScore] = useState(0);
+            const [failed, setFailed] = useState(false);
+
+            const q = set[idx];
+            const done = idx >= set.length;
+
+            const retry = () => { setSet(withShuffledOptions(pick())); setIdx(0); setPicked(null); setScore(0); setFailed(false); };
+            const choose = (i) => {
+                if (picked !== null) return;
+                setPicked(i);
+                if (i === q.a) setScore(score + 1); else setFailed(true);
+            };
+            const next = () => { setIdx(idx + 1); setPicked(null); };
+
+            if (done) {
+                const allRight = !failed && score === set.length;
+                return (
+                    <div className="bg-white rounded-3xl shadow-lg p-8 md:p-10 border-t-8 border-green-500 min-h-[500px] flex flex-col justify-center items-center text-center animate-[fadeIn_0.4s_ease-out]">
+                        {allRight ? (
+                            <>
+                                <div className="text-6xl mb-4">🏆</div>
+                                <h2 className="text-3xl font-black text-green-600 mb-3">結業測驗全對！</h2>
+                                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                                    清單的觀念過關了。<br/>關卡已經解鎖，去試試第 1 關「班級置物櫃」吧！
+                                </p>
+                                <button onClick={onPass}
+                                    className="bg-green-500 hover:bg-green-600 text-white text-2xl font-bold py-4 px-8 rounded-full shadow-lg transition-all active:scale-95 hover:-translate-y-1">
+                                    🚀 進入積木實驗室
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-6xl mb-4">🤔</div>
+                                <h2 className="text-3xl font-black text-amber-600 mb-3">差一點，再來一次</h2>
+                                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                                    要<b className="text-amber-700">全部答對</b>才算過關。<br/>
+                                    看看右邊貓咪老師的解說，重新抽 {QUIZ_PICK} 題再挑戰。
+                                </p>
+                                <button onClick={retry}
+                                    className="bg-teal-500 hover:bg-teal-600 text-white text-xl font-bold py-3 px-8 rounded-full shadow-lg transition-transform active:scale-95">
+                                    🔄 重新挑戰
+                                </button>
+                            </>
+                        )}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="bg-white rounded-3xl shadow-lg p-8 md:p-10 border-t-8 border-amber-400 min-h-[500px] flex flex-col justify-center animate-[fadeIn_0.4s_ease-out]">
+                    <div className="flex items-center justify-between mb-4">
+                        <span className="text-sm font-black text-amber-600">✅ 結業測驗（{QUIZ_PICK} 題全對才過關）</span>
+                        <span className="text-sm font-bold text-slate-400">第 {idx + 1} / {set.length} 題</span>
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-800 mb-6 leading-relaxed">{q.q}</h2>
+                    <div className="flex flex-col gap-3 items-stretch">
+                        {q.o.map((opt, i) => {
+                            let cls = 'bg-white hover:bg-amber-50 border-slate-300 hover:border-amber-400 text-slate-800';
+                            if (picked !== null) {
+                                if (i === q.a) cls = 'bg-green-50 border-green-500 text-green-800';
+                                else if (i === picked) cls = 'bg-red-50 border-red-400 text-red-700';
+                                else cls = 'bg-white border-slate-200 text-slate-400';
+                            }
+                            return (
+                                <button key={i} onClick={() => choose(i)} disabled={picked !== null}
+                                    className={`border-2 text-lg font-bold py-3 px-5 rounded-2xl shadow-sm transition-all active:scale-95 text-left ${cls}`}>
+                                    {picked !== null && i === q.a ? '✅ ' : ''}
+                                    {picked !== null && i === picked && i !== q.a ? '❌ ' : ''}
+                                    {opt}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {picked !== null && (
+                        <div className="mt-6 animate-[fadeIn_0.3s_ease-out]">
+                            <p className="text-base text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-4">💡 {q.why}</p>
+                            <button onClick={next}
+                                className="w-full bg-teal-500 hover:bg-teal-600 text-white text-xl font-bold py-3 rounded-full shadow-lg transition-transform active:scale-95">
+                                {idx + 1 < set.length ? '下一題 ➡️' : '看結果 🏁'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 元件 3：第三階段 - 自由探索 (Sandbox Mode)
+        // ==========================================
+        const SandboxMode = ({ list, setList, setMessage, onTraverse }) => {
+            const [useItemIndex, setUseItemIndex] = useState('1');
+            const [removeItemIndex, setRemoveItemIndex] = useState('1');
+            const [scenarioInsertIndex, setScenarioInsertIndex] = useState('1');
+            const [scenarioReplaceIndex, setScenarioReplaceIndex] = useState('1');
+            const [addValue, setAddValue] = useState('紅藥水');
+            const [deleteIndex, setDeleteIndex] = useState('1');
+            const [insertValue, setInsertValue] = useState('鐵劍');
+            const [insertIndex, setInsertIndex] = useState('2');
+            const [replaceIndex, setReplaceIndex] = useState('1');
+            const [replaceValue, setReplaceValue] = useState('超級蘋果');
+            const [getItemIndex, setGetItemIndex] = useState('1');
+            const [containsValue, setContainsValue] = useState('金幣');
+
+            // --- 情境區專用功能 ---
+            const collectItem = (itemName) => {
+                setList([...list, itemName]);
+                setMessage(`⚔️ 勇者撿到了「${itemName}」！這在程式裡等於使用了【添加 (${itemName}) 到清單】積木喔。`);
+            };
+
+            const handleScenarioInsert = () => {
+                const idx = parseInt(scenarioInsertIndex);
+                if (isNaN(idx) || idx < 1 || idx > list.length + 1) {
+                    setMessage(`⚠️ 無法裝備！背包的編號只能是 1 到 ${list.length + 1} 之間。`);
+                    return;
+                }
+                const newList = [...list];
+                newList.splice(idx - 1, 0, '🛡️ 木盾');
+                setList(newList);
+                setMessage(`🛡️ 勇者將「🛡️ 木盾」緊急裝備到了第 ${idx} 項！這在程式裡等於使用了【插入】積木。`);
+            };
+
+            const handleScenarioReplace = () => {
+                const idx = parseInt(scenarioReplaceIndex);
+                if (isNaN(idx) || idx < 1 || idx > list.length) {
+                    setMessage(`⚠️ 找不到第 ${idx} 項道具，神仙教母無法施法！`);
+                    return;
+                }
+                const oldItem = list[idx - 1];
+                const newList = [...list];
+                newList[idx - 1] = '✨ 勇者之盾';
+                setList(newList);
+                setMessage(`✨ 神仙教母把第 ${idx} 項的「${oldItem}」變成「✨ 勇者之盾」了！這等於使用了【替換】積木。`);
+            };
+
+            const useFirstItem = () => {
+                if (list.length === 0) {
+                    setMessage("⚠️ 背包是空的！勇者沒有東西可以使用。");
+                    return;
+                }
+                const item = list[0];
+                const newList = list.slice(1);
+                setList(newList);
+                setMessage(`✨ 勇者使用了「${item}」！這等於使用了【刪除清單的第 (1) 項】積木。後面的物品自動往前排了！`);
+            };
+
+            const handleUseNthItem = () => {
+                const idx = parseInt(useItemIndex);
+                if (isNaN(idx) || idx < 1 || idx > list.length) {
+                    setMessage(`⚠️ 背包裡沒有第 ${idx} 項道具喔！請確認輸入的編號。`);
+                    return;
+                }
+                const item = list[idx - 1];
+                const newList = list.filter((_, i) => i !== (idx - 1));
+                setList(newList);
+                setMessage(`✨ 勇者使用了第 ${idx} 項的「${item}」！這相當於先用【第 (${idx}) 項】讀取它，再用【刪除第 (${idx}) 項】移除它。`);
+            };
+
+            const handleRemoveNthItem = () => {
+                const idx = parseInt(removeItemIndex);
+                if (isNaN(idx) || idx < 1 || idx > list.length) {
+                    setMessage(`⚠️ 找不到第 ${idx} 項道具，無法移除！`);
+                    return;
+                }
+                const item = list[idx - 1];
+                const newList = list.filter((_, i) => i !== (idx - 1));
+                setList(newList);
+                setMessage(`🗑️ 勇者把第 ${idx} 項的「${item}」移除了！等於直接使用了【刪除清單的第 (${idx}) 項】積木。`);
+            };
+
+            // --- 積木區專用功能 ---
+            const handleAdd = () => {
+                if (!addValue) { setMessage("請輸入要加入的東西！"); return; }
+                setList([...list, addValue]);
+                setMessage(`👉 已將「${addValue}」排到清單的最後面！目前長度變為 ${list.length + 1}。`);
+            };
+            const handleDelete = () => {
+                const idx = parseInt(deleteIndex);
+                if (isNaN(idx) || idx < 1 || idx > list.length) { setMessage("❌ 找不到這個編號！請輸入正確的項目編號。"); return; }
+                const deletedItem = list[idx - 1];
+                setList(list.filter((_, i) => i !== (idx - 1)));
+                setMessage(`🗑️ 已刪除第 ${idx} 項的「${deletedItem}」。後面的東西會自動往前遞補喔！`);
+            };
+            const handleDeleteAll = () => {
+                setList([]);
+                setMessage("🌪️ 已經清空整個清單了！現在清單長度是 0。");
+            };
+            const handleInsert = () => {
+                const idx = parseInt(insertIndex);
+                if (!insertValue) { setMessage("請輸入要插入的東西！"); return; }
+                if (isNaN(idx) || idx < 1 || idx > list.length + 1) { setMessage(`❌ 無法插入！編號只能是 1 到 ${list.length + 1} 之間。`); return; }
+                const newList = [...list];
+                newList.splice(idx - 1, 0, insertValue);
+                setList(newList);
+                setMessage(`➡️ 已將「${insertValue}」擠進第 ${idx} 個位置。原本在它後面的東西都往後退一格了！`);
+            };
+            const handleReplace = () => {
+                const idx = parseInt(replaceIndex);
+                if (!replaceValue) { setMessage("請輸入要替換成什麼東西！"); return; }
+                if (isNaN(idx) || idx < 1 || idx > list.length) { setMessage("❌ 找不到這個編號，無法替換！"); return; }
+                const oldItem = list[idx - 1];
+                const newList = [...list];
+                newList[idx - 1] = replaceValue;
+                setList(newList);
+                setMessage(`🔄 已將第 ${idx} 項原本的「${oldItem}」直接替換成「${replaceValue}」！`);
+            };
+            const handleGetItem = () => {
+                const idx = parseInt(getItemIndex);
+                if (isNaN(idx) || idx < 1 || idx > list.length) { setMessage("❌ 找不到這個編號！"); return; }
+                setMessage(`🔍 第 ${idx} 項裡裝的東西是：「${list[idx - 1]}」`);
+            };
+            const handleLength = () => {
+                setMessage(`📏 目前清單的總長度（共有幾個項目）是：${list.length}`);
+            };
+            const handleContains = () => {
+                if (!containsValue) { setMessage("請輸入要檢查的東西！"); return; }
+                const isContain = list.includes(containsValue);
+                setMessage(isContain ? `✅ 是的！清單裡面**包含**「${containsValue}」。` : `❌ 沒有喔！清單裡面**不包含**「${containsValue}」。`);
+            };
+
+            // --- UI 元件 ---
+            const BlockInput = ({ value, onChange, placeholder, width = "w-16" }) => (
+                <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`text-black text-center px-1 rounded-full outline-none shadow-inner mx-1 ${width}`} onClick={(e) => e.stopPropagation()} />
+            );
+            const BlockNumInput = ({ value, onChange, placeholder, width = "w-10" }) => (
+                <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`text-black text-center px-1 rounded-full outline-none shadow-inner mx-1 ${width}`} onClick={(e) => e.stopPropagation()} />
+            );
+            const PlayBtn = () => (
+                <div className="bg-white/20 hover:bg-white/40 rounded-full w-8 h-8 flex items-center justify-center mr-2 cursor-pointer transition-colors shrink-0"><span className="text-white text-lg ml-1">▶</span></div>
+            );
+
+            return (
+                <div className="animate-[fadeIn_0.5s_ease-out]">
+                    {/* 真實情境提示：清單在後面關卡的應用 */}
+                    <div className="bg-white rounded-2xl shadow-md p-4 mb-6 border-l-4 border-teal-400">
+                        <p className="text-sm text-slate-600 leading-relaxed"><span className="font-black text-teal-700">🎯 清單在後面關卡的應用：</span>點名名單、把成績逐一加總算平均、演奏小星星的音階、抽籤不重複、發撲克牌…全都是把資料放進「清單」，再用<strong>迴圈</strong>跑過每一項。</p>
+                    </div>
+
+                    {/* 區塊 1：真實場景應用 */}
+                    <div className="bg-white rounded-2xl shadow-md p-6 mb-8 border-t-8 border-teal-500">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-3 flex items-center gap-2">
+                            🎮 情境體驗：勇者的遊戲背包
+                        </h2>
+                        <p className="text-slate-600 mb-4 bg-teal-50 p-3 rounded-lg border border-teal-100 text-sm leading-relaxed">
+                            有了「清單 (List)」，勇者就像擁有了一個<strong>無限大的置物櫃</strong>，可以依序存放所有寶物。試著點擊下方按鈕進行操作吧！
+                        </p>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-500 mb-2">1. 探索並收集道具 (添加項目)</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    <button onClick={() => collectItem('🍎 蘋果')} className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-4 py-2 rounded-xl font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-1">撿起蘋果</button>
+                                    <button onClick={() => collectItem('🗡️ 鐵劍')} className="bg-slate-50 hover:bg-slate-200 text-slate-700 border border-slate-300 px-4 py-2 rounded-xl font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-1">撿起鐵劍</button>
+                                    <button onClick={() => collectItem('🧪 紅藥水')} className="bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 px-4 py-2 rounded-xl font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-1">撿起紅藥水</button>
+                                    <button onClick={() => collectItem('💰 金幣')} className="bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 px-4 py-2 rounded-xl font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-1">撿起金幣</button>
+                                </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100">
+                                <h3 className="text-sm font-bold text-slate-500 mb-2">2. 緊急防禦 (插入項目)</h3>
+                                <div className="bg-green-50 border border-green-200 rounded-xl flex items-center shadow-sm p-1 pr-3 w-max">
+                                    <button onClick={handleScenarioInsert} className="hover:bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-bold transition-transform active:scale-95 flex items-center gap-1">
+                                        🛡️ 插入 木盾 到第
+                                    </button>
+                                    <input type="number" min="1" value={scenarioInsertIndex} onChange={(e) => setScenarioInsertIndex(e.target.value)} className="w-12 text-center border border-green-300 rounded mx-1 py-1 outline-none font-bold bg-white" />
+                                    <span className="text-green-700 font-bold">項</span>
+                                </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100">
+                                <h3 className="text-sm font-bold text-slate-500 mb-2">3. 裝備升級 (替換項目)</h3>
+                                <div className="bg-purple-50 border border-purple-200 rounded-xl flex items-center shadow-sm p-1 pr-3 w-max">
+                                    <button onClick={handleScenarioReplace} className="hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-bold transition-transform active:scale-95 flex items-center gap-1">
+                                        ✨ 將第
+                                    </button>
+                                    <input type="number" min="1" value={scenarioReplaceIndex} onChange={(e) => setScenarioReplaceIndex(e.target.value)} className="w-12 text-center border border-purple-300 rounded mx-1 py-1 outline-none font-bold bg-white" />
+                                    <span className="text-purple-700 font-bold">項替換為 勇者之盾</span>
+                                </div>
+                            </div>
+                            
+                            <div className="pt-2 border-t border-slate-100">
+                                <h3 className="text-sm font-bold text-slate-500 mb-2">4. 使用或管理道具 (讀取與刪除)</h3>
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <button onClick={useFirstItem} className="bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 px-4 py-2 rounded-xl font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-1">
+                                            ✨ 使用最上面的道具 (第 1 項)
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-3">
+                                        <div className="bg-teal-50 border border-teal-200 rounded-xl flex items-center shadow-sm p-1 pr-3 w-max">
+                                            <button onClick={handleUseNthItem} className="hover:bg-teal-100 text-teal-700 px-3 py-1.5 rounded-lg font-bold transition-transform active:scale-95 flex items-center gap-1">
+                                                ✨ 使用第
+                                            </button>
+                                            <input type="number" min="1" value={useItemIndex} onChange={(e) => setUseItemIndex(e.target.value)} className="w-12 text-center border border-teal-300 rounded mx-1 py-1 outline-none font-bold bg-white" />
+                                            <span className="text-teal-700 font-bold">項道具</span>
+                                        </div>
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl flex items-center shadow-sm p-1 pr-3 w-max">
+                                            <button onClick={handleRemoveNthItem} className="hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition-transform active:scale-95 flex items-center gap-1">
+                                                🗑️ 移除第
+                                            </button>
+                                            <input type="number" min="1" value={removeItemIndex} onChange={(e) => setRemoveItemIndex(e.target.value)} className="w-12 text-center border border-slate-300 rounded mx-1 py-1 outline-none font-bold bg-white" />
+                                            <span className="text-slate-700 font-bold">項道具</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 區塊 2：Scratch 積木對應區 */}
+                    <div className="bg-white rounded-2xl shadow-md p-6 border-t-8 border-[#ff661a]">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-3 flex items-center gap-2">
+                            🧩 幕後原理：Scratch 積木控制台
+                        </h2>
+                        <p className="text-slate-600 mb-6 bg-orange-50 p-3 rounded-lg border border-orange-100 text-sm leading-relaxed">
+                            剛剛在遊戲情境裡的操作，其實都可以用 Scratch 的清單積木來完成！點擊下方積木最左邊的「▶」按鈕來執行程式。
+                        </p>
+
+                        <div className="space-y-4 overflow-x-auto pb-4">
+                            <div className="scratch-list-color text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#cc5214] active:border-b-0 active:translate-y-1 transition-all" onClick={handleAdd}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap">添加 <BlockInput value={addValue} onChange={setAddValue} placeholder="物品" width="w-24" /> 到 [我的背包]</span>
+                            </div>
+                            <div className="scratch-list-color text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#cc5214] active:border-b-0 active:translate-y-1 transition-all" onClick={handleDelete}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap">刪除 [我的背包] 的第 <BlockNumInput value={deleteIndex} onChange={setDeleteIndex} /> 項</span>
+                            </div>
+                            <div className="scratch-list-color text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#cc5214] active:border-b-0 active:translate-y-1 transition-all" onClick={handleDeleteAll}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap">刪除 [我的背包] 的所有項目</span>
+                            </div>
+                            <hr className="my-4 border-slate-200" />
+                            <div className="scratch-list-color text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#cc5214] active:border-b-0 active:translate-y-1 transition-all" onClick={handleInsert}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap">插入 <BlockInput value={insertValue} onChange={setInsertValue} width="w-20" /> 到 [我的背包] 的第 <BlockNumInput value={insertIndex} onChange={setInsertIndex} /> 項</span>
+                            </div>
+                            <div className="scratch-list-color text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#cc5214] active:border-b-0 active:translate-y-1 transition-all" onClick={handleReplace}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap">將 [我的背包] 的第 <BlockNumInput value={replaceIndex} onChange={setReplaceIndex} /> 項替換為 <BlockInput value={replaceValue} onChange={setReplaceValue} width="w-24" /></span>
+                            </div>
+                            <hr className="my-4 border-slate-200" />
+                            <div className="bg-[#9966ff] text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#7a52cc] active:border-b-0 active:translate-y-1 transition-all" onClick={handleGetItem}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap flex items-center">說出<span className="scratch-reporter px-3 py-1 mx-2 flex items-center border border-[#cc5214]">[我的背包] 的第 <BlockNumInput value={getItemIndex} onChange={setGetItemIndex} /> 項</span></span>
+                            </div>
+                            <div className="bg-[#9966ff] text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#7a52cc] active:border-b-0 active:translate-y-1 transition-all" onClick={handleLength}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap flex items-center">說出<span className="scratch-reporter px-3 py-1 mx-2 flex items-center border border-[#cc5214]">[我的背包] 的長度</span></span>
+                            </div>
+                            <div className="bg-[#9966ff] text-white p-2 rounded-lg flex items-center shadow-md select-none w-max border-b-4 border-[#7a52cc] active:border-b-0 active:translate-y-1 transition-all" onClick={handleContains}>
+                                <PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap flex items-center">說出<span className="scratch-boolean py-1 mx-2 flex items-center border border-[#cc5214]">[我的背包] 包含 <BlockInput value={containsValue} onChange={setContainsValue} width="w-24" /> ？</span></span>
+                            </div>
+
+                            <hr className="my-4 border-slate-200" />
+                            <div className="text-xs font-bold text-slate-400 mb-1">🔁 迴圈：一次跑完整個清單（後面每一關都會用到！）</div>
+                            <div className="bg-[#ffab19] text-white p-3 rounded-lg shadow-md select-none w-max border-b-4 border-[#cf9412] active:border-b-0 active:translate-y-1 transition-all cursor-pointer" onClick={onTraverse}>
+                                <div className="flex items-center"><PlayBtn /><span className="font-bold text-lg tracking-wide whitespace-nowrap">重複 <span className="scratch-reporter px-3 py-0.5 mx-1 border border-[#cc5214]">[我的背包] 的長度</span> 次</span></div>
+                                <div className="pl-8 mt-2 border-l-4 border-[#cf9412]">
+                                    <span className="bg-[#9966ff] inline-flex items-center px-3 py-1.5 rounded-lg shadow border-b-2 border-[#7a52cc] font-bold whitespace-nowrap">說出 [我的背包] 的第 <span className="scratch-reporter px-2 py-0.5 mx-1 border border-[#7a52cc]">編號</span> 項</span>
+                                    <div className="mt-2"><span className="scratch-list-color inline-flex items-center px-3 py-1.5 rounded-lg shadow border-b-2 border-[#cc5214] font-bold whitespace-nowrap">編號 = 編號 + 1</span></div>
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-2">👉 點這塊迴圈，右邊背包會用「編號」指標從第 1 項逐項高亮到最後一項。</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 回報「前導教材通過了」
+        // ------------------------------------------
+        // 這一頁刻意不碰 Firebase：它是被 flowchart.html 用 iframe 嵌進去的，
+        // 由父頁負責寫進度（父頁本來就有學生身分與資料庫連線）。
+        // 這裡只送一個訊息出去，父頁收到才寫入 modules.list。
+        //
+        // ⚠️ 這是「課堂秩序」機制，不是防作弊機制：學生開 F12 一樣送得出這個訊息。
+        //    前導教材不計星，也不擋關卡。
+        // ==========================================
+        function reportPassed() {
+            if (window.self === window.top) return;   // 沒有被嵌入就沒人要收
+            try {
+                var origin = (location.protocol === 'http:' || location.protocol === 'https:')
+                    ? location.origin : '*';
+                window.parent.postMessage({ type: 'lead-done', module: 'list' }, origin);
+            } catch (e) { /* 送不出去就算了，學生仍可繼續操作 */ }
+        }
+
+        // ==========================================
+        // 主程式 (控制階段切換)
+        // ==========================================
+        function App() {
+            /* 三個階段：tutorial（特訓）→ quiz（結業測驗）→ sandbox（積木實驗室）
+               ?done=1 是父頁（flowchart.html）帶進來的：這位同學之前已經考過了，
+               不必再考一次，直接進實驗室自由玩。 */
+            const alreadyPassed = new URLSearchParams(location.search).get('done') === '1';
+            const [mode, setMode] = useState(alreadyPassed ? 'sandbox' : 'tutorial');
+            const [list, setList] = useState([]);         // 共享的背包資料（跨階段保留）
+            const [message, setMessage] = useState(alreadyPassed
+                ? "歡迎回到積木實驗室！你已經考過結業測驗了，這裡可以自由操作，隨時回來複習清單積木。"
+                : "勇者你好！我是貓咪導師。在出發冒險前，請先完成左側的「清單特訓」，學習怎麼管理你的背包！");
+            const [highlightIndex, setHighlightIndex] = useState(-1); // 走訪動畫用：目前高亮到第幾項
+
+            // 🔁 走訪整個清單（迴圈）：編號從 1 開始，重複「清單長度」次，逐項讀出
+            const runTraverse = () => {
+                if (list.length === 0) { setMessage("🎒 背包是空的，沒有東西可以走訪！先去撿一些道具吧。"); return; }
+                let i = 0;
+                setMessage("🔁 開始走訪！「編號」從 1 開始，重複（清單長度）次，每次讀出一項。");
+                const timer = setInterval(() => {
+                    if (i >= list.length) {
+                        clearInterval(timer);
+                        setHighlightIndex(-1);
+                        setMessage(`✅ 走訪完成！迴圈總共跑了 ${list.length} 次（＝清單長度），每一項都讀到了。點名、算成績、演奏音階都是這樣跑的！`);
+                        return;
+                    }
+                    setHighlightIndex(i);
+                    setMessage(`👉 編號 = ${i + 1}：讀出第 ${i + 1} 項「${list[i]}」`);
+                    i++;
+                }, 950);
+            };
+
+            return (
+                <div className="max-w-7xl mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-6 relative">
+                    
+                    {/* 左側：操作區 (根據階段切換介面) */}
+                    <div className="w-full md:w-3/5 pb-20">
+                        {mode === 'tutorial' ? (
+                            <TutorialMode
+                                list={list}
+                                setList={setList}
+                                setMessage={setMessage}
+                                onComplete={() => setMode('quiz')}
+                            />
+                        ) : mode === 'quiz' ? (
+                            <QuizMode onPass={() => { reportPassed(); setMode('sandbox'); }} />
+                        ) : (
+                            <SandboxMode
+                                list={list}
+                                setList={setList}
+                                setMessage={setMessage}
+                                onTraverse={runTraverse}
+                            />
+                        )}
+                    </div>
+
+                    {/* 右側：視覺化清單與回饋區 (保持黏貼在畫面上) */}
+                    <div className="w-full md:w-2/5 md:sticky md:top-6 md:h-[calc(100vh-3rem)] z-10">
+                        <BackpackDisplay list={list} message={message} highlightIndex={highlightIndex} />
+                    </div>
+
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+
+<!-- 返回基地按鈕（自動加入） -->
+<a id="back-to-hub" href="hub.html" title="返回闖關基地"
+   style="position:fixed;top:14px;left:14px;z-index:99999;display:inline-flex;align-items:center;gap:6px;background:#1e293b;color:#fff;font-family:'Noto Sans TC',system-ui,sans-serif;font-weight:700;font-size:14px;padding:8px 14px;border-radius:9999px;text-decoration:none;box-shadow:0 4px 12px rgba(0,0,0,.25);transition:transform .15s;" onmouseover="this.style.transform='translateX(-2px)'" onmouseout="this.style.transform=''">← 返回基地</a>
+<script>/* 被嵌入 iframe 時隱藏返回基地按鈕 */if(window.self!==window.top){var _b=document.getElementById('back-to-hub');if(_b)_b.style.display='none';}</script>
+</body>
+</html>

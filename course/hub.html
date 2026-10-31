@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資訊科技 闖關基地</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+    body{
+      font-family:'Noto Sans TC',sans-serif;
+      background-color:#e7e5e4;
+      background-image:
+        linear-gradient(rgba(120,113,108,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120,113,108,.06) 1px, transparent 1px);
+      background-size:26px 26px;
+    }
+    .tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;backdrop-filter:blur(1px);border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+    @keyframes pop{0%{opacity:0;transform:translateY(12px) scale(.96)}100%{opacity:1;transform:none}}
+    .pop{animation:pop .5s ease-out both}
+    .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
+  </style>
+</head>
+<body class="min-h-screen text-slate-800">
+  <div id="app"></div>
+
+  <!-- 全站共用計分規則（單一來源，與各關卡頁、教師端同一份） -->
+  <script src="config.js"></script>
+<!-- 登入：學號＋六位數驗證碼（單一來源，見 shared/auth.js）-->
+<script src="../shared/auth.js"></script>
+  <script src="../shared/grading.js"></script>
+  <!-- 課表與「這週有沒有上課日」的判定（教師端同一支）-->
+  <script src="../shared/schedule.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signOut,
+         signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // ===== Firebase 設定（與課程其他頁面同一專案） =====
+    const firebaseConfig = window.CONFIG.FIREBASE;   // 設定集中在 config.js
+    // 集合名稱（config.js）
+    const COLLECTION = window.CONFIG.COLLECTIONS.PROGRESS;
+    const ROSTER = window.CONFIG.COLLECTIONS.ROSTER;
+    const CFG_COL = window.CONFIG.COLLECTIONS.CONFIG;   // {學期}-config（課表放這裡）
+    // 記住登入學號的鍵（同一個分頁內免得重打；關閉瀏覽器就失效）
+    const SAVED_KEY = 'sid' + window.CONFIG.TERM;
+
+    const app = initializeApp(firebaseConfig);
+    const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    /* ===== 登入：學號＋六位數驗證碼 =====
+       判斷邏輯（帳號怎麼組、第一次要不要先設定驗證碼）全在 shared/auth.js，
+       這裡只負責把 SDK 函式交給它、接結果、畫畫面。 */
+    AUTH.configure({ auth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+                     signInAnonymously, signOut, db, doc, getDoc, setDoc });
+
+    function loginBusy(on, text){
+      const btn = document.getElementById('login-go');
+      if(btn){ btn.disabled = on; btn.textContent = on ? (text || '登入中…') : (state.setup ? '設定並進入' : '登入'); }
+    }
+    async function codeLogin(){
+      const sid  = (document.getElementById('sid')?.value || '').trim();
+      const code = (document.getElementById('code')?.value || '').trim();
+      state.loginError = ''; state.loginSid = sid;
+      loginBusy(true);
+      try{
+        const r = await AUTH.studentSignIn(sid, code);
+        if(r.needsSetup){
+          // 第一次登入：把剛剛打的驗證碼帶過去，只要再確認一次
+          state.setup = { sid, code };
+          render(); return;
+        }
+        state.studentName = r.name || '';
+        startSession(r.sid);
+      }catch(e){
+        state.loginError = e.friendly || AUTH.hintFor((e && e.code) || 'unknown');
+        render();
+      }
+    }
+    async function codeSetup(){
+      const code  = (document.getElementById('code')?.value || '').trim();
+      const again = (document.getElementById('code2')?.value || '').trim();
+      state.loginError = '';
+      loginBusy(true, '設定中…');
+      try{
+        const r = await AUTH.studentSetup(state.setup.sid, code, again);
+        state.setup = null;
+        state.studentName = r.name || '';
+        startSession(r.sid);
+      }catch(e){
+        state.loginError = e.friendly || AUTH.hintFor((e && e.code) || 'unknown');
+        render();
+      }
+    }
+
+    // ===== 關卡定義（module ID 對應規格文件） =====
+    const MODULES = [
+      { id:'ethics',    title:'資訊倫理學習系統', tag:'法律倫理', icon:'⚖️', href:'cyberethics.html', theme:'bg-pink-100 border-pink-300 text-pink-900',    tape:'bg-pink-500/25',   rot:'rotate-1',  desc:'資訊倫理、網路禮儀、著作權與個資法。', maxStars:30, subLevels:10 },
+      { id:'thinking',  title:'運算思維挑戰',     tag:'運算思維', icon:'🧠', href:'thinking.html',    theme:'bg-green-100 border-green-300 text-green-900',  tape:'bg-green-500/25',  rot:'-rotate-1', desc:'10 道生活謎題，訓練邏輯與拆解力。', maxStars:20, subLevels:10 },
+      { id:'listprog', combines:['flowchart','scratch'], title:'程式設計（Scratch）', tag:'程式設計', icon:'🐱', href:'flowchart.html', theme:'bg-orange-100 border-orange-300 text-orange-900', tape:'bg-orange-500/25', rot:'-rotate-1',  desc:'含前導「清單學習機」與音階教材；一關關：排流程圖 → 寫 Scratch 程式。', maxStars:(window.CONFIG.GRADER_URL ? 60 : 30), subLevels:20 },
+      /* ⚠️ maxStars 是進度條的分母，一定要和「這張卡真的顯示的星數」對得起來：
+         流程圖 10×2 ＋ 交圖加分 10 ＝ 30；有接 Apps Script 評分（GRADER_URL）再加作品星 10×3 ＝ 60。
+         上限的算法在 GRADING.moduleMax()，改門檻時記得回來對一次。 */
+      { id:'arduino',   title:'智慧家居機電專題', tag:'延伸挑戰', icon:'💡', href:'5016b.html',       theme:'bg-indigo-100 border-indigo-300 text-indigo-900', tape:'bg-indigo-500/25', rot:'rotate-2',  desc:'五節課：感應、換算、調速、混色，最後做一個自己的專題。', maxStars:0, subLevels:0 }   // 延伸體驗，不計星數
+    ];
+
+    /* ===== 🏆 資訊倫理 闖關排行賽 =====
+       ★ 排行賽的題目、對錯、時間都由 Apps Script 處理（和程式設計評分同一個部署），
+         所以 config.js 有填 GRADER_URL 才出現；不想開排行賽就把 config.js 的 ARENA 設成 false。
+       ★ 放在模組卡片的最後面：不算一個模組、不進星數、不影響「下一關」提示。
+       ⚠️ 參賽資格的章節清單要和 content/ethics.js 的章節一樣（gas/arena.test.js 會比對）；
+          真正擋人的是 Apps Script（它用老師匯入的題庫裡的章節清單），這裡只是先告訴學生還差幾章。 */
+    const ARENA_ON = !!String(window.CONFIG.GRADER_URL || '').trim() && window.CONFIG.ARENA !== false;
+    const ARENA_UNITS = ['1-1','1-2','1-3','1-4','ch1-all','3-1','3-2','3-3','ch3-all','review-all'];
+    const ARENA_CARD = { title:'資訊倫理 闖關排行賽', tag:'排行挑戰', icon:'🏆', href:'arena.html',
+                         theme:'bg-pink-50 border-pink-200 text-pink-900', tape:'bg-pink-400/20',
+                         desc:'全部題目大亂鬥：答對升級、答錯降級，全對 1000 分。挑戰全年級排行榜！',
+                         needModule:'ethics', needUnits:ARENA_UNITS };
+    function arenaCard(mods, SZ){
+      if (!ARENA_ON) return '';
+      const s = ARENA_CARD, passed = standInPassed(s, mods), need = s.needUnits.length;
+      const head = `
+            <span class="tape ${s.tape}"></span>
+            <div class="flex items-center justify-between mb-2">
+              <div class="${SZ.icon}">${s.icon}</div>
+              <span class="${SZ.badge} font-bold px-2.5 py-1 rounded-full border bg-white/80 text-pink-600 border-pink-200">排行挑戰</span>
+            </div>
+            <h3 class="${SZ.title} font-black leading-tight mb-1">${s.title}</h3>
+            <p class="${SZ.desc} opacity-75 leading-relaxed mb-3">${s.desc}</p>`;
+      if (passed < need) return `
+          <div class="relative block ${SZ.pad} rounded-2xl border shadow-md rotate-1 ${s.theme} opacity-80 cursor-not-allowed select-none"
+               aria-disabled="true" title="資訊倫理 ${need} 個章節全部通關才能挑戰">${head}
+            <div class="h-2 bg-white/70 rounded-full overflow-hidden border border-pink-200 mb-2">
+              <div class="h-full bg-pink-300" style="width:${Math.round(passed / need * 100)}%"></div>
+            </div>
+            <span class="inline-flex items-center gap-1 ${SZ.go} font-bold">🔒 資訊倫理 ${need} 個章節全部通關才能挑戰（目前 ${passed} / ${need}）</span>
+          </div>`;
+      return `
+          <a href="${s.href}" class="group relative block ${SZ.pad} rounded-2xl border shadow-md hover:shadow-xl transition-all duration-300 rotate-1 hover:rotate-0 hover:-translate-y-1 ${s.theme}">${head}
+            <div class="flex items-center justify-between">
+              <span class="${SZ.tag} font-bold bg-white/50 px-2.5 py-1 rounded-full border border-black/5">${s.tag}</span>
+            </div>
+            <span class="mt-3 inline-flex items-center gap-1 ${SZ.go} font-bold">開始挑戰 →</span>
+          </a>`;
+    }
+    /** 已通關幾個指定章節：和章節選單同一個判斷（units[id].star > 0） */
+    function standInPassed(s, mods){
+      const units = ((mods||{})[s.needModule]||{}).units || {};
+      return s.needUnits.filter(id => (Number((units[id]||{}).star)||0) > 0).length;
+    }
+
+    // ===== 狀態呈現對照 =====
+    const STATUS = {
+      'todo':        { label:'尚未開始', badge:'bg-white/60 text-slate-500 border-slate-300', dim:false },   // 不變暗：學期初每張都是 todo，變暗的話整頁會霧掉
+      'in-progress': { label:'進行中',   badge:'bg-white/70 text-amber-700 border-amber-300', dim:false },
+      'pass':        { label:'已通關',   badge:'bg-white/80 text-emerald-700 border-emerald-400', dim:false },
+      'pending':     { label:'審核中',   badge:'bg-white/70 text-blue-700 border-blue-300', dim:false }
+    };
+
+    // ===== 全域狀態 =====
+    let state = {
+      status: 'loading',   // loading | login | main
+      /* 出席判定要用的兩份資料（週分數規則）：
+         cls   = 這個學生哪一班（從名冊來）
+         sched = 課表（整班共用一份，登入後讀一次） */
+      cls: '', sched: null,
+      authReady: false,
+      studentId: '',
+      studentName: '',
+      loginError: '',
+      loginSid: '',        // 剛剛打的學號（登入失敗時不必重打）
+      setup: null,         // 第一次登入：{ sid, code } → 顯示設定驗證碼的畫面
+      data: null,          // Firestore 文件內容
+      demo: false,
+      showWeek: false      // 是否顯示「本週成績卡」
+    };
+    let unsub = null;
+
+    // 範例資料（空資料時給老師預覽用）
+    const DEMO_DATA = { studentId:'DEMO', name:'範例學生', modules:{
+      ethics:{status:'pass',stars:26,level:10}, thinking:{status:'in-progress',stars:14,level:7},
+      flowchart:{status:'in-progress',stars:8,level:4}, list:{status:'in-progress'},
+      music:{status:'todo'}, scratch:{status:'pending',link:'#'}, arduino:{status:'todo'}
+    }};
+
+    // ===== 認證 =====
+    /* 建立這個分頁的登入狀態（規則在 shared/auth.js）：
+         · 完全沒有登入紀錄才匿名登入，不會蓋掉既有的學生身分
+         · 之後持續盯著「Firebase 的身分」有沒有和「這個分頁的學號」對不上，
+           對不上就讓這個分頁下線（教室換人用電腦時會發生） */
+    AUTH.attachSession(auth, signInAnonymously, onAuthStateChanged, {
+      /* 這台電腦已經用學生帳號登入過（可能是另一個分頁登的），這個分頁直接沿用，不必再登入一次。 */
+      onAdopt: (user, sid) => { if (state.status !== 'main') startSession(sid); },
+      /* 這台電腦目前登入的不是學生（多半是老師剛在這台示範過）。
+           先登出，再讓學生用學號登入 —— 不然規則會把他當成那個帳號。 */
+      onMismatch: (user) => {
+        AUTH.signOut().catch(()=>{});
+        state.status = 'login';
+        state.loginError = `這台電腦剛才登入的是 ${user.email || '其他帳號'}（不是學生帳號），已經幫你登出了，請用自己的學號登入。`;
+        render();
+      }
+    });
+    onAuthStateChanged(auth, user=>{
+      if(user){
+        state.authReady = true;
+        if(state.status==='loading'){
+          const saved = sessionStorage.getItem(SAVED_KEY);
+          if(saved && window.CONFIG.isSid(saved)){ startSession(saved); }  // SSO：已驗證過，直接登入
+          else {
+            /* 這個分頁沒有記住學號，但 Firebase 可能早就登入了（例如另一個分頁登的）。
+               身分的來源是 Firebase 的 email，sessionStorage 只是「這個分頁現在是誰」的快取 ——
+               email 取得出學號就直接用，不必再問一次。
+               ⚠️ 匿名登入或老師帳號取不出學號 → 回到登入畫面。 */
+            const fromEmail = (window.AUTH && AUTH.sidFromEmail)
+              ? AUTH.sidFromEmail(user.email || '') : '';
+            if (fromEmail) { startSession(fromEmail); }
+            else { state.status='login'; render(); }
+          }
+        }
+      }
+    });
+    // 保險：2.5 秒內未連上也先進登入頁（範例預覽不需連線）
+    setTimeout(()=>{ if(state.status==='loading'){ state.status='login'; render(); } }, 2500);
+
+
+    // 出席紀錄：只寫「當天第一次登入」的時間，同一天重複進出不覆蓋
+    async function recordAttendance(sid){
+      try{
+        const d = new Date();
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const ref = doc(db, COLLECTION, sid);
+        const snap = await getDoc(ref);
+        const att = (snap.exists() && snap.data().attendance) || {};
+        if(att[key]) return;                       // 今天已記錄過
+        await setDoc(ref, {
+          studentId: sid,
+          attendance: { [key]: Date.now() },
+          updatedAt: Date.now()
+        }, { merge:true });
+      }catch(e){ console.error('出席紀錄失敗', e); }
+    }
+
+
+    /* 課表：整班共用一份文件，登入後讀**一次**就好。
+       ⚠️ 不要放在 render() 或每次切換畫面時讀 —— 30 個人一堂課會變成幾百次讀取，吃掉免費額度。
+       ⚠️ {學期}-config 本來只有老師讀得到；為了這件事規則開了一個
+          「只限 schedule 這一份、只限單筆 get」的例外。
+          規則沒發布的話這裡會拿到 permission-denied，
+          出席一律判成 false ——「全班都缺席」就是那個症狀。 */
+    async function loadSchedule(){
+      try{
+        const s = await getDoc(doc(db, CFG_COL, 'schedule'));
+        const d = (s.exists() && s.data()) || {};
+        /* ★ open_json：哪些模組還沒到開放日（見 shared/schedule.js）。
+           和課表放在同一份文件，所以不多一次讀取、也不必改安全規則。 */
+        state.sched = { base: d.base||{}, off: d.off||{}, move: d.move||{},
+                        open_json: d.open_json || '' };
+      }catch(e){
+        console.warn('讀不到課表，本週成績卡會把出席當成「沒有」', e);
+        /* ⚠️ open_json 留空 ＝ 全部當成已開放。設定讀失敗就把教材鎖住，
+           是拿學生的課去賭一個設定檔。 */
+        state.sched = { base:{}, off:{}, move:{}, open_json:'' };
+      }
+      render();
+    }
+    // 開始一段登入 session（驗證通過或 SSO 自動登入後呼叫）
+    function startSession(t){
+      state.loginError=''; state.studentId=t; state.demo=false; state.status='main'; state.data=null;
+      sessionStorage.setItem(SAVED_KEY, t);  // 記住學號，回來自動登入（SSO）
+
+      // 若是被關卡頁導回來確認身分的（?next=xxx.html），登入成功就送他回去
+      try{
+        const next = new URLSearchParams(location.search).get('next');
+        // 白名單刻意只認「同資料夾的相對檔名」，擋掉 //evil.com 這種外部導轉。
+        if(next && /^[\w.-]+\.html(\?[\w=&%.\-]*)?$/.test(next)){
+          location.replace(next);
+          return;
+        }
+      }catch(e){}
+
+      render();
+      recordAttendance(t);   // 記錄今天的首次登入時間（當作出席）
+      // 取名冊姓名顯示（親切辨識）
+      getDoc(doc(db, ROSTER, t)).then(s=>{ if(s.exists()){ const r=s.data(); state.studentName = r.name || ''; state.cls = String(r.cls||''); render(); loadSchedule(); } }).catch(()=>{});
+      const ref = doc(db, COLLECTION, t);
+      if(unsub) unsub();
+      unsub = onSnapshot(ref, snap=>{
+        state.data = snap.exists() ? snap.data() : { studentId:t, modules:{} };
+        render();
+      }, err=>console.error('讀取失敗',err));
+    }
+    /* 登出一定要連 Firebase 一起登出。
+       ⚠️ 只清 sessionStorage 是不夠的：Firebase 的登入狀態存在瀏覽器裡，
+          attachSession 會立刻又把身分撿回來，看起來像登不出去。 */
+    function logout(){ if(unsub)unsub(); AUTH.signOut(); sessionStorage.removeItem(SAVED_KEY); state.status='login'; state.studentId=''; state.data=null; state.demo=false; render(); }
+
+    // ===== 計算 =====
+    function starStr(n){ n=Math.max(0,Math.min(3,n||0)); return '★'.repeat(n)+'☆'.repeat(3-n); }
+    // 合併卡（combines）會加總多個模組的星數與狀態；一般卡直接讀自己的模組
+    /* 老師審核給的加分星（交流程圖圖片 +1⭐）：要算進來，不然「老師說給我加分了，可是我的星星沒變」。
+       ★ 計算規則走 GRADING.starsWithBonus（單一來源），不要在這裡自己加。 */
+    function bonusOf(mods, id){
+      if(!window.GRADING || !window.GRADING.starsWithBonus) return 0;
+      const b = window.GRADING.starsWithBonus({ modules: mods });
+      return id==='flowchart' ? (b.flowchartBonus||0)
+           : 0;
+    }
+
+    function cardData(m, mods){
+      if(!m.combines){ const d = mods[m.id] || { status:'todo' }; return Object.assign({ levelSum: Number(d.level)||0 }, d); }
+      let stars=0, level=0, levelSum=0; const sts=[];
+      m.combines.forEach(id=>{
+        const dd=mods[id]||{};
+        /* 程式設計：由「各關星數」重算，不信任可能過時的匯總欄位。
+           ⚠️ `{}` 在 JavaScript 是 truthy：unitStars 存在但是空的（或全是 0）時，
+              只有真的算得出東西才覆蓋，算出 0 就沿用原本的匯總值。
+           ⚠️ 不可以改成 Math.max(重算, 匯總)：那會讓「老師扣掉一關的星」永遠生效不了。 */
+        let st = Number(dd.stars)||0, lv = Number(dd.level)||0;
+        if(id==='scratch' && dd.unitStars){
+          const vals = Object.values(dd.unitStars).map(Number).filter(v=>v>0);
+          if(vals.length){ st = vals.reduce((a,b)=>a+b,0); lv = vals.length; }
+        }
+        st += bonusOf(mods, id);          // ★ 老師給的加分星也要算進去
+        stars+=st; levelSum+=lv; if(lv) level=Math.max(level,lv); sts.push(dd.status||'todo');
+      });
+      let status='todo';
+      if(sts.every(s=>s==='pass')) status='pass';
+      else if(sts.includes('pending')) status='pending';
+      else if(sts.some(s=>s&&s!=='todo')) status='in-progress';
+      return { stars, level: level||null, levelSum, status };
+    }
+    // 通關進度以「小關卡」計算：資訊倫理 10 + 運算思維 10 + 流程圖 10 + 程式設計 10 ＝ 40 關
+    // ===== 每週星星（與教師端「每週評分」同一套規則）=====
+    const TERM_START = window.CONFIG.TERM_START;   // 學期起始日集中在 config.js
+    const WK_BASE = 60, WK_PER = 4;    // 分數 = 60 + 星數×4（上限 100）
+    const MOD_NAME = { flowchart:'🧩 流程圖', scratch:'🐱 程式設計', ethics:'⚖️ 資訊倫理', thinking:'🧠 運算思維' };
+    function evStars(ev){
+      if(typeof ev.stars === 'number') return ev.stars;
+      if(ev.module==='flowchart' || ev.module==='thinking') return 2;
+      if(ev.module==='ethics') return (window.GRADING ? window.GRADING.ethicsStar(ev.score) : 0);
+      return 0;
+    }
+    // 星等門檻一律以 shared/grading.js 為準，這裡不再自行定義（避免兩邊規則不同步）
+    function weekInfo(data){
+      const start = new Date(TERM_START+'T00:00:00').getTime();
+      const hist = (window.GRADING && GRADING.statHistory) ? GRADING.statHistory(data || {}) : ((data && data.history) || []);
+      const now = Date.now();
+      const curIdx = Math.floor((now - start)/(7*86400000));
+      const weeks = {};          // 週次 → 星數
+      const bySrc = {};          // 本週各模組星數
+      hist.forEach(ev=>{
+        const at = Number(ev.at); if(!at) return;
+        const i = Math.floor((at - start)/(7*86400000));
+        if(i < 0) return;
+        const st = evStars(ev);
+        weeks[i] = (weeks[i]||0) + st;
+        if(i === curIdx && st > 0) bySrc[ev.module] = (bySrc[ev.module]||0) + st;
+      });
+      const thisWeekStars = weeks[curIdx] || 0;
+      /* 週分數：這週有登入但沒拿星給 60 分，缺席維持零分。
+         「有登入」＝ 該班**上課日**有登入（不是那週隨便哪天）——
+         定義與算法都在 shared/schedule.js，教師端呼叫同一支。
+         ⚠️ 讀不到課表（規則沒發布、或還沒建課表）時 attended() 會是 false，
+            看起來就是「全班都缺席」。所以那份規則一定要發布。 */
+      const hereThisWeek = !!(window.SCHEDULE && state.cls && state.sched &&
+        SCHEDULE.attended(state.sched, state.cls,
+                          new Date(start + curIdx*7*86400000),
+                          (data && data.attendance) || {}));
+      // 0 星＝這週還沒有任何進度 → 0 分（有星星才套用 60+星×4，避免誤以為沒做也有分）
+      const recent = [];         // 近 8 週
+      for(let i = Math.max(0, curIdx-7); i <= curIdx; i++) recent.push({ no:i+1, stars: weeks[i]||0 });
+      const best = Object.values(weeks).reduce((a,b)=>Math.max(a,b), 0);
+      return {
+        curWeekNo: curIdx+1,
+        thisWeekStars,
+        thisWeekScore: window.SCHEDULE
+          ? SCHEDULE.weekScore(thisWeekStars, hereThisWeek, WK_BASE, WK_PER)
+          : (thisWeekStars > 0 ? Math.min(100, WK_BASE + thisWeekStars*WK_PER) : 0),
+        hereThisWeek,
+        recent, best, bySrc,
+        totalWeeks: Object.keys(weeks).length
+      };
+    }
+
+    function summary(mods){
+      let pass=0, stars=0, maxTotal=0, subDone=0, subTotal=0;
+      MODULES.forEach(m=>{
+        const d=cardData(m,mods);
+        if(d.status==='pass')pass++;
+        stars+=(d.stars||0);
+        maxTotal+=(m.maxStars ?? 3);   // 不計星的模組（5016B 是 0）不要被當成 3
+        const cap=m.subLevels||0;
+        if(cap){ subTotal+=cap; subDone+=Math.min(cap, Number(d.levelSum||d.level)||0); }
+      });
+      return { pass, total:MODULES.length, stars, maxTotal, subDone, subTotal,
+               pct: subTotal ? Math.round(subDone/subTotal*100) : 0 };
+    }
+
+    // ===== 畫面 =====
+    function render(){
+      const el = document.getElementById('app');
+
+      if(state.status==='loading'){
+        el.innerHTML = `<div class="min-h-screen flex items-center justify-center text-slate-500 font-bold text-lg">系統連線中…</div>`;
+        return;
+      }
+
+      if(state.status==='login'){
+        el.innerHTML = `
+          <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="w-full max-w-md pop">
+              <div class="text-center mb-6">
+                <span class="inline-block transform -rotate-2 bg-amber-200 text-amber-900 text-xs font-bold px-4 py-1.5 rounded shadow-sm border border-amber-300">📝 ${window.CONFIG.SCHOOL.NAME} ${window.CONFIG.SCHOOL.GRADE}</span>
+                <h1 class="text-3xl font-black mt-4">資訊科技 <span class="underline-doodle">闖關基地</span></h1>
+                <p class="text-slate-500 text-sm mt-2">${state.setup ? '第一次登入，先設定你自己的驗證碼 🔑' : '輸入學號和六位數驗證碼就可以了 🚀'}</p>
+                ${new URLSearchParams(location.search).get('next') ? `<p class="mt-3 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">🔒 請先在這裡確認身分，登入後會自動帶你回到剛才要去的頁面。</p>` : ''}
+                ${(() => { const sw = new URLSearchParams(location.search).get('switched');
+                   return sw ? `<p class="mt-3 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 leading-relaxed">🔄 這台電腦目前登入的是 <b>${esc(sw)}</b>，那不是學生帳號（可能是老師帳號），所以沒辦法用來闖關。<br>請在下面用自己的學號登入。</p>` : ''; })()}
+              </div>
+              <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                <form id="login-form" autocomplete="off" class="space-y-4">
+                  ${state.setup ? `
+                    <div class="text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">學號：${esc(state.setup.sid)}</div>
+                    <label class="block text-sm font-bold text-slate-700">設定六位數驗證碼
+                      <input id="code" type="password" inputmode="numeric" maxlength="6" value="${esc(state.setup.code)}" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg tracking-widest focus:border-indigo-400 outline-none"></label>
+                    <label class="block text-sm font-bold text-slate-700">再輸入一次
+                      <input id="code2" type="password" inputmode="numeric" maxlength="6" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg tracking-widest focus:border-indigo-400 outline-none"></label>
+                    <p class="text-xs text-slate-500 leading-relaxed">⚠️ 自己記好，不要讓別人看到。忘記了要找老師查看或重設。</p>
+                    <button id="login-go" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-lg active:scale-95 transition">設定並進入</button>
+                    <button id="setup-back" type="button" class="w-full text-slate-400 hover:text-slate-600 text-sm underline">← 回上一步</button>
+                  ` : `
+                    <label class="block text-sm font-bold text-slate-700">學號
+                      <input id="sid" inputmode="numeric" value="${esc(state.loginSid||'')}" placeholder="${esc(window.CONFIG.SCHOOL.SID_HINT||'')}" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg focus:border-indigo-400 outline-none"></label>
+                    <label class="block text-sm font-bold text-slate-700">六位數驗證碼
+                      <input id="code" type="password" inputmode="numeric" maxlength="6" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg tracking-widest focus:border-indigo-400 outline-none"></label>
+                    <button id="login-go" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-lg active:scale-95 transition">登入</button>
+                    <p class="text-xs text-slate-400 text-center">還沒設定過驗證碼？輸入你想用的六位數字，系統會帶你設定。</p>
+                  `}
+                </form>
+                ${state.loginError?`<p class="text-red-500 text-sm mt-3 leading-relaxed">${state.loginError}</p>`:''}
+
+                <button id="demo" class="mt-4 w-full text-slate-400 hover:text-slate-600 text-sm underline">先看範例畫面</button>
+              </div>
+            </div>
+          </div>`;
+        setTimeout(()=>{ const f = state.setup ? document.getElementById('code2') : document.getElementById(state.loginSid ? 'code' : 'sid'); f?.focus(); },0);
+        return;
+      }
+
+      // main
+      const isDemo = state.demo;
+      const data = isDemo ? DEMO_DATA : (state.data || { modules:{} });
+      const mods = data.modules || {};
+      const s = summary(mods);
+      const wk = weekInfo(data);
+      const displayName = isDemo ? '範例學生' : (state.studentName || '');
+      // 依學號第三碼上色：1=男(冷色) / 2=女(暖色) / 其他(中性)
+      const genderCode = isDemo ? '2' : (String(state.studentId).length >= 3 ? String(state.studentId).charAt(2) : '');
+      const avatarColor = genderCode === '1' ? 'bg-sky-100 text-sky-600 border-sky-300'
+                        : genderCode === '2' ? 'bg-rose-100 text-rose-600 border-rose-300'
+                        : 'bg-slate-100 text-slate-500 border-slate-300';
+      const avatarChar = (displayName || '學').charAt(0);
+      const nextModule = MODULES.find(m => (cardData(m,mods).status || 'todo') !== 'pass');
+      const allDone = !nextModule;
+
+      /* 卡片尺寸依數量調整：張數少用大卡（不會顯得空盪），張數多用小卡（不用一直往下捲）。 */
+      const roomy = MODULES.length <= 5;
+      const SZ = roomy
+        ? { pad:'p-7', icon:'text-5xl', title:'text-xl',  desc:'text-sm',
+            tag:'text-xs',    badge:'text-xs',    go:'text-sm',
+            wrap:'max-w-4xl', gap:'gap-7' }
+        : { pad:'p-5', icon:'text-3xl', title:'text-base', desc:'text-xs',
+            tag:'text-[11px]', badge:'text-[11px]', go:'text-xs',
+            wrap:'max-w-3xl', gap:'gap-6' };
+
+      const cards = MODULES.map(m=>{
+        const d = cardData(m, mods);
+        const st = STATUS[d.status] || STATUS['todo'];
+        const isNext = nextModule && m.id === nextModule.id;
+        const showStars = (d.stars||0) > 0;
+        const starsHtml = showStars
+          ? ((m.maxStars||3) > 3
+              ? `<div class="text-amber-500 ${roomy?'text-base':'text-sm'} font-black mt-1">⭐ ${d.stars} 星</div>`
+              : `<div class="text-amber-500 ${roomy?'text-xl':'text-lg'} tracking-widest mt-1">${starStr(d.stars)}</div>`)
+          : '';
+        const extra = (d.status==='pass' && d.score!=null) ? `<span class="text-xs opacity-70">分數 ${d.score}</span>`
+                    : (d.status==='pass' && d.level!=null) ? `<span class="text-xs opacity-70">通關 ${d.level} 關</span>` : '';
+        /* ── 還沒到開放日的模組（教師後台課表設定的開放日）────────────────
+           ⚠️ 未開放時要畫成 div 區塊而不是 a 連結 —— 只加灰色和
+              pointer-events 的話，鍵盤 Tab 還是走得進去，
+              而且右鍵「開新分頁」照樣打得開。沒有 href 才是真的點不到。
+           ⚠️ 但這只是**把入口藏起來**：知道網址的人照樣打得開。
+              和這個系統其他的前端判斷一樣，要真的擋住得做在後端。 */
+        const openOK = !(window.SCHEDULE && SCHEDULE.moduleOpen)
+                       || SCHEDULE.moduleOpen(state.sched, m.id);
+        const openMsg = (window.SCHEDULE && SCHEDULE.openLabel)
+                       ? SCHEDULE.openLabel(state.sched, m.id) : '';
+        if (!openOK) {
+          return `
+          <div class="relative block ${SZ.pad} rounded-2xl border shadow-md ${m.rot} bg-slate-100 border-slate-300 text-slate-500 grayscale opacity-60 cursor-not-allowed select-none"
+               aria-disabled="true" title="${openMsg}">
+            <span class="tape bg-slate-400/25"></span>
+            <div class="flex items-center justify-between mb-2">
+              <div class="${SZ.icon} grayscale">${m.icon}</div>
+              <span class="${SZ.badge} font-bold px-2.5 py-1 rounded-full border bg-white/60 text-slate-500 border-slate-300">尚未開放</span>
+            </div>
+            <h3 class="${SZ.title} font-black leading-tight mb-1">${m.title}</h3>
+            <p class="${SZ.desc} opacity-75 leading-relaxed mb-3">${m.desc}</p>
+            <div class="flex items-center justify-between">
+              <span class="${SZ.tag} font-bold bg-white/50 px-2.5 py-1 rounded-full border border-black/5">${m.tag}</span>
+            </div>
+            <span class="mt-3 inline-flex items-center gap-1 ${SZ.go} font-bold">🔒 ${openMsg || '尚未開放'}</span>
+          </div>`;
+        }
+        return `
+          <a href="${m.href}" class="group relative block ${SZ.pad} rounded-2xl border shadow-md hover:shadow-xl transition-all duration-300 ${m.rot} hover:rotate-0 hover:-translate-y-1 ${m.theme} ${st.dim?'opacity-70 hover:opacity-100':''} ${isNext?'ring-2 ring-indigo-500 ring-offset-2':''}">
+            <span class="tape ${m.tape}"></span>
+            ${isNext?`<span class="absolute -top-2 -right-2 bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow z-10 -rotate-3">👉 下一關</span>`:''}
+            <div class="flex items-center justify-between mb-2">
+              <div class="${SZ.icon}">${m.icon}</div>
+              <span class="${SZ.badge} font-bold px-2.5 py-1 rounded-full border ${st.badge}">${st.label}</span>
+            </div>
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <h3 class="${SZ.title} font-black leading-tight">${m.title}</h3>
+              ${m.lead?`<span class="text-[10px] font-black text-teal-700 bg-teal-200/70 px-1.5 py-0.5 rounded-full border border-teal-300 whitespace-nowrap">🔰 前導</span>`:''}
+              ${m.prereqTitle?`<span class="text-[10px] font-bold text-orange-700 bg-orange-200/60 px-1.5 py-0.5 rounded-full border border-orange-300 whitespace-nowrap">前導：清單學習機</span>`:''}
+            </div>
+            <p class="${SZ.desc} opacity-75 leading-relaxed mb-3">${m.desc}</p>
+            <div class="flex items-center justify-between">
+              <span class="${SZ.tag} font-bold bg-white/50 px-2.5 py-1 rounded-full border border-black/5">${m.tag}</span>
+              ${extra}
+            </div>
+            ${starsHtml}
+            <span class="mt-3 inline-flex items-center gap-1 ${SZ.go} font-bold opacity-70 group-hover:opacity-100 group-hover:gap-2 transition-all">${d.status==='pass'?'再玩一次':'開始闖關'} →</span>
+          </a>`;
+      }).join('') + arenaCard(mods, SZ);
+
+
+      // 本週成績卡（點「累積星星」開啟）
+      const maxBar = Math.max(1, ...wk.recent.map(r=>r.stars));
+      const medal = wk.thisWeekStars >= 10 ? '🏆' : wk.thisWeekStars >= 6 ? '🥇' : wk.thisWeekStars >= 3 ? '🥈' : wk.thisWeekStars > 0 ? '🥉' : '🌱';
+      const praise = wk.thisWeekStars >= 10 ? '本週火力全開，太強了！'
+                   : wk.thisWeekStars >= 6 ? '穩定推進，保持這個節奏！'
+                   : wk.thisWeekStars >= 3 ? '有進度了，再加把勁！'
+                   : wk.thisWeekStars > 0 ? '起步了！這週再多闖一關吧。'
+                   : '這週還沒有新星星，挑一關開始吧！';
+      const weekCard = state.showWeek ? `
+        <div id="week-mask" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div class="w-full max-w-md pop">
+            <div class="relative bg-gradient-to-br from-amber-50 to-white rounded-3xl border-4 border-amber-300 shadow-2xl overflow-hidden">
+              <span class="tape"></span>
+              <button id="close-week" class="absolute top-3 right-4 text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
+
+              <div class="p-6 text-center border-b-2 border-dashed border-amber-200">
+                <div class="text-xs font-black text-amber-600 tracking-widest">第 ${wk.curWeekNo} 週 · 本週成績卡</div>
+                <div class="text-6xl my-2">${medal}</div>
+                <div class="text-5xl font-black ${wk.thisWeekStars>0?'text-amber-500':'text-slate-300'} tracking-wider">⭐ ${wk.thisWeekStars}</div>
+                <div class="mt-2 inline-block ${wk.thisWeekScore>0?'bg-amber-500 text-white':'bg-slate-200 text-slate-500'} font-black text-2xl px-5 py-1.5 rounded-full shadow">${wk.thisWeekScore} 分</div>
+                <!-- ★ 0 星的兩種情況要分開講：
+                     人有來、也登入了 → 給基本分；整週沒出現 → 0 分。
+                     ⚠️ 不講清楚的話，兩個 0 星的同學看到不同分數會以為系統壞了。 -->
+                ${wk.thisWeekStars>0 ? '' : (wk.hereThisWeek
+                  ? `<div class="text-xs text-slate-500 mt-1">這週有來上課（基本分）—— 拿到星星就會往上加</div>`
+                  : `<div class="text-xs text-slate-400 mt-1">這週還沒有登入紀錄</div>`)}
+                <p class="text-sm font-bold text-slate-600 mt-3">${praise}</p>
+                <p class="text-[11px] text-slate-400 mt-1">${wk.thisWeekStars>0 ? '分數 ＝ 60 ＋ 星數 × 4（滿分 100）' : '本週還沒有星星，先完成一個小關卡就會開始計分'}</p>
+              </div>
+
+              <div class="p-5">
+                <div class="text-xs font-black text-slate-500 mb-2">📊 最近幾週的星星</div>
+                <div class="flex items-end justify-between gap-1.5 h-24 mb-1">
+                  ${wk.recent.map(r=>`
+                    <div class="flex-1 flex flex-col items-center justify-end h-full">
+                      <div class="text-[10px] font-bold ${r.no===wk.curWeekNo?'text-amber-600':'text-slate-400'}">${r.stars||''}</div>
+                      <div class="w-full rounded-t ${r.no===wk.curWeekNo?'bg-amber-400':'bg-slate-200'}" style="height:${Math.max(4, r.stars/maxBar*70)}px"></div>
+                      <div class="text-[10px] mt-1 ${r.no===wk.curWeekNo?'font-black text-amber-700':'text-slate-400'}">${r.no}</div>
+                    </div>`).join('')}
+                </div>
+                <div class="text-[10px] text-slate-400 text-center mb-4">週次（最佳紀錄：${wk.best} 星／週）</div>
+
+                <div class="text-xs font-black text-slate-500 mb-2">✨ 本週星星來自</div>
+                ${Object.keys(wk.bySrc).length
+                  ? `<div class="space-y-1.5">${Object.entries(wk.bySrc).map(([m,st])=>`
+                      <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm">
+                        <span class="font-bold text-slate-700">${MOD_NAME[m]||m}</span>
+                        <span class="font-black text-amber-500">+${st} ⭐</span>
+                      </div>`).join('')}</div>`
+                  : `<div class="text-center text-sm text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-lg py-4">這週還沒有新星星<br><span class="text-xs">完成任何一個小關卡就會出現在這裡</span></div>`}
+
+                <div class="mt-4 text-center text-[11px] text-slate-400">累積總星數 ★ ${s.stars} / ${s.maxTotal}　·　通關 ${s.subDone}/${s.subTotal} 小關</div>
+              </div>
+            </div>
+          </div>
+        </div>` : '';
+
+      el.innerHTML = `
+        ${weekCard}
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          ${isDemo?`<div class="mb-4 text-center"><span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full border border-amber-300">🔎 範例預覽模式（非真實資料）</span></div>`:''}
+
+          <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-8 relative pop">
+            <button id="logout" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xs bg-slate-50 px-2 py-1 rounded-md border border-slate-100">${isDemo?'返回':'登出'}</button>
+            <div class="flex flex-col md:flex-row md:items-center gap-6">
+              <div class="flex-shrink-0 flex items-center gap-3">
+                <div class="w-14 h-14 rounded-full border-2 ${avatarColor} flex items-center justify-center text-2xl font-black flex-shrink-0 shadow-sm">${avatarChar}</div>
+                <div>
+                  <span class="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold mb-1 border border-indigo-100">學號 ${isDemo?'DEMO':state.studentId}</span>
+                  <h1 class="text-2xl font-black">${displayName?`嗨，${displayName}！`:'闖關進度'}</h1>
+                </div>
+              </div>
+              <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <div class="flex justify-between items-end mb-2"><span class="text-sm font-semibold text-slate-600">通關進度</span><span class="text-2xl font-black text-indigo-600">${s.pct}%</span></div>
+                  <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden"><div class="bg-indigo-600 h-3 rounded-full transition-all duration-700" style="width:${s.pct}%"></div></div>
+                  <div class="text-right text-xs text-slate-400 mt-1">${s.subDone} / ${s.subTotal} 個小關卡</div>
+                </div>
+                <button id="open-week" class="bg-amber-50 rounded-xl p-4 border border-amber-100 flex flex-col justify-center text-left hover:bg-amber-100 hover:shadow-md transition group relative">
+                  <span class="absolute top-2 right-3 text-[10px] font-bold text-amber-600 opacity-70 group-hover:opacity-100">點我看本週成績卡 →</span>
+                  <span class="text-sm font-semibold text-amber-700 mb-1">累積星星</span>
+                  <span class="text-2xl font-black text-amber-500 tracking-wider">★ ${s.stars} <span class="text-sm font-medium text-amber-400">/ ${s.maxTotal}</span></span>
+                  <span class="text-xs font-bold text-amber-700 mt-1.5 bg-white/70 inline-block px-2 py-0.5 rounded-full border border-amber-200 w-max">本週 ⭐ ${wk.thisWeekStars}　${wk.thisWeekScore} 分</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          ${nextModule ? `
+            <a href="${nextModule.href}" class="block mb-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl p-4 sm:p-5 shadow-md transition flex items-center justify-between gap-3 pop">
+              <div>
+                <div class="text-xs font-bold text-indigo-200 mb-0.5">👉 建議下一關</div>
+                <div class="text-lg font-black">${nextModule.icon} ${nextModule.title}</div>
+              </div>
+              <span class="text-2xl flex-shrink-0">開始 →</span>
+            </a>` : `
+            <div class="mb-8 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl p-4 text-center font-black shadow-sm">🏆 太厲害了，所有關卡都通關了！</div>`}
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 ${SZ.gap} pb-12 ${SZ.wrap} mx-auto">
+            ${cards}
+          </div>
+
+          <footer class="mt-6 text-center text-xs text-slate-400">${window.CONFIG.SCHOOL.NAME} · 資訊科技課程</footer>
+        </div>`;
+    }
+
+    // ===== 事件 =====
+    document.addEventListener('click', e=>{
+      if(e.target.closest('#setup-back')){ state.setup=null; state.loginError=''; render(); return; }
+      if(e.target.closest('#demo')){ state.demo=true; state.status='main'; render(); return; }
+      if(e.target.closest('#logout')){ logout(); return; }
+      if(e.target.closest('#open-week')){ state.showWeek=true; render(); return; }
+      if(e.target.closest('#close-week')){ state.showWeek=false; render(); return; }
+      // 點卡片外的暗色區域也可關閉
+      if(state.showWeek && e.target.id==='week-mask'){ state.showWeek=false; render(); return; }
+    });
+
+    document.addEventListener('submit', e=>{
+      if(e.target.id !== 'login-form') return;
+      e.preventDefault();
+      if(state.setup) codeSetup(); else codeLogin();
+    });
+
+    render();
+  </script>
+
+  <!-- 教師專用入口（學生看不到）：請直接開啟 teacher.html -->
+</body>
+</html>

@@ -608,3 +608,27 @@ body.ac-sky-bg {
   background: linear-gradient(90deg, #0284c7, #10b981);
 }
 
+/* ── 島長 NPC 頭頂對話名牌 ── */
+.ac-npc-tag {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  color: #78350f;
+  font-size: 11.5px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 2px solid #f59e0b;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 26;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.ac-npc-tag:hover {
+  transform: translate(-50%, -108%) scale(1.06);
+  background: #fde68a;
+}
+
+

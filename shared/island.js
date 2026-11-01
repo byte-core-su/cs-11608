@@ -1874,6 +1874,239 @@
     return group;
   }
 
+  // 建立各島專屬 3D 動森動物島長 NPC（站在廣場向學生揮手打招呼、點擊會跳躍給予鼓勵）
+  function buildMascotNPC3D(THREE, variantKey) {
+    var cfgMap = {
+      hub: {
+        name: '🦝 狸克島務長',
+        fur: 0xb45309, belly: 0xfde68a, shirt: 0x22c55e, earType: 'round',
+        hat: 'leaf',
+        tips: ['歡迎來到科技探險群島！點擊任一學習館就能出發囉！', '試試右上角的「🌅 晝夜切換」，夜晚的島嶼超美喔！', '搖搖島上的果樹，說不定會掉下驚喜果實！']
+      },
+      ethics: {
+        name: '🐿️ 蘋蘋松鼠園長',
+        fur: 0xea580c, belly: 0xffedd5, shirt: 0x16a34a, earType: 'squirrel',
+        hat: 'straw',
+        tips: ['果園裡的每棵果樹都藏著資安與倫理知識喔！', '通關後果樹上方會升起閃亮的金星光環！', '走上北邊石階，還有金蘋果神木與陽光溫室等你挑戰！']
+      },
+      thinking: {
+        name: '🐰 奇奇魔術兔',
+        fur: 0xffffff, belly: 0xfce7f3, shirt: 0xec4899, earType: 'bunny',
+        hat: 'tophat',
+        tips: ['歡迎來到森林奇幻遊樂園！10 座遊樂設施都開放囉！', '過關後記得截圖，去旋轉木馬回報亭領取榮譽證書！', '切換到「🌙 星夜」模式，摩天輪跟旋轉木馬會亮起霓虹燈喔！']
+      },
+      code: {
+        name: '🦫 齒輪海狸師傅',
+        fur: 0x78350f, belly: 0xfef3c7, shirt: 0xd97706, earType: 'round',
+        hat: 'goggles',
+        tips: ['先找廣場旁的發條機器人完成「清單學習機」前導訓練吧！', '排對流程圖再上傳 Scratch 作品，每關最多能拿 6 顆星！', '十座蒸氣工坊任你挑選，通關後屋頂會升起黃金榮譽星！']
+      },
+      flowchart: {
+        name: '🦫 齒輪海狸師傅',
+        fur: 0x78350f, belly: 0xfef3c7, shirt: 0xd97706, earType: 'round',
+        hat: 'goggles',
+        tips: ['先找廣場旁的發條機器人完成「清單學習機」前導訓練吧！', '排對流程圖再上傳 Scratch 作品，每關最多能拿 6 顆星！', '十座蒸氣工坊任你挑選，通關後屋頂會升起黃金榮譽星！']
+      },
+      arduino: {
+        name: '🤖 諾克號創客機',
+        fur: 0x38bdf8, belly: 0xe0f2fe, shirt: 0x0284c7, earType: 'antenna',
+        hat: 'halo',
+        tips: ['嗶嗶！歡迎光臨未來科技創客實驗島！', '點擊任一智慧家居實驗艙，就能在浮動視窗裡操作 3D 感測模擬器！', '切換到星夜模式，整座科技島的光電迴路都會發光喔！']
+      }
+    };
+    var info = cfgMap[variantKey] || cfgMap.hub;
+    var group = new THREE.Group();
+
+    var furMat   = new THREE.MeshStandardMaterial({ color: info.fur, roughness: 0.55 });
+    var bellyMat = new THREE.MeshStandardMaterial({ color: info.belly, roughness: 0.6 });
+    var shirtMat = new THREE.MeshStandardMaterial({ color: info.shirt, roughness: 0.5 });
+    var darkMat  = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3 });
+
+    // 柔和地面陰影
+    var sh = new THREE.Mesh(
+      new THREE.CircleGeometry(0.95, 18),
+      new THREE.MeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.28 })
+    );
+    sh.rotation.x = -Math.PI / 2;
+    sh.position.y = 0.03;
+    group.add(sh);
+
+    // 小短腿與圓滾滾身體
+    [-0.24, 0.24].forEach(function (lx) {
+      var leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.5, 10), furMat);
+      leg.position.set(lx, 0.25, 0);
+      group.add(leg);
+    });
+    var body = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.58, 0.95, 16), shirtMat);
+    body.position.y = 0.92;
+    group.add(body);
+    var belly = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 12), bellyMat);
+    belly.scale.set(1, 1.1, 0.45);
+    belly.position.set(0, 0.9, 0.42);
+    group.add(belly);
+
+    // 雙手（右手會揮手打招呼）
+    var leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.62, 10), furMat);
+    leftArm.position.set(-0.56, 0.96, 0);
+    leftArm.rotation.z = 0.32;
+    group.add(leftArm);
+
+    var rightArmPivot = new THREE.Group();
+    rightArmPivot.position.set(0.54, 1.18, 0);
+    var rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.62, 10), furMat);
+    rightArm.position.set(0.12, 0.22, 0);
+    rightArm.rotation.z = -2.4;
+    rightArmPivot.add(rightArm);
+    group.add(rightArmPivot);
+
+    // 大圓頭與臉部
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.68, 20, 18), furMat);
+    head.scale.set(1.08, 0.96, 1.0);
+    head.position.y = 1.92;
+    group.add(head);
+
+    var snout = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 10), bellyMat);
+    snout.scale.set(1.2, 0.85, 0.8);
+    snout.position.set(0, 1.82, 0.58);
+    group.add(snout);
+
+    var nose = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), darkMat);
+    nose.position.set(0, 1.9, 0.78);
+    group.add(nose);
+
+    [-0.25, 0.25].forEach(function (ex) {
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), darkMat);
+      eye.position.set(ex, 1.98, 0.61);
+      group.add(eye);
+      var blush = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.55 })
+      );
+      blush.scale.set(1.3, 0.65, 0.4);
+      blush.position.set(ex * 1.45, 1.84, 0.57);
+      group.add(blush);
+    });
+
+    // 耳朵與大尾巴
+    if (info.earType === 'bunny') {
+      [-0.28, 0.28].forEach(function (bx) {
+        var ear = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.75, 10), furMat);
+        ear.position.set(bx, 2.75, -0.05);
+        ear.rotation.z = bx * -0.25;
+        group.add(ear);
+      });
+    } else if (info.earType === 'antenna') {
+      var ant = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 8), darkMat);
+      ant.position.set(0, 2.75, 0);
+      group.add(ant);
+      var orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.14, 10, 10),
+        new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0x38bdf8, emissiveIntensity: 0.9 })
+      );
+      orb.position.set(0, 3.05, 0);
+      group.add(orb);
+    } else {
+      [-0.42, 0.42].forEach(function (rx) {
+        var rEar = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), furMat);
+        rEar.position.set(rx, 2.48, -0.05);
+        group.add(rEar);
+      });
+      if (info.earType === 'squirrel') {
+        var bigTail = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 12), furMat);
+        bigTail.scale.set(0.75, 1.35, 0.95);
+        bigTail.position.set(0, 1.15, -0.68);
+        bigTail.rotation.x = -0.35;
+        group.add(bigTail);
+      }
+    }
+
+    // 主題頭飾
+    if (info.hat === 'tophat') {
+      var thMat = new THREE.MeshStandardMaterial({ color: 0x9333ea, roughness: 0.4 });
+      var brim = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.08, 16), thMat);
+      brim.position.y = 2.52;
+      group.add(brim);
+      var cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.52, 16), thMat);
+      cyl.position.y = 2.8;
+      group.add(cyl);
+    } else if (info.hat === 'goggles') {
+      var gogMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.7, roughness: 0.25 });
+      [-0.22, 0.22].forEach(function (gx) {
+        var gRing = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.04, 8, 16), gogMat);
+        gRing.position.set(gx, 2.28, 0.55);
+        group.add(gRing);
+      });
+    } else if (info.hat === 'straw') {
+      var sBrim = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.78, 0.78, 0.08, 16),
+        new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.6 })
+      );
+      sBrim.position.y = 2.52;
+      group.add(sBrim);
+    }
+
+    enableShadow(group, true, false);
+    group.userData = {
+      isNPC: true,
+      name: info.name,
+      tips: info.tips,
+      tipIdx: 0,
+      rightArmPivot: rightArmPivot,
+      jumpTime: 0
+    };
+    return group;
+  }
+
+  // 建立已通關建築專屬「3D 屋頂旋轉金星王冠 ＋ 門口慶祝花環」
+  function buildVictoryCrown3D(THREE, labelHeight) {
+    var vg = new THREE.Group();
+    var topY = (labelHeight || 5.2) + 0.65;
+
+    var starGroup = new THREE.Group();
+    starGroup.position.y = topY;
+
+    var goldStarMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.55,
+      metalness: 0.65,
+      roughness: 0.18
+    });
+    var starCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.58, 0), goldStarMat);
+    starCore.scale.set(1.15, 1.15, 0.55);
+    starGroup.add(starCore);
+
+    var haloRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.88, 0.06, 10, 28),
+      new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.85 })
+    );
+    haloRing.rotation.x = Math.PI / 2;
+    starGroup.add(haloRing);
+    vg.add(starGroup);
+
+    // 建築門口慶祝花叢
+    var flColors = [0xf43f5e, 0xfacc15, 0x38bdf8, 0xa855f7, 0x4ade80];
+    for (var fi = 0; fi < 5; fi++) {
+      var ang = -Math.PI * 0.15 + (fi / 4) * Math.PI * 1.3;
+      var fx = Math.cos(ang) * 2.55;
+      var fz = Math.sin(ang) * 2.35;
+      var fl = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 10, 10),
+        new THREE.MeshStandardMaterial({
+          color: flColors[fi % flColors.length],
+          emissive: flColors[fi % flColors.length],
+          emissiveIntensity: 0.2,
+          roughness: 0.4
+        })
+      );
+      fl.position.set(fx, 0.2, fz);
+      vg.add(fl);
+    }
+
+    vg.userData.starGroup = starGroup;
+    return vg;
+  }
+
   /* ── 5. 標準化各頁面傳入的節點欄位 ────────────────────────────── */
   function normalizeNode(n, cfg) {
     var title = n.title || n.label || ('單元 ' + n.id);
@@ -1956,6 +2189,16 @@
       return Object.assign({ drops: ['🍎 果實 +1', '💰 100鈴錢'] }, p);
     });
 
+    var savedTimeMode = 'day';
+    try { savedTimeMode = localStorage.getItem('ac_time_mode') || 'day'; } catch (e) {}
+    if (['day', 'sunset', 'night'].indexOf(savedTimeMode) < 0) savedTimeMode = 'day';
+
+    var timeBtnLabelMap = {
+      day:    '☀️ 時段：晴朗白天',
+      sunset: '🌇 時段：魔幻夕陽',
+      night:  '🌙 時段：璀璨星夜'
+    };
+
     var state = {
       px: (savedPos && savedPos.x) || cfg.startX || 50,
       py: (savedPos && savedPos.y) || cfg.startY || 72,
@@ -1967,6 +2210,8 @@
       nearId: null,
       selectedId: cfg.initialSelectedId || (nodes[0] && nodes[0].id) || null,
       camMode: 'follow',
+      timeMode: savedTimeMode,
+      focusUntil: 0,
       yawOffset: 0,
       zoomDist: 1.0,
       destroyed: false,
@@ -2005,6 +2250,7 @@
       +       '<div class="flex items-center gap-2 flex-wrap">'
       +         backHubBtnHtml
       +         '<button type="button" id="ac-wardrobe-toggle" class="ac-cam-btn" style="background:#fdf2f8;border-color:#f472b6;color:#9d174d">🪞 更換造型</button>'
+      +         '<button type="button" id="ac-time-toggle" class="ac-cam-btn" style="background:#eff6ff;border-color:#60a5fa;color:#1e3a8a">' + timeBtnLabelMap[state.timeMode] + '</button>'
       +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn">🎥 視角：動森跟隨（點擊切換全島鳥瞰）</button>'
       +       '</div>'
       +       '<div class="ac-controls-hint hidden md:block">🎮 WASD / 方向鍵走動 · 點擊 3D 建築或地面移動 · 滑鼠拖曳旋轉視角 / 滾輪縮放</div>'
@@ -2012,6 +2258,7 @@
       +     '<div id="ac-wardrobe-panel" class="ac-wardrobe-panel hidden"></div>'
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
       +       nodesOverlayHtml
+      +       '<div id="ac-npc-tag" class="ac-npc-tag" title="點擊與島長對話">🦝 島長</div>'
       +       '<div id="ac-player-tag" class="ac-player-tag">🧑‍🌾 ' + esc(cfg.playerName || '島民') + '</div>'
       +     '</div>'
       +     '<div id="ac-dialog" class="ac-dialog-bar"></div>'
@@ -2022,12 +2269,27 @@
     var canvasEl  = container.querySelector('#ac-webgl-canvas');
     var overlayEl = container.querySelector('#ac-overlay');
     var playerTag = container.querySelector('#ac-player-tag');
+    var npcTag    = container.querySelector('#ac-npc-tag');
     var dialogEl  = container.querySelector('#ac-dialog');
     var camBtn    = container.querySelector('#ac-cam-toggle');
+    var timeBtn   = container.querySelector('#ac-time-toggle');
     var wardrobeBtn   = container.querySelector('#ac-wardrobe-toggle');
     var wardrobePanel = container.querySelector('#ac-wardrobe-panel');
     var currentLook   = loadAvatarLook(cfg.genderCode);
     var rebuildPlayerFn = null;
+    var applyTimeModeFn = null;
+
+    if (timeBtn) {
+      timeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var order = ['day', 'sunset', 'night'];
+        var nextIdx = (order.indexOf(state.timeMode) + 1) % order.length;
+        state.timeMode = order[nextIdx];
+        try { localStorage.setItem('ac_time_mode', state.timeMode); } catch (err) {}
+        timeBtn.textContent = timeBtnLabelMap[state.timeMode];
+        if (applyTimeModeFn) applyTimeModeFn(state.timeMode);
+      });
+    }
 
     function renderWardrobe() {
       if (!wardrobePanel) return;
@@ -2460,10 +2722,12 @@
       enableShadow(pierGroup, true, true);
       worldGroup.add(pierGroup);
 
-      // ── 4. 島嶼暖光街燈、花叢與飛舞的 3D 蝴蝶 ──
+      // ── 4. 島嶼暖光街燈（含夜間光暈）、星夜穹頂與晝夜光影系統 ──
       var lampMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.5 });
-      var bulbMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfde047, emissiveIntensity: 0.8 });
-      [[-8.5, 5.2], [8.5, 5.2], [-8.5, -4.5], [8.5, -4.5]].forEach(function (lp) {
+      var bulbMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfde047, emissiveIntensity: 0.85 });
+      var lampHaloMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.14 });
+      var groundLightMat = new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.0 });
+      [[-8.5, 5.2], [8.5, 5.2], [-8.5, -4.5], [8.5, -4.5], [-3.2, 16.5], [3.2, 16.5]].forEach(function (lp) {
         var lg = new THREE.Group();
         var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 2.8, 10), lampMat);
         pole.position.y = 1.4;
@@ -2471,10 +2735,42 @@
         var globe = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 12), bulbMat);
         globe.position.y = 2.9;
         lg.add(globe);
+        var halo = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 12), lampHaloMat);
+        halo.position.y = 2.9;
+        lg.add(halo);
+        var gPool = new THREE.Mesh(new THREE.CircleGeometry(2.8, 20), groundLightMat);
+        gPool.rotation.x = -Math.PI / 2;
+        gPool.position.y = 0.04;
+        lg.add(gPool);
         lg.position.set(lp[0], getExactSurfaceY(lp[0], lp[1]), lp[1]);
         enableShadow(lg, true, false);
         worldGroup.add(lg);
       });
+
+      // 中央廣場夜間暖色點光源
+      var plazaNightLight = new THREE.PointLight(0xfbbf24, 0, 42, 1.5);
+      plazaNightLight.position.set(0, 7.5, 2.0);
+      worldGroup.add(plazaNightLight);
+
+      // 3D 璀璨星空穹頂與弦月（夕陽與星夜模式自動浮現）
+      var starFieldGroup = new THREE.Group();
+      var starMat = new THREE.MeshBasicMaterial({ color: 0xfef9c3, transparent: true, opacity: 0 });
+      for (var sIdx = 0; sIdx < 95; sIdx++) {
+        var stMesh = new THREE.Mesh(new THREE.SphereGeometry(0.16 + (sIdx % 3) * 0.07, 6, 6), starMat);
+        var sTheta = (sIdx * 2.39996) % (Math.PI * 2);
+        var sRad = 32 + (sIdx % 7) * 8;
+        stMesh.position.set(
+          Math.cos(sTheta) * sRad * 1.3,
+          22 + (sIdx % 9) * 3.2,
+          -25 - Math.abs(Math.sin(sTheta)) * 38
+        );
+        starFieldGroup.add(stMesh);
+      }
+      var moonMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0 });
+      var moonMesh = new THREE.Mesh(new THREE.SphereGeometry(3.2, 18, 18), moonMat);
+      moonMesh.position.set(-28, 34, -48);
+      starFieldGroup.add(moonMesh);
+      scene.add(starFieldGroup);
 
       // ── 4B. 依據各課程系列主題（variant）鋪設專屬 3D 島嶼環境裝飾 ──
       if (variantKey === 'ethics') {
@@ -2570,10 +2866,49 @@
         worldGroup.add(circuitRing);
       }
 
+      // ── 4C. 四大主題 3D 飄浮環境粒子系統（花粉落葉／嘉年華泡泡／蒸氣火星／科技光點／星夜螢火蟲） ──
+      var ambientParticles = [];
+      var pColorsByVariant = {
+        hub:       [0xfef08a, 0x86efac, 0xfda4af],
+        ethics:    [0xfde047, 0xfca5a5, 0x86efac], // 金色花粉與花瓣
+        thinking:  [0xf472b6, 0x38bdf8, 0xfacc15, 0xc084fc], // 奇幻彩球與泡泡
+        code:      [0xf59e0b, 0xfef3c7, 0xfb923c], // 蒸氣火星與暖光
+        flowchart: [0xf59e0b, 0xfef3c7, 0xfb923c],
+        arduino:   [0x38bdf8, 0x2dd4bf, 0x818cf8]  // 科技青色數位能量塊
+      };
+      var pCols = pColorsByVariant[variantKey] || pColorsByVariant.hub;
+      var pGeo = (variantKey === 'arduino' || variantKey === 'code' || variantKey === 'flowchart')
+        ? new THREE.BoxGeometry(0.22, 0.22, 0.22)
+        : new THREE.SphereGeometry(0.16, 8, 8);
+
+      for (var pIdx = 0; pIdx < 32; pIdx++) {
+        var pm = new THREE.Mesh(
+          pGeo,
+          new THREE.MeshBasicMaterial({
+            color: pCols[pIdx % pCols.length],
+            transparent: true,
+            opacity: 0.78
+          })
+        );
+        var px0 = (Math.random() - 0.5) * 58;
+        var pz0 = (Math.random() - 0.5) * 38;
+        var py0 = 1.2 + Math.random() * 9.5;
+        pm.position.set(px0, py0, pz0);
+        worldGroup.add(pm);
+        ambientParticles.push({
+          mesh: pm,
+          baseX: px0,
+          baseZ: pz0,
+          y: py0,
+          vy: (variantKey === 'ethics' || variantKey === 'hub') ? -(0.015 + Math.random() * 0.018) : (0.016 + Math.random() * 0.02),
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+
       // 3D 飛舞蝴蝶
       var butterflies = [];
-      var bfCols = [0xfde047, 0xf472b6, 0x38bdf8];
-      [[-12, 8], [12, 6], [-5, -5]].forEach(function (bp, bi) {
+      var bfCols = [0xfde047, 0xf472b6, 0x38bdf8, 0xa855f7];
+      [[-12, 8], [12, 6], [-5, -5], [14, -7], [-15, -3]].forEach(function (bp, bi) {
         var bfg = new THREE.Group();
         var wMat = new THREE.MeshBasicMaterial({ color: bfCols[bi % bfCols.length], side: THREE.DoubleSide });
         var lw = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.24), wMat);
@@ -2588,7 +2923,7 @@
         butterflies.push(bfg);
       });
 
-      // ── 5. 天空立體白雲 ──
+      // ── 5. 天空立體白雲與晝夜光影切換器 ──
       var clouds = [];
       var cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent: true, opacity: 0.92 });
       [[-28, 19, -32], [4, 21, -36], [32, 18, -28], [-18, 20, -22], [24, 22, -20]].forEach(function (cp) {
@@ -2603,11 +2938,106 @@
         clouds.push(cg);
       });
 
-      // ── 6. 放置裝飾果樹与關卡 3D 建築 ──
+      applyTimeModeFn = function (mode) {
+        if (mode === 'sunset') {
+          scene.background.setHex(0xfda4af);
+          scene.fog.color.setHex(0xfb923c);
+          hemiLight.color.setHex(0xfecdd3);
+          hemiLight.groundColor.setHex(0xb45309);
+          hemiLight.intensity = 0.72;
+          sunLight.color.setHex(0xf97316);
+          sunLight.intensity = 1.18;
+          sunLight.position.set(38, 24, 28);
+          fillLight.color.setHex(0xfde047);
+          fillLight.intensity = 0.35;
+          seaMat.color.setHex(0x0284c7);
+          seaMat.emissive.setHex(0xd97706);
+          seaMat.emissiveIntensity = 0.28;
+          cloudMat.color.setHex(0xffedd5);
+          bulbMat.emissiveIntensity = 1.6;
+          lampHaloMat.opacity = 0.48;
+          groundLightMat.opacity = 0.22;
+          plazaNightLight.intensity = 0.65;
+          starMat.opacity = 0.32;
+          moonMat.opacity = 0.45;
+        } else if (mode === 'night') {
+          scene.background.setHex(0x0f172a);
+          scene.fog.color.setHex(0x1e1b4b);
+          hemiLight.color.setHex(0x6366f1);
+          hemiLight.groundColor.setHex(0x064e3b);
+          hemiLight.intensity = 0.56;
+          sunLight.color.setHex(0x93c5fd);
+          sunLight.intensity = 0.58;
+          sunLight.position.set(-24, 42, 26);
+          fillLight.color.setHex(0x38bdf8);
+          fillLight.intensity = 0.25;
+          seaMat.color.setHex(0x0c4a6e);
+          seaMat.emissive.setHex(0x1e3a8a);
+          seaMat.emissiveIntensity = 0.32;
+          cloudMat.color.setHex(0x94a3b8);
+          bulbMat.emissiveIntensity = 2.4;
+          lampHaloMat.opacity = 0.88;
+          groundLightMat.opacity = 0.45;
+          plazaNightLight.intensity = 1.45;
+          starMat.opacity = 0.95;
+          moonMat.opacity = 0.95;
+        } else {
+          scene.background.setHex(0x88def8);
+          scene.fog.color.setHex(0x9be7fa);
+          hemiLight.color.setHex(0xe0f7ff);
+          hemiLight.groundColor.setHex(0x4ade80);
+          hemiLight.intensity = 0.78;
+          sunLight.color.setHex(0xfffbeb);
+          sunLight.intensity = 1.05;
+          sunLight.position.set(28, 48, 32);
+          fillLight.color.setHex(0xbae6fd);
+          fillLight.intensity = 0.28;
+          seaMat.color.setHex(0x0ea5e9);
+          seaMat.emissive.setHex(0x0284c7);
+          seaMat.emissiveIntensity = 0.16;
+          cloudMat.color.setHex(0xffffff);
+          bulbMat.emissiveIntensity = 0.85;
+          lampHaloMat.opacity = 0.14;
+          groundLightMat.opacity = 0.0;
+          plazaNightLight.intensity = 0.0;
+          starMat.opacity = 0.0;
+          moonMat.opacity = 0.0;
+        }
+      };
+      applyTimeModeFn(state.timeMode);
+
+      // ── 6. 放置裝飾果樹、關卡 3D 建築（含通關金星王冠）與 3D 島長 NPC ──
       var interactiveMeshes = [];
       if (isSubIsland) interactiveMeshes.push(planeGroup);
       var propEntries = [];
       var fallingFruits = [];
+
+      // 建立站在中央廣場旁的 3D 動物島長 NPC
+      var mascotWx = -4.5, mascotWz = 3.6;
+      var mascotWy = getExactSurfaceY(mascotWx, mascotWz);
+      var mascotMesh = buildMascotNPC3D(THREE, variantKey);
+      mascotMesh.position.set(mascotWx, mascotWy, mascotWz);
+      mascotMesh.rotation.y = 0.35;
+      worldGroup.add(mascotMesh);
+      interactiveMeshes.push(mascotMesh);
+      if (npcTag) {
+        npcTag.textContent = mascotMesh.userData.name + ' 💬';
+      }
+
+      function triggerMascotGreeting() {
+        mascotMesh.userData.jumpTime = performance.now();
+        var tips = mascotMesh.userData.tips || ['歡迎來到動森探險島！'];
+        var msg = tips[mascotMesh.userData.tipIdx % tips.length];
+        mascotMesh.userData.tipIdx++;
+        var sp = projectToScreen(mascotWx, mascotWy + 3.6, mascotWz);
+        spawnFloatScreen(sp.x, sp.y, '💬 ' + msg);
+      }
+      if (npcTag) {
+        npcTag.addEventListener('click', function (e) {
+          e.stopPropagation();
+          triggerMascotGreeting();
+        });
+      }
 
       props.forEach(function (p, idx) {
         var wx = pctToWorldX(p.x);
@@ -2639,8 +3069,14 @@
         var mesh = buildBuilding3D(THREE, n.kind || 'cottage-amber', {
           fruit: n.fruit,
           fruitColor: n.fruitColor,
-          pass: n.pass
+          pass: n.pass || n.done
         });
+        // ★ 已通關建築自動升起 3D 旋轉黃金榮譽星冠與慶祝花叢！
+        var crownGroup = null;
+        if (n.done || n.pass) {
+          crownGroup = buildVictoryCrown3D(THREE, mesh.userData.labelHeight || 5.2);
+          mesh.add(crownGroup);
+        }
         mesh.position.set(wx, wy, wz);
         mesh.userData.nodeId = n.id;
         worldGroup.add(mesh);
@@ -2648,6 +3084,7 @@
         nodeEntries.push({
           node: n,
           mesh: mesh,
+          crownGroup: crownGroup,
           domEl: nodeDomMap[String(n.id)],
           wx: wx,
           wy: wy,
@@ -2736,7 +3173,7 @@
       var dragState = { active: false, moved: false, startX: 0, startY: 0, startYaw: 0 };
 
       function onPointerDown(e) {
-        if (e.target.closest('#ac-dialog') || e.target.closest('.ac-cam-btn') || e.target.closest('.ac-node') || e.target.closest('#ac-wardrobe-panel')) return;
+        if (e.target.closest('#ac-dialog') || e.target.closest('.ac-cam-btn') || e.target.closest('.ac-node') || e.target.closest('#ac-wardrobe-panel') || e.target.closest('#ac-npc-tag')) return;
         dragState.active = true;
         dragState.moved = false;
         dragState.startX = e.clientX;
@@ -2768,8 +3205,12 @@
         var hits = raycaster.intersectObjects(interactiveMeshes, true);
         if (hits.length > 0) {
           var hitObj = hits[0].object;
-          while (hitObj && hitObj.parent && hitObj.userData.nodeId == null && hitObj.userData.propIndex == null) {
+          while (hitObj && hitObj.parent && hitObj.userData.nodeId == null && hitObj.userData.propIndex == null && !hitObj.userData.isNPC) {
             hitObj = hitObj.parent;
+          }
+          if (hitObj && hitObj.userData.isNPC) {
+            triggerMascotGreeting();
+            return;
           }
           if (hitObj && hitObj.userData.propIndex != null) {
             var pe = propEntries[hitObj.userData.propIndex];
@@ -2822,6 +3263,7 @@
         state.nearId = node.id;
         state.tx = node.x;
         state.ty = Math.min(86, node.y + 4.0);
+        state.focusUntil = performance.now() + 1400; // 啟動電影級推進運鏡
         renderDialog();
 
         var scr = projectToScreen(entry.wx, entry.wy + 4.5, entry.wz);
@@ -2842,6 +3284,7 @@
           e.stopPropagation();
           var nId = actBtn.getAttribute('data-ac-node');
           var aIdx = Number(actBtn.getAttribute('data-ac-act')) || 0;
+          state.focusUntil = performance.now() + 1400;
           triggerNodeAction(findNode(nId), aIdx);
           return;
         }
@@ -2984,9 +3427,29 @@
           limbs.rightArm.rotation.x = swing * 0.85;
         }
 
-        // 更新鏡頭平滑跟隨
+        // ★ 檢測是否有主題浮動視窗正在開啟，或剛點擊了建築：啟動「電影級建築特寫運鏡 (Cinematic Building Focus)」
+        var isModalOpen = !!document.querySelector('.ac-float-backdrop:not(.hidden)');
+        var focusEntry = null;
+        if ((isModalOpen || now < state.focusUntil) && state.selectedId) {
+          for (var fIdx = 0; fIdx < nodeEntries.length; fIdx++) {
+            if (String(nodeEntries[fIdx].node.id) === String(state.selectedId)) {
+              focusEntry = nodeEntries[fIdx];
+              break;
+            }
+          }
+        }
+
+        // 更新鏡頭平滑跟隨或建築特寫
         var targetCamX, targetCamY, targetCamZ, targetLookX, targetLookY, targetLookZ;
-        if (state.camMode === 'follow') {
+        if (focusEntry) {
+          var orbitShift = Math.sin(tSec * 0.45) * 2.2;
+          targetCamX = focusEntry.wx + orbitShift;
+          targetCamY = focusEntry.wy + 9.5;
+          targetCamZ = focusEntry.wz + 14.5;
+          targetLookX = focusEntry.wx;
+          targetLookY = focusEntry.wy + 2.4;
+          targetLookZ = focusEntry.wz;
+        } else if (state.camMode === 'follow') {
           var distRadius = 28.5 * state.zoomDist;
           targetCamX = pWx * 0.74 + Math.sin(state.yawOffset) * distRadius;
           targetCamY = currentPy + 20.5 * state.zoomDist;
@@ -3004,17 +3467,50 @@
           targetLookZ = -1.5;
         }
 
-        camPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.085);
-        camLook.lerp(new THREE.Vector3(targetLookX, targetLookY, targetLookZ), 0.11);
+        camPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.08);
+        camLook.lerp(new THREE.Vector3(targetLookX, targetLookY, targetLookZ), 0.10);
         camera.position.copy(camPos);
         camera.lookAt(camLook);
 
-        // 環境動態效果
+        // 環境動態效果：海岸浪花、水上飛機、3D 島長 NPC 揮手與跳躍
         foamMesh.scale.x = 1.06 + Math.sin(tSec * 2.1) * 0.015;
         foamMesh.scale.z = 0.72 + Math.cos(tSec * 2.1) * 0.012;
         planeGroup.position.y = -0.35 + Math.sin(tSec * 2.6) * 0.14;
         planeGroup.rotation.z = Math.sin(tSec * 1.9) * 0.05;
         propBlade.rotation.z = tSec * 14;
+
+        if (mascotMesh) {
+          if (mascotMesh.userData.rightArmPivot) {
+            mascotMesh.userData.rightArmPivot.rotation.z = Math.sin(tSec * 5.2) * 0.32;
+          }
+          var npcJump = 0;
+          if (mascotMesh.userData.jumpTime > 0) {
+            var jAge = (now - mascotMesh.userData.jumpTime) / 480;
+            if (jAge < 1) {
+              npcJump = Math.sin(jAge * Math.PI) * 0.85;
+            } else {
+              mascotMesh.userData.jumpTime = 0;
+            }
+          }
+          mascotMesh.position.y = mascotWy + Math.abs(Math.sin(tSec * 2.4)) * 0.08 + npcJump;
+          if (npcTag) {
+            var npcScr = projectToScreen(mascotWx, mascotMesh.position.y + 3.25, mascotWz);
+            npcTag.style.left = Math.round(npcScr.x) + 'px';
+            npcTag.style.top  = Math.round(npcScr.y) + 'px';
+          }
+        }
+
+        // 主題環境飄浮粒子動畫
+        for (var api = 0; api < ambientParticles.length; api++) {
+          var ap = ambientParticles[api];
+          ap.y += ap.vy;
+          if (ap.vy < 0 && ap.y < 0.4) ap.y = 10.5;
+          if (ap.vy > 0 && ap.y > 10.5) ap.y = 0.6;
+          ap.mesh.position.x = ap.baseX + Math.sin(tSec * 1.5 + ap.phase) * 0.9;
+          ap.mesh.position.y = ap.y;
+          ap.mesh.position.z = ap.baseZ + Math.cos(tSec * 1.3 + ap.phase) * 0.9;
+          ap.mesh.rotation.y = tSec * 2.0 + ap.phase;
+        }
 
         // 蝴蝶飛舞動畫
         for (var bi = 0; bi < butterflies.length; bi++) {
@@ -3089,6 +3585,11 @@
           if (dDist < bestDist) {
             bestDist = dDist;
             bestId = n.id;
+          }
+
+          if (ne.crownGroup && ne.crownGroup.userData.starGroup) {
+            ne.crownGroup.userData.starGroup.rotation.y = tSec * 2.2 + ni;
+            ne.crownGroup.userData.starGroup.position.y = (ne.mesh.userData.labelHeight || 5.2) + 0.65 + Math.sin(tSec * 3.2 + ni) * 0.18;
           }
 
           if (ne.mesh.userData.spinPart) {

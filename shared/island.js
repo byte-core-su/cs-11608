@@ -34,22 +34,33 @@
 
   var threePromise = null;
   function loadThree() {
-    if (global.THREE && global.THREE.GLTFLoader) return Promise.resolve(global.THREE);
+    if (global.THREE && global.THREE.GLTFLoader && global.AC_GLB_BUNDLE) {
+      return Promise.resolve(global.THREE);
+    }
     if (threePromise) return threePromise;
     threePromise = new Promise(function (resolve, reject) {
-      function ensureGLTFLoader() {
-        if (global.THREE && global.THREE.GLTFLoader) {
+      function ensureModelBundle() {
+        if (global.AC_GLB_BUNDLE) {
           resolve(global.THREE);
           return;
         }
+        var b = document.createElement('script');
+        b.src = getSharedBaseUrl() + 'models-bundle.js?v=20261101v4';
+        b.async = true;
+        b.onload = function () { resolve(global.THREE); };
+        b.onerror = function () { resolve(global.THREE); };
+        document.head.appendChild(b);
+      }
+      function ensureGLTFLoader() {
+        if (global.THREE && global.THREE.GLTFLoader) {
+          ensureModelBundle();
+          return;
+        }
         var g = document.createElement('script');
-        g.src = getSharedBaseUrl() + 'GLTFLoader.js';
+        g.src = getSharedBaseUrl() + 'GLTFLoader.js?v=20261101v4';
         g.async = true;
-        g.onload = function () { resolve(global.THREE); };
-        g.onerror = function () {
-          // 若 GLTFLoader 載入失敗仍允許 Three.js 主場景運作
-          resolve(global.THREE);
-        };
+        g.onload = ensureModelBundle;
+        g.onerror = ensureModelBundle;
         document.head.appendChild(g);
       }
       if (global.THREE) {
@@ -66,7 +77,7 @@
     return threePromise;
   }
 
-  // 快取 .glb 二進位 ArrayBuffer，支援多個獨立骨骼動畫實例 (SkinnedMesh) 零網路重抓
+  // 快取 .glb 二進位 ArrayBuffer，支援本機 file:// (Base64 Bundle) 與網路 https:// 100% 一致零誤差載入
   var glbBufferCache = {};
   var activeGlbMixers = [];
   var GLB_PRESETS = {
@@ -81,9 +92,26 @@
     'Flower.glb':          { refSize: 0.21,  offsetY: 0 }
   };
 
+  function base64ToArrayBuffer(b64) {
+    var bin = atob(b64);
+    var len = bin.length;
+    var bytes = new Uint8Array(len);
+    for (var i = 0; i < len; i++) {
+      bytes[i] = bin.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
   function fetchGLBBuffer(fileName) {
     if (glbBufferCache[fileName]) return glbBufferCache[fileName];
-    var url = getSharedBaseUrl() + 'models/' + fileName + '?v=20261101v3';
+    if (global.AC_GLB_BUNDLE && global.AC_GLB_BUNDLE[fileName]) {
+      try {
+        var ab = base64ToArrayBuffer(global.AC_GLB_BUNDLE[fileName]);
+        glbBufferCache[fileName] = Promise.resolve(ab);
+        return glbBufferCache[fileName];
+      } catch (e) {}
+    }
+    var url = getSharedBaseUrl() + 'models/' + fileName + '?v=20261101v4';
     glbBufferCache[fileName] = fetch(url).then(function (res) {
       if (!res.ok) throw new Error('GLB HTTP ' + res.status);
       return res.arrayBuffer();
@@ -3739,10 +3767,62 @@
         });
       });
 
+      // ── 6C. 建立全島實體物理碰撞體清單（建築物、果樹、島長、機器人、小狐狸、駿馬、卡車皆不可穿透） ──
+      var solidObstacles = [
+        { x: mascotWx, z: mascotWz, r: 1.05 },
+        { x: foxWx,    z: foxWz,    r: 1.05 },
+        { x: robWx,    z: robWz,    r: 1.15 },
+        { x: horseWx,  z: horseWz,  r: 1.35 },
+        { x: truckWx,  z: truckWz,  r: 1.65 }
+      ];
+      for (var pi0 = 0; pi0 < propEntries.length; pi0++) {
+        solidObstacles.push({
+          x: propEntries[pi0].wx,
+          z: propEntries[pi0].wz,
+          r: 1.15
+        });
+      }
+      for (var ni0 = 0; ni0 < nodeEntries.length; ni0++) {
+        var ne0 = nodeEntries[ni0];
+        var nk = String(ne0.node.kind || '');
+        if (nk === 'airport') {
+          solidObstacles.push({ x: ne0.wx - 1.6, z: ne0.wz, r: 0.85 });
+        } else if (nk.indexOf('orchard-') === 0 && nk !== 'orchard-barn' && nk !== 'orchard-mill' && nk !== 'orchard-greenhouse') {
+          solidObstacles.push({ x: ne0.wx, z: ne0.wz, r: 2.05 });
+        } else {
+          solidObstacles.push({ x: ne0.wx, z: ne0.wz, r: 2.55 });
+        }
+      }
+
+      function pushOutsideObstacles(wx, wz, extraPad) {
+        var pad = extraPad || 0;
+        for (var pass = 0; pass < 2; pass++) {
+          for (var i = 0; i < solidObstacles.length; i++) {
+            var ob = solidObstacles[i];
+            var minR = ob.r + pad;
+            var dx = wx - ob.x;
+            var dz = wz - ob.z;
+            var d = Math.sqrt(dx * dx + dz * dz);
+            if (d < minR) {
+              if (d > 0.001) {
+                wx = ob.x + (dx / d) * minR;
+                wz = ob.z + (dz / d) * minR;
+              } else {
+                wz = ob.z + minR;
+              }
+            }
+          }
+        }
+        return { wx: wx, wz: wz };
+      }
+
       // ── 7. 放置 3D 村民玩家角色與點擊地面波紋環 ──
       var playerMesh = buildVillager3D(THREE, cfg.genderCode, currentLook);
-      var initWx = pctToWorldX(state.px);
-      var initWz = pctToWorldZ(state.py);
+      var initSafe = pushOutsideObstacles(pctToWorldX(state.px), pctToWorldZ(state.py), 0.15);
+      var initWx = initSafe.wx;
+      var initWz = initSafe.wz;
+      state.px = worldToPctX(initWx);
+      state.py = worldToPctY(initWz);
       playerMesh.position.set(initWx, getExactSurfaceY(initWx, initWz), initWz);
       worldGroup.add(playerMesh);
 
@@ -3884,10 +3964,11 @@
         var groundHits = raycaster.intersectObjects([islandMesh, sandMesh, cliffTop, plazaMesh, pierDeck], false);
         if (groundHits.length > 0) {
           var pt = worldGroup.worldToLocal(groundHits[0].point.clone());
-          state.tx = Math.max(12, Math.min(88, worldToPctX(pt.x)));
-          state.ty = Math.max(15, Math.min(88, worldToPctY(pt.z)));
-          var surfY = getExactSurfaceY(pt.x, pt.z);
-          clickRingMesh.position.set(pt.x, surfY + 0.08, pt.z);
+          var safePt = pushOutsideObstacles(pt.x, pt.z, 0.28);
+          state.tx = Math.max(12, Math.min(88, worldToPctX(safePt.wx)));
+          state.ty = Math.max(15, Math.min(88, worldToPctY(safePt.wz)));
+          var surfY = getExactSurfaceY(safePt.wx, safePt.wz);
+          clickRingMesh.position.set(safePt.wx, surfY + 0.08, safePt.wz);
           clickRingTimer = performance.now();
         }
       }
@@ -3911,8 +3992,9 @@
 
         state.selectedId = node.id;
         state.nearId = node.id;
-        state.tx = node.x;
-        state.ty = Math.min(86, node.y + 4.0);
+        var doorSafe = pushOutsideObstacles(entry.wx, entry.wz + 3.15, 0.25);
+        state.tx = Math.max(12, Math.min(88, worldToPctX(doorSafe.wx)));
+        state.ty = Math.max(15, Math.min(88, worldToPctY(doorSafe.wz)));
         state.focusUntil = performance.now() + 1400; // 啟動電影級推進運鏡
         renderDialog();
 
@@ -4038,47 +4120,110 @@
 
         var oldWx = pctToWorldX(state.px);
         var oldWz = pctToWorldZ(state.py);
+        var nextWx = oldWx;
+        var nextWz = oldWz;
+        var wSpeed = 0.21; // 悠閒漫步世界速度
 
-        var speed = 0.23; // 調慢 50%，符合動森悠閒漫步節奏
         if (vx !== 0 || vy !== 0) {
           state.tx = null;
           state.ty = null;
           var len = Math.sqrt(vx * vx + vy * vy);
-          var nx = vx / len, ny = vy / len;
-          state.px += nx * speed;
-          state.py += ny * (speed * 1.12);
-          state.heading = Math.atan2(nx, ny);
+          var nx = vx / len, nz = vy / len;
+          nextWx = oldWx + nx * wSpeed;
+          nextWz = oldWz + nz * wSpeed;
+          state.heading = Math.atan2(nx, nz);
           state.walking = true;
         } else if (state.tx !== null && state.ty !== null) {
-          var dx = state.tx - state.px;
-          var dy = state.ty - state.py;
-          var dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 0.4) {
-            var ux = dx / dist, uy = dy / dist;
-            state.px += ux * (speed * 1.18);
-            state.py += uy * (speed * 1.18);
-            state.heading = Math.atan2(ux, uy);
-            state.walking = true;
-          } else {
-            state.px = state.tx;
-            state.py = state.ty;
+          var safeGoal = pushOutsideObstacles(pctToWorldX(state.tx), pctToWorldZ(state.ty), 0.22);
+          var goalWx = safeGoal.wx;
+          var goalWz = safeGoal.wz;
+
+          // 若起點與終點分別在北側懸崖上下兩層，且角色尚未走到石階斜坡走廊，自動先導引至石階斜坡口！
+          var subWx = goalWx;
+          var subWz = goalWz;
+          var crossUp   = (oldWz > CLIFF_Z_EDGE && goalWz <= CLIFF_Z_EDGE);
+          var crossDown = (oldWz <= CLIFF_Z_EDGE && goalWz > CLIFF_Z_EDGE);
+          if ((crossUp || crossDown) && (oldWx < RAMP_X_MIN + 0.5 || oldWx > RAMP_X_MAX - 0.5)) {
+            subWx = -6.0;
+            subWz = crossUp ? (RAMP_Z_SOUTH + 0.4) : (CLIFF_Z_EDGE - 0.4);
+          }
+
+          var gdx = subWx - oldWx;
+          var gdz = subWz - oldWz;
+          var gDist = Math.sqrt(gdx * gdx + gdz * gdz);
+
+          if (gDist <= 0.34 && subWx === goalWx && subWz === goalWz) {
+            nextWx = goalWx;
+            nextWz = goalWz;
             state.tx = null;
             state.ty = null;
             state.walking = false;
             savePos();
+          } else {
+            var dirX = gdx / (gDist || 1);
+            var dirZ = gdz / (gDist || 1);
+
+            // ★ 智慧繞行系統：若前方路徑上有 3D 建築物或樹木阻擋，自動計算切線方向優雅繞過建築外牆！
+            var lookDist = Math.min(gDist, 4.6);
+            for (var oi = 0; oi < solidObstacles.length; oi++) {
+              var ob = solidObstacles[oi];
+              var toObX = ob.x - oldWx;
+              var toObZ = ob.z - oldWz;
+              var proj = toObX * dirX + toObZ * dirZ;
+              var distToOb = Math.sqrt(toObX * toObX + toObZ * toObZ);
+              var avoidR = ob.r + 0.55;
+              if ((proj > -0.25 && proj < lookDist) || distToOb < avoidR) {
+                var perpX = toObX - proj * dirX;
+                var perpZ = toObZ - proj * dirZ;
+                var perpDist = Math.sqrt(perpX * perpX + perpZ * perpZ);
+                if (perpDist < avoidR) {
+                  var rnx = -toObX / (distToOb || 1);
+                  var rnz = -toObZ / (distToOb || 1);
+                  var t1x = -rnz, t1z = rnx;
+                  var t2x = rnz,  t2z = -rnx;
+                  var obToGoalX = subWx - ob.x;
+                  var obToGoalZ = subWz - ob.z;
+                  var dot1 = t1x * obToGoalX + t1z * obToGoalZ;
+                  var dot2 = t2x * obToGoalX + t2z * obToGoalZ;
+                  var tx = dot1 >= dot2 ? t1x : t2x;
+                  var tz = dot1 >= dot2 ? t1z : t2z;
+                  var blend = Math.min(1.0, ((avoidR - perpDist) / avoidR) * 1.35);
+                  dirX = dirX * (1 - blend) + (tx * 0.88 + rnx * 0.25) * blend;
+                  dirZ = dirZ * (1 - blend) + (tz * 0.88 + rnz * 0.25) * blend;
+                  var dLen = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1;
+                  dirX /= dLen;
+                  dirZ /= dLen;
+                }
+              }
+            }
+
+            nextWx = oldWx + dirX * (wSpeed * 1.15);
+            nextWz = oldWz + dirZ * (wSpeed * 1.15);
+            state.heading = Math.atan2(dirX, dirZ);
+            state.walking = true;
           }
         } else {
           state.walking = false;
         }
 
-        state.px = Math.max(12, Math.min(88, state.px));
-        state.py = Math.max(15, Math.min(88, state.py));
+        // ★ 實體物理碰撞約束：1. 北側垂直懸崖壁（非石階區不可直接穿牆） 2. 全島建築與樹木圓柱剛體排斥
+        var inRampCorridor = (nextWx >= RAMP_X_MIN && nextWx <= RAMP_X_MAX);
+        if (!inRampCorridor && Math.abs(nextWx) <= 27.5) {
+          if (oldWz > CLIFF_Z_EDGE && nextWz <= CLIFF_Z_EDGE + 0.22) {
+            nextWz = CLIFF_Z_EDGE + 0.24;
+          } else if (oldWz <= CLIFF_Z_EDGE && nextWz > CLIFF_Z_EDGE - 0.22) {
+            nextWz = CLIFF_Z_EDGE - 0.24;
+          }
+        }
 
-        var rawWx = pctToWorldX(state.px);
-        var rawWz = pctToWorldZ(state.py);
-        var resolved = resolveCliffMovement(oldWx, oldWz, rawWx, rawWz);
-        var pWx = resolved.wx;
-        var pWz = resolved.wz;
+        var colResolved = pushOutsideObstacles(nextWx, nextWz, 0);
+        var pWx = colResolved.wx;
+        var pWz = colResolved.wz;
+
+        state.px = Math.max(12, Math.min(88, worldToPctX(pWx)));
+        state.py = Math.max(15, Math.min(88, worldToPctY(pWz)));
+        pWx = pctToWorldX(state.px);
+        pWz = pctToWorldZ(state.py);
 
         // 精準取得角色所在位置的地表高度，並平滑插值（上下石階或躍上高台時自然過渡，絕不陷入地下！）
         var targetSurfY = getExactSurfaceY(pWx, pWz);

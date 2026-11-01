@@ -19,20 +19,140 @@
       .replace(/"/g, '&quot;');
   }
 
-  /* ── 1. 動態載入 Three.js (r128) 與 GLTFLoader (選用擴充) ───────── */
+  /* ── 1. 動態載入 Three.js (r128) 與 GLTFLoader + 開源 .glb 模型引擎 ── */
+  function getSharedBaseUrl() {
+    var scripts = document.getElementsByTagName('script');
+    for (var i = 0; i < scripts.length; i++) {
+      var src = scripts[i].getAttribute('src') || '';
+      var idx = src.indexOf('island.js');
+      if (idx >= 0) {
+        return src.substring(0, idx);
+      }
+    }
+    return '../shared/';
+  }
+
   var threePromise = null;
   function loadThree() {
-    if (global.THREE) return Promise.resolve(global.THREE);
+    if (global.THREE && global.THREE.GLTFLoader) return Promise.resolve(global.THREE);
     if (threePromise) return threePromise;
     threePromise = new Promise(function (resolve, reject) {
+      function ensureGLTFLoader() {
+        if (global.THREE && global.THREE.GLTFLoader) {
+          resolve(global.THREE);
+          return;
+        }
+        var g = document.createElement('script');
+        g.src = getSharedBaseUrl() + 'GLTFLoader.js';
+        g.async = true;
+        g.onload = function () { resolve(global.THREE); };
+        g.onerror = function () {
+          // 若 GLTFLoader 載入失敗仍允許 Three.js 主場景運作
+          resolve(global.THREE);
+        };
+        document.head.appendChild(g);
+      }
+      if (global.THREE) {
+        ensureGLTFLoader();
+        return;
+      }
       var s = document.createElement('script');
       s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
       s.async = true;
-      s.onload = function () { resolve(global.THREE); };
+      s.onload = ensureGLTFLoader;
       s.onerror = function (e) { threePromise = null; reject(e); };
       document.head.appendChild(s);
     });
     return threePromise;
+  }
+
+  // 快取 .glb 二進位 ArrayBuffer，支援多個獨立骨骼動畫實例 (SkinnedMesh) 零網路重抓
+  var glbBufferCache = {};
+  var activeGlbMixers = [];
+  function fetchGLBBuffer(fileName) {
+    if (glbBufferCache[fileName]) return glbBufferCache[fileName];
+    var url = getSharedBaseUrl() + 'models/' + fileName;
+    glbBufferCache[fileName] = fetch(url).then(function (res) {
+      if (!res.ok) throw new Error('GLB HTTP ' + res.status);
+      return res.arrayBuffer();
+    });
+    return glbBufferCache[fileName];
+  }
+
+  function spawnGLBInstance(THREE, fileName, opts, onReady) {
+    if (!THREE || !THREE.GLTFLoader) return;
+    opts = opts || {};
+    var targetSize = opts.targetSize || 2.4;
+    var alignBottom = opts.alignBottom !== false;
+    fetchGLBBuffer(fileName).then(function (buf) {
+      var loader = new THREE.GLTFLoader();
+      loader.parse(buf.slice(0), getSharedBaseUrl() + 'models/', function (gltf) {
+        var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!model) return;
+
+        var wrap = new THREE.Group();
+        model.updateMatrixWorld(true);
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+
+        var maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0.0001) {
+          var scale = targetSize / maxDim;
+          model.scale.multiplyScalar(scale);
+          model.updateMatrixWorld(true);
+          box.setFromObject(model);
+          box.getCenter(center);
+        }
+
+        model.position.x -= center.x;
+        model.position.z -= center.z;
+        if (alignBottom) {
+          model.position.y -= box.min.y;
+        } else {
+          model.position.y -= center.y;
+        }
+
+        model.traverse(function (child) {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        wrap.add(model);
+
+        var mixer = null;
+        var actions = {};
+        if (gltf.animations && gltf.animations.length > 0) {
+          mixer = new THREE.AnimationMixer(model);
+          for (var i = 0; i < gltf.animations.length; i++) {
+            var clip = gltf.animations[i];
+            actions[clip.name] = mixer.clipAction(clip);
+          }
+          var defaultClipName = opts.clipName && actions[opts.clipName]
+            ? opts.clipName
+            : gltf.animations[0].name;
+          if (actions[defaultClipName]) {
+            if (opts.timeScale) actions[defaultClipName].timeScale = opts.timeScale;
+            actions[defaultClipName].play();
+          }
+          activeGlbMixers.push(mixer);
+        }
+
+        if (typeof onReady === 'function') {
+          onReady({
+            group: wrap,
+            model: model,
+            mixer: mixer,
+            actions: actions,
+            animations: gltf.animations || []
+          });
+        }
+      });
+    }).catch(function () {});
   }
 
   /* ── 2. 高解析度動森風格程序化貼圖產生器 ────────────────────────── */
@@ -976,7 +1096,7 @@
       cross2.rotation.z = -0.78;
       group.add(cross2);
 
-      // 門口金黃乾草捆
+      // 門口金黃乾草捆 ＋ 開源 .glb 豐收運輸卡車與駿馬
       var hayMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.8 });
       var hay1 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.55, 0.65), hayMat);
       hay1.position.set(-1.55, 0.48, 1.65);
@@ -984,6 +1104,17 @@
       var hay2 = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.5, 0.6), hayMat);
       hay2.position.set(1.55, 0.45, 1.65);
       group.add(hay2);
+
+      spawnGLBInstance(THREE, 'Truck.glb', { targetSize: 2.35 }, function (res) {
+        res.group.position.set(2.55, 0.02, 1.15);
+        res.group.rotation.y = -0.45;
+        group.add(res.group);
+      });
+      spawnGLBInstance(THREE, 'Horse.glb', { targetSize: 1.95, timeScale: 0.85 }, function (res) {
+        res.group.position.set(-2.45, 0.02, 1.25);
+        res.group.rotation.y = 0.55;
+        group.add(res.group);
+      });
 
       group.userData.labelHeight = 5.5;
 
@@ -1076,10 +1207,17 @@
         group.add(bush);
       });
 
-      // 溫室拱門框
+      // 溫室拱門框 ＋ 開源 .glb 雕塑花叢
       var ghDoor = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.75, 0.18), frameMat);
       ghDoor.position.set(0, 1.32, 1.38);
       group.add(ghDoor);
+
+      [[-1.35, 1.55], [1.35, 1.55]].forEach(function (fp) {
+        spawnGLBInstance(THREE, 'Flower.glb', { targetSize: 1.05 }, function (res) {
+          res.group.position.set(fp[0], 0.22, fp[1]);
+          group.add(res.group);
+        });
+      });
 
       group.userData.labelHeight = 4.9;
 
@@ -1327,7 +1465,7 @@
         group.userData.labelHeight = 6.2;
 
       } else {
-        // 🏆 我的證書屋：3D 夢幻旋轉木馬帳篷
+        // 🏆 我的證書屋：3D 夢幻旋轉木馬帳篷（搭載開源 Horse.glb 骨骼動畫駿馬）
         var cPole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 3.4, 12), goldMat);
         cPole.position.y = 1.9;
         group.add(cPole);
@@ -1335,21 +1473,24 @@
         tentTop.position.y = 3.85;
         group.add(tentTop);
         var horses = new THREE.Group();
-        horses.position.y = 1.5;
+        horses.position.y = 1.25;
         for (var h = 0; h < 4; h++) {
-          var hAng = (h / 4) * Math.PI * 2;
-          var hx = Math.cos(hAng) * 1.35;
-          var hz = Math.sin(hAng) * 1.35;
-          var hBar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), goldMat);
-          hBar.position.set(hx, 0.5, hz);
-          horses.add(hBar);
-          var horseBody = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.38, 0.82), h % 2 ? whiteMat : cyanMat);
-          horseBody.position.set(hx, 0, hz);
-          horseBody.rotation.y = -hAng;
-          horses.add(horseBody);
+          (function (hIdx) {
+            var hAng = (hIdx / 4) * Math.PI * 2;
+            var hx = Math.cos(hAng) * 1.38;
+            var hz = Math.sin(hAng) * 1.38;
+            var hBar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), goldMat);
+            hBar.position.set(hx, 0.75, hz);
+            horses.add(hBar);
+            spawnGLBInstance(THREE, 'Horse.glb', { targetSize: 1.25, timeScale: 0.9 }, function (res) {
+              res.group.position.set(hx, -0.35, hz);
+              res.group.rotation.y = -hAng + Math.PI / 2;
+              horses.add(res.group);
+            });
+          })(h);
         }
         group.add(horses);
-        group.userData.spinPart = horses;
+        group.userData.spinPartY = horses;
         group.userData.labelHeight = 5.4;
       }
 
@@ -1380,7 +1521,7 @@
       }
 
       if (kind === 'craft-robot') {
-        // 🤖 清單學習機：巨型發條機器人控制塔
+        // 🤖 清單學習機：巨型發條機器人控制塔（搭載開源 RobotExpressive.glb 骨骼動畫機器人）
         var rLegs = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.0, 1.8), ironMat);
         rLegs.position.y = 0.9;
         group.add(rLegs);
@@ -1403,6 +1544,11 @@
         windKey.position.set(0, 5.15, 0);
         group.add(windKey);
         group.userData.spinPart = windKey;
+        spawnGLBInstance(THREE, 'RobotExpressive.glb', { targetSize: 2.35, clipName: 'Wave' }, function (res) {
+          res.group.position.set(1.75, 0.44, 1.25);
+          res.group.rotation.y = -0.35;
+          group.add(res.group);
+        });
         group.userData.labelHeight = 6.2;
 
       } else if (kind === 'craft-forge') {
@@ -2840,6 +2986,7 @@
     var cleanupThree = null;
     loadThree().then(function (THREE) {
       if (state.destroyed || !canvasEl.isConnected) return;
+      activeGlbMixers = [];
 
       var renderer = new THREE.WebGLRenderer({
         canvas: canvasEl,
@@ -3403,8 +3550,25 @@
         npcTag.textContent = currentNpcInfo.name + ' 💬（點我對話）';
       }
 
+      var foxCompanion = null;
+      var plazaRobot = null;
+      var robotClipCycle = ['Wave', 'Dance', 'Jump', 'ThumbsUp', 'Idle'];
+      var robotClipIdx = 0;
+
       triggerMascotJumpFn = function () {
         mascotMesh.userData.jumpTime = performance.now();
+        if (foxCompanion && foxCompanion.actions) {
+          if (foxCompanion.actions.Run && foxCompanion.actions.Survey) {
+            foxCompanion.actions.Survey.stop();
+            foxCompanion.actions.Run.reset().play();
+            setTimeout(function () {
+              if (foxCompanion && foxCompanion.actions.Run && foxCompanion.actions.Survey) {
+                foxCompanion.actions.Run.stop();
+                foxCompanion.actions.Survey.reset().play();
+              }
+            }, 1400);
+          }
+        }
         var sp = projectToScreen(mascotWx, mascotWy + 3.6, mascotWz);
         spawnFloatScreen(sp.x, sp.y, '💬 ' + currentNpcInfo.name + '：歡迎聊聊！');
       };
@@ -3424,6 +3588,101 @@
           triggerMascotGreeting(state.selectedId === '__npc__');
         });
       }
+
+      // ── 6B. 載入開源 .glb 骨骼動畫與雕塑模型群（飛鳥、小鴨、小狐狸、表情機器人、駿馬、卡車、花叢） ──
+      var skyBirds = [];
+      [
+        { file: 'Parrot.glb',   r: 18.5, y: 12.8, speed: 0.46, phase: 0.0, size: 2.35 },
+        { file: 'Flamingo.glb', r: 21.5, y: 14.2, speed: 0.38, phase: 2.1, size: 2.55 },
+        { file: 'Stork.glb',    r: 16.0, y: 13.5, speed: 0.42, phase: 4.2, size: 2.45 }
+      ].forEach(function (bCfg) {
+        spawnGLBInstance(THREE, bCfg.file, { targetSize: bCfg.size, alignBottom: false, timeScale: 1.25 }, function (res) {
+          res.group.position.set(Math.cos(bCfg.phase) * bCfg.r, bCfg.y, Math.sin(bCfg.phase) * bCfg.r);
+          worldGroup.add(res.group);
+          skyBirds.push({ group: res.group, cfg: bCfg });
+        });
+      });
+
+      var pondDucks = [];
+      [
+        { cx: 19.3, cz: -15.3, r: 1.15, baseY: CLIFF_HEIGHT + 0.08, speed: 0.65, phase: 0.5 },
+        { cx: 20.6, cz: 5.2,   r: 0.95, baseY: 0.04,                speed: 0.55, phase: 2.6 }
+      ].forEach(function (dCfg) {
+        spawnGLBInstance(THREE, 'Duck.glb', { targetSize: 1.15 }, function (res) {
+          res.group.position.set(dCfg.cx, dCfg.baseY, dCfg.cz);
+          worldGroup.add(res.group);
+          pondDucks.push({ group: res.group, cfg: dCfg });
+        });
+      });
+
+      // 中央廣場旁：開源 Fox.glb 骨骼動畫小狐狸夥伴（點擊可與島長一起互動跳躍）
+      var foxWx = -6.35, foxWz = 3.25;
+      var foxWy = getExactSurfaceY(foxWx, foxWz);
+      spawnGLBInstance(THREE, 'Fox.glb', { targetSize: 1.95, clipName: 'Survey' }, function (res) {
+        res.group.position.set(foxWx, foxWy, foxWz);
+        res.group.rotation.y = 0.48;
+        res.group.userData.isNPC = true;
+        worldGroup.add(res.group);
+        interactiveMeshes.push(res.group);
+        foxCompanion = res;
+      });
+
+      // 中央廣場東側：開源 RobotExpressive.glb 骨骼動畫表情機器人（點擊可切換揮手／跳舞／跳躍／比讚動畫）
+      var robWx = 5.35, robWz = 3.45;
+      var robWy = getExactSurfaceY(robWx, robWz);
+      spawnGLBInstance(THREE, 'RobotExpressive.glb', { targetSize: 2.65, clipName: 'Wave' }, function (res) {
+        res.group.position.set(robWx, robWy, robWz);
+        res.group.rotation.y = -0.42;
+        res.group.userData.isRobot = true;
+        worldGroup.add(res.group);
+        interactiveMeshes.push(res.group);
+        plazaRobot = res;
+      });
+
+      function triggerRobotPerform() {
+        if (!plazaRobot) return;
+        robotClipIdx = (robotClipIdx + 1) % robotClipCycle.length;
+        var nextClip = robotClipCycle[robotClipIdx];
+        if (plazaRobot.actions) {
+          Object.keys(plazaRobot.actions).forEach(function (k) {
+            plazaRobot.actions[k].stop();
+          });
+          var act = plazaRobot.actions[nextClip] || plazaRobot.actions.Wave || plazaRobot.actions.Idle;
+          if (act) act.reset().play();
+        }
+        var sp = projectToScreen(robWx, robWy + 3.4, robWz);
+        var msgMap = {
+          Wave: '🤖 創客機器人：嗨！歡迎來到 3D 動森島！（揮手）',
+          Dance: '🤖 創客機器人：啟動歡樂熱舞模式！💃',
+          Jump: '🤖 創客機器人：超級跳躍推進！🚀',
+          ThumbsUp: '🤖 創客機器人：你今天表現超讚喔！👍',
+          Idle: '🤖 創客機器人：待命巡邏中，隨時點我表演！✨'
+        };
+        spawnFloatScreen(sp.x, sp.y, msgMap[nextClip] || '🤖 創客機器人：嗶嗶！');
+      }
+
+      // 草原奔馳駿馬 (Horse.glb)、果園補給卡車 (Truck.glb) 與中央廣場立體雕塑花叢 (Flower.glb)
+      var horseWx = -14.6, horseWz = 3.8;
+      spawnGLBInstance(THREE, 'Horse.glb', { targetSize: 2.25, timeScale: 0.82 }, function (res) {
+        res.group.position.set(horseWx, getExactSurfaceY(horseWx, horseWz), horseWz);
+        res.group.rotation.y = 0.65;
+        worldGroup.add(res.group);
+      });
+
+      var truckWx = -21.8, truckWz = 6.2;
+      spawnGLBInstance(THREE, 'Truck.glb', { targetSize: 2.65 }, function (res) {
+        res.group.position.set(truckWx, getExactSurfaceY(truckWx, truckWz), truckWz);
+        res.group.rotation.y = 0.42;
+        worldGroup.add(res.group);
+      });
+
+      [[-3.6, 4.3], [3.6, 4.3], [-3.8, -3.2], [3.8, -3.2]].forEach(function (fp, fi) {
+        spawnGLBInstance(THREE, 'Flower.glb', { targetSize: 1.05 }, function (res) {
+          res.group.position.set(fp[0], getExactSurfaceY(fp[0], fp[1]), fp[1]);
+          res.group.rotation.y = fi * 1.2;
+          worldGroup.add(res.group);
+        });
+      });
 
       props.forEach(function (p, idx) {
         var wx = pctToWorldX(p.x);
@@ -3591,8 +3850,12 @@
         var hits = raycaster.intersectObjects(interactiveMeshes, true);
         if (hits.length > 0) {
           var hitObj = hits[0].object;
-          while (hitObj && hitObj.parent && hitObj.userData.nodeId == null && hitObj.userData.propIndex == null && !hitObj.userData.isNPC) {
+          while (hitObj && hitObj.parent && hitObj.userData.nodeId == null && hitObj.userData.propIndex == null && !hitObj.userData.isNPC && !hitObj.userData.isRobot) {
             hitObj = hitObj.parent;
+          }
+          if (hitObj && hitObj.userData.isRobot) {
+            triggerRobotPerform();
+            return;
           }
           if (hitObj && hitObj.userData.isNPC) {
             triggerMascotGreeting(state.selectedId === '__npc__');
@@ -3754,10 +4017,17 @@
       var camPos = new THREE.Vector3(0, 24, 34);
       var camLook = new THREE.Vector3(0, 1.5, 4);
       var currentPy = getExactSurfaceY(initWx, initWz);
+      var lastAnimNow = performance.now();
 
       function animate(now) {
         if (state.destroyed) return;
+        var dt = Math.min(0.05, Math.max(0.001, (now - lastAnimNow) * 0.001));
+        lastAnimNow = now;
         var tSec = now * 0.001;
+
+        for (var mi = 0; mi < activeGlbMixers.length; mi++) {
+          activeGlbMixers[mi].update(dt);
+        }
 
         var vx = 0, vy = 0;
         if (state.keys.ArrowLeft  || state.keys.KeyA) vx -= 1;
@@ -3927,6 +4197,32 @@
           bf.userData.rw.rotation.y = -flapAng;
         }
 
+        // 開源 .glb 天空飛鳥群環島翱翔動畫
+        for (var sbi = 0; sbi < skyBirds.length; sbi++) {
+          var sb = skyBirds[sbi];
+          var bAng = tSec * sb.cfg.speed + sb.cfg.phase;
+          var bx = Math.cos(bAng) * sb.cfg.r;
+          var bz = Math.sin(bAng) * (sb.cfg.r * 0.72);
+          var nextAng = bAng + 0.05;
+          var nbx = Math.cos(nextAng) * sb.cfg.r;
+          var nbz = Math.sin(nextAng) * (sb.cfg.r * 0.72);
+          sb.group.position.set(bx, sb.cfg.y + Math.sin(tSec * 2.1 + sbi) * 0.45, bz);
+          sb.group.rotation.y = Math.atan2(nbx - bx, nbz - bz);
+        }
+
+        // 開源 .glb 池塘與河道小鴨游水動畫
+        for (var pdi = 0; pdi < pondDucks.length; pdi++) {
+          var pd = pondDucks[pdi];
+          var dAng = tSec * pd.cfg.speed + pd.cfg.phase;
+          var dxPos = pd.cfg.cx + Math.cos(dAng) * pd.cfg.r;
+          var dzPos = pd.cfg.cz + Math.sin(dAng) * (pd.cfg.r * 0.75);
+          var ndAng = dAng + 0.05;
+          var ndx = pd.cfg.cx + Math.cos(ndAng) * pd.cfg.r;
+          var ndz = pd.cfg.cz + Math.sin(ndAng) * (pd.cfg.r * 0.75);
+          pd.group.position.set(dxPos, pd.cfg.baseY + Math.sin(tSec * 3.8 + pdi) * 0.04, dzPos);
+          pd.group.rotation.y = Math.atan2(ndx - dxPos, ndz - dzPos) - Math.PI / 2;
+        }
+
         for (var cl = 0; cl < clouds.length; cl++) {
           clouds[cl].position.x += 0.018;
           if (clouds[cl].position.x > 46) clouds[cl].position.x = -46;
@@ -4003,6 +4299,9 @@
 
           if (ne.mesh.userData.spinPart) {
             ne.mesh.userData.spinPart.rotation.z = tSec * 1.8;
+          }
+          if (ne.mesh.userData.spinPartY) {
+            ne.mesh.userData.spinPartY.rotation.y = tSec * 1.25;
           }
           if (ne.mesh.userData.pulsePart) {
             var sc = 0.9 + Math.sin(tSec * 9) * 0.14;

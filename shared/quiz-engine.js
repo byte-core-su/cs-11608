@@ -190,7 +190,7 @@
     // 返回基地：固定左上，每頁只放一顆
     + '<a id="back-to-hub" href="' + hubHref + '" title="返回闖關基地" style="position:fixed;top:1rem;left:1rem;z-index:9999;display:inline-flex;align-items:center;gap:.35rem;background:#1e293b;color:#fff;font-weight:700;font-size:.875rem;padding:.5rem .875rem;border-radius:9999px;box-shadow:0 10px 15px -3px rgba(0,0,0,.2);text-decoration:none;">&#8592; 返回基地</a>'
 
-    + '<div id="app" class="max-w-2xl mx-auto">'
+    + '<div id="app" class="max-w-6xl mx-auto">'
 
     // 1. 身分確認
     +   '<div id="login-screen" class="glass-card p-10 max-w-md mx-auto mt-8 text-center">'
@@ -199,99 +199,126 @@
     +     '<p id="sso-msg" class="mt-8 text-slate-500 font-bold">正在從闖關基地確認身分…</p>'
     +   '</div>'
 
-    // 2. 章節選擇
-    +   '<div id="chapter-screen" class="glass-card p-10 hidden animate-pop">'
-    +     '<div class="text-center mb-8">'
-    +       '<h2 id="welcome-info" class="text-lg font-bold text-slate-500 mb-2"></h2>'
-    +       '<h2 class="text-2xl font-black text-slate-800">請選擇學習章節</h2>'
-    +       '<p id="chapter-progress" class="mt-2 text-sm font-bold text-slate-500">讀取進度中…</p>'
-    +       '<p class="mt-1 text-xs text-slate-400 leading-relaxed">💡 小提示：<span class="hl">章節大標題也是測驗</span>，點下去可一次挑戰整章；下方小方塊則是單一小節的測驗。</p>'
+    // 2. 章節選擇（動森島嶼探險 ＋ 清單雙模式）
+    +   '<div id="chapter-screen" class="hidden animate-pop">'
+    +     '<div class="ac-hud mb-5">'
+    +       '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">'
+    +         '<div>'
+    +           '<h2 id="welcome-info" class="text-xs font-extrabold text-amber-800 mb-0.5"></h2>'
+    +           '<h2 class="text-xl sm:text-2xl font-black text-amber-950">⚖️ 資訊倫理 · 法治森林村落</h2>'
+    +           '<p id="chapter-progress" class="mt-1 text-xs sm:text-sm font-bold text-stone-600">讀取進度中…</p>'
+    +         '</div>'
+    +         '<div class="flex items-center gap-2 flex-wrap">'
+    +           C.chapters.map(function (ch) {
+                  return ch.pdf ? '<a href="' + ch.pdf + '" target="_blank" class="pdf-link">📄 ' + ch.title.split('：')[0] + ' 教材 PDF</a>' : '';
+                }).join('')
+    +           '<div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">'
+    +             '<button type="button" data-qz-view="island" class="qz-view-btn px-3 py-1 rounded-full text-xs font-black transition bg-emerald-500 text-white shadow">🏝️ 島嶼探險</button>'
+    +             '<button type="button" data-qz-view="list" class="qz-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 章節清單</button>'
+    +           '</div>'
+    +         '</div>'
+    +       '</div>'
     +     '</div>'
-    +     '<div class="space-y-6">' + C.chapters.map(chapterCard).join('') + '</div>'
+    +     '<div id="qz-island-mount" class="mb-6"></div>'
+    +     '<div id="qz-list-wrap" class="glass-card p-8 max-w-2xl mx-auto hidden">'
+    +       '<p class="mb-4 text-xs text-slate-400 text-center leading-relaxed">💡 小提示：<span class="hl">章節大標題也是測驗</span>，點下去可一次挑戰整章；下方小方塊則是單一小節的測驗。</p>'
+    +       '<div class="space-y-6">' + C.chapters.map(chapterCard).join('') + '</div>'
     /* 🧠 記憶補給站：放在最後一章（總整理）下方，要一眼看得到 */
-    +     (PRACTICE
-          ? '<div id="qz-practice" class="mt-6 p-5 rounded-2xl border-4 border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-100 shadow-md">'
-            +   '<div class="flex items-center gap-3 mb-2">'
-            +     '<span class="text-4xl" aria-hidden="true">🧠</span>'
-            +     '<div><div class="text-xl font-black text-amber-800">' + PRACTICE.label.replace(/^🧠\s*/, '')
-            +       ' <span class="ml-1 align-middle text-[11px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full">複習用</span></div>'
-            +     '<div class="text-xs font-bold text-amber-700 leading-relaxed">從你<b>已通關的章節</b>出 ' + PRACTICE.size
-            +       ' 題：答錯過的先出（最多 ' + PRACTICE.weak + ' 題），其餘隨機・每題公布正解・不計分</div></div>'
-            +   '</div>'
-            +   '<button id="qz-practice-go" disabled class="w-full mt-2 py-3 rounded-xl font-black text-lg transition '
-            +     'bg-amber-400 text-amber-950 hover:bg-amber-500 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed">'
-            +     '🔒 通關任一章節後開放</button>'
-            + '</div>'
-          : '')
-    +   '</div>'
-
-    // 3. 章節重點閱讀
-    +   '<div id="study-screen" class="glass-card p-8 hidden animate-pop">'
-    +     '<h2 id="study-title" class="text-2xl font-black text-slate-800 mb-6 border-b-4 ' + MAIN.border + ' pb-2 inline-block">章節重點</h2>'
-    +     '<div id="study-content" class="study-note-box p-6 mb-8 text-slate-700 leading-relaxed space-y-4 text-lg max-h-[60vh] overflow-y-auto"></div>'
-    +     '<div class="flex space-x-4">'
-    +       '<button id="back-chapters-btn" class="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition">返回目錄</button>'
-    +       '<button id="start-quiz-btn" class="flex-2 px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-xl ' + MAIN.bgHover + ' shadow-lg ' + MAIN.shadow + ' transition transform active:scale-95">開始測驗挑戰</button>'
+    +       (PRACTICE
+            ? '<div id="qz-practice" class="mt-6 p-5 rounded-2xl border-4 border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-100 shadow-md">'
+              +   '<div class="flex items-center gap-3 mb-2">'
+              +     '<span class="text-4xl" aria-hidden="true">🧠</span>'
+              +     '<div><div class="text-xl font-black text-amber-800">' + PRACTICE.label.replace(/^🧠\s*/, '')
+              +       ' <span class="ml-1 align-middle text-[11px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full">複習用</span></div>'
+              +     '<div class="text-xs font-bold text-amber-700 leading-relaxed">從你<b>已通關的章節</b>出 ' + PRACTICE.size
+              +       ' 題：答錯過的先出（最多 ' + PRACTICE.weak + ' 題），其餘隨機・每題公布正解・不計分</div></div>'
+              +   '</div>'
+              +   '<button id="qz-practice-go" disabled class="w-full mt-2 py-3 rounded-xl font-black text-lg transition '
+              +     'bg-amber-400 text-amber-950 hover:bg-amber-500 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed">'
+              +     '🔒 通關任一章節後開放</button>'
+              + '</div>'
+            : '')
     +     '</div>'
     +   '</div>'
 
-    // 4. 測驗
-    +   '<div id="quiz-screen" class="glass-card p-8 hidden animate-pop">'
-    +     '<div class="flex justify-between items-center mb-8 border-b pb-6">'
-    +       '<div class="max-w-[70%]">'
-    +         '<div id="current-chapter-title" class="' + MAIN.text + ' font-black text-xl leading-tight"></div>'
-    +         '<div class="flex items-center space-x-3 mt-2">'
-    +           '<span id="score-counter" class="bg-orange-500 text-white text-xs px-3 py-1 rounded-full font-black shadow-sm">連對: 0 / ' + TARGET + '</span>'
-    +           '<span id="target-counter" class="bg-slate-100 text-slate-500 text-xs px-3 py-1 rounded-full font-bold">目標連對: ' + TARGET + '</span>'
-    +           '<span id="wrong-counter" class="bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full font-bold shadow-sm">容錯: ' + MAX_WRONG + '</span>'
-    +         '</div>'
+    // 3. 章節重點閱讀（浮動在 3D 果園島嶼上方的主題木框視窗）
+    +   '<div id="study-screen" class="ac-float-backdrop hidden">'
+    +     '<div class="ac-float-window theme-orchard p-8 max-w-2xl mx-auto animate-pop">'
+    +       '<div class="ac-window-badge">🍎 豐收果園 · 園丁筆記</div>'
+    +       '<h2 id="study-title" class="text-2xl font-black text-amber-950 mb-6 border-b-4 border-amber-500 pb-2 inline-block">章節重點</h2>'
+    +       '<div id="study-content" class="study-note-box p-6 mb-8 text-slate-700 leading-relaxed space-y-4 text-lg max-h-[58vh] overflow-y-auto"></div>'
+    +       '<div class="flex space-x-4">'
+    +         '<button id="back-chapters-btn" class="flex-1 py-4 bg-amber-100 text-amber-900 border-2 border-amber-300 font-bold rounded-2xl hover:bg-amber-200 transition">返回目錄</button>'
+    +         '<button id="start-quiz-btn" class="flex-2 px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-2xl ' + MAIN.bgHover + ' shadow-lg ' + MAIN.shadow + ' transition transform active:scale-95">開始測驗挑戰</button>'
     +       '</div>'
-    +       '<div id="timer" class="text-red-500 font-mono font-black text-2xl bg-red-50 px-4 py-1 rounded-lg border border-red-100">00:00</div>'
     +     '</div>'
-    +     '<div id="question-container" class="min-h-[300px]"></div>'
+    +   '</div>'
+
+    // 4. 測驗（浮動在 3D 果園島嶼上方的主題木框視窗）
+    +   '<div id="quiz-screen" class="ac-float-backdrop hidden">'
+    +     '<div class="ac-float-window theme-orchard p-8 max-w-2xl mx-auto animate-pop relative">'
+    +       '<div class="ac-window-badge">🍎 豐收果園 · 採收挑戰</div>'
+    +       '<div class="flex justify-between items-center mb-8 border-b-2 border-amber-200 pb-6">'
+    +         '<div class="max-w-[70%]">'
+    +           '<div id="current-chapter-title" class="' + MAIN.text + ' font-black text-xl leading-tight"></div>'
+    +           '<div class="flex items-center space-x-3 mt-2">'
+    +             '<span id="score-counter" class="bg-orange-500 text-white text-xs px-3 py-1 rounded-full font-black shadow-sm">連對: 0 / ' + TARGET + '</span>'
+    +             '<span id="target-counter" class="bg-amber-100 text-amber-800 text-xs px-3 py-1 rounded-full font-bold border border-amber-300">目標連對: ' + TARGET + '</span>'
+    +             '<span id="wrong-counter" class="bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full font-bold shadow-sm">容錯: ' + MAX_WRONG + '</span>'
+    +           '</div>'
+    +         '</div>'
+    +         '<div id="timer" class="text-red-500 font-mono font-black text-2xl bg-red-50 px-4 py-1 rounded-xl border-2 border-red-200">00:00</div>'
+    +       '</div>'
+    +       '<div id="question-container" class="min-h-[300px]"></div>'
     /* 浮水印與遮罩都掛在 quiz-screen 裡（它是 position:relative） */
-    +     '<div id="qz-mark" class="qz-mark"></div>'
-    +     '<div class="mt-10 flex justify-end">'
-    +       '<button id="next-btn" class="px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-xl shadow-xl ' + MAIN.bgHover + ' transition transform active:scale-95">送出答案</button>'
+    +       '<div id="qz-mark" class="qz-mark"></div>'
+    +       '<div class="mt-10 flex justify-end">'
+    +         '<button id="next-btn" class="px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-2xl shadow-xl ' + MAIN.bgHover + ' transition transform active:scale-95">送出答案</button>'
+    +       '</div>'
     +     '</div>'
     +   '</div>'
 
-    // 5. 通關卡
-    +   '<div id="result-screen" class="glass-card p-8 hidden animate-pop">'
-    +     '<div class="pass-card rounded-[2rem] p-8 shadow-2xl">'
-    +       '<div class="text-center mb-6">'
-    +         '<h2 class="text-4xl font-black ' + MAIN.text + ' italic underline tracking-tighter uppercase">QUIZ PASS CARD</h2>'
-    +         '<p class="text-[10px] text-slate-400 font-bold tracking-[0.3em] mt-1">INFORMATION TECHNOLOGY LEARNING SYSTEM</p>'
-    +       '</div>'
-    +       '<div class="bg-slate-50/50 border-y-4 border-double border-slate-100 rounded-xl p-6 mb-6">'
-    +         '<div class="flex justify-around items-center mb-4">'
-    +           '<div class="text-center"><span class="block text-[10px] text-slate-400 font-black uppercase mb-1">Class</span><span id="res-class" class="text-2xl font-black text-slate-800"></span></div>'
-    +           '<div class="h-8 w-[2px] bg-slate-200"></div>'
-    +           '<div class="text-center"><span class="block text-[10px] text-slate-400 font-black uppercase mb-1">No.</span><span id="res-no" class="text-2xl font-black text-slate-800"></span></div>'
-    +           '<div class="h-8 w-[2px] bg-slate-200"></div>'
-    +           '<div class="text-center"><span class="block text-[10px] text-slate-400 font-black uppercase mb-1">Name</span><span id="res-name" class="text-2xl font-black text-slate-800"></span></div>'
+    // 5. 通關卡（浮動在 3D 果園島嶼上方）
+    +   '<div id="result-screen" class="ac-float-backdrop hidden">'
+    +     '<div class="ac-float-window theme-orchard p-6 sm:p-8 max-w-2xl mx-auto animate-pop">'
+    +       '<div class="ac-window-badge">🏆 豐收果園 · 榮譽收成證書</div>'
+    +       '<div class="pass-card rounded-[2rem] p-8 shadow-2xl">'
+    +         '<div class="text-center mb-6">'
+    +           '<h2 class="text-4xl font-black ' + MAIN.text + ' italic underline tracking-tighter uppercase">QUIZ PASS CARD</h2>'
+    +           '<p class="text-[10px] text-slate-400 font-bold tracking-[0.3em] mt-1">INFORMATION TECHNOLOGY LEARNING SYSTEM</p>'
     +         '</div>'
-    +         '<div class="text-center pt-2 border-t border-slate-100"><span class="text-[10px] text-slate-400 font-black uppercase mr-2">Challenge Date:</span><span id="res-date" class="text-sm font-bold text-slate-600 tracking-widest"></span></div>'
-    +       '</div>'
-    +       '<div class="space-y-4 mb-8">'
-    +         '<div class="bg-slate-50 p-5 rounded-2xl border border-slate-100"><span class="text-[10px] text-slate-400 font-black uppercase block mb-1">Completed Chapter</span><span id="res-chapter" class="font-black ' + MAIN.textDark + ' text-lg leading-tight"></span></div>'
-    +         '<div class="grid grid-cols-2 gap-4">'
-    +           '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center"><span class="text-[10px] text-slate-400 font-black block mb-1">DURATION</span><span id="res-duration" class="font-black text-orange-600 text-lg"></span></div>'
-    +           '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center"><span class="text-[10px] text-slate-400 font-black block mb-1">ACCURACY</span><span id="res-rate" class="font-black text-green-600 text-lg">0%</span></div>'
+    +         '<div class="bg-slate-50/50 border-y-4 border-double border-slate-100 rounded-xl p-6 mb-6">'
+    +           '<div class="flex justify-around items-center mb-4">'
+    +             '<div class="text-center"><span class="block text-[10px] text-slate-400 font-black uppercase mb-1">Class</span><span id="res-class" class="text-2xl font-black text-slate-800"></span></div>'
+    +             '<div class="h-8 w-[2px] bg-slate-200"></div>'
+    +             '<div class="text-center"><span class="block text-[10px] text-slate-400 font-black uppercase mb-1">No.</span><span id="res-no" class="text-2xl font-black text-slate-800"></span></div>'
+    +             '<div class="h-8 w-[2px] bg-slate-200"></div>'
+    +             '<div class="text-center"><span class="block text-[10px] text-slate-400 font-black uppercase mb-1">Name</span><span id="res-name" class="text-2xl font-black text-slate-800"></span></div>'
+    +           '</div>'
+    +           '<div class="text-center pt-2 border-t border-slate-100"><span class="text-[10px] text-slate-400 font-black uppercase mr-2">Challenge Date:</span><span id="res-date" class="text-sm font-bold text-slate-600 tracking-widest"></span></div>'
     +         '</div>'
+    +         '<div class="space-y-4 mb-8">'
+    +           '<div class="bg-slate-50 p-5 rounded-2xl border border-slate-100"><span class="text-[10px] text-slate-400 font-black uppercase block mb-1">Completed Chapter</span><span id="res-chapter" class="font-black ' + MAIN.textDark + ' text-lg leading-tight"></span></div>'
+    +           '<div class="grid grid-cols-2 gap-4">'
+    +             '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center"><span class="text-[10px] text-slate-400 font-black block mb-1">DURATION</span><span id="res-duration" class="font-black text-orange-600 text-lg"></span></div>'
+    +             '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center"><span class="text-[10px] text-slate-400 font-black block mb-1">ACCURACY</span><span id="res-rate" class="font-black text-green-600 text-lg">0%</span></div>'
+    +           '</div>'
+    +         '</div>'
+    +         '<div class="grid grid-cols-2 gap-4 text-center mb-8">'
+    +           '<div><div class="text-[10px] text-slate-400 font-bold">CORRECT</div><div id="res-correct" class="text-2xl font-black text-green-500">0</div></div>'
+    +           '<div><div class="text-[10px] text-slate-400 font-bold">TOTAL Q.</div><div id="res-total" class="text-2xl font-black text-slate-800">0</div></div>'
+    +         '</div>'
+    +         '<p id="pass-msg" class="text-center text-sm text-slate-400 mb-8 italic font-bold"></p>'
+    +         '<button id="cert-return-btn" class="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-black transition transform active:scale-95">完成挑戰</button>'
     +       '</div>'
-    +       '<div class="grid grid-cols-2 gap-4 text-center mb-8">'
-    +         '<div><div class="text-[10px] text-slate-400 font-bold">CORRECT</div><div id="res-correct" class="text-2xl font-black text-green-500">0</div></div>'
-    +         '<div><div class="text-[10px] text-slate-400 font-bold">TOTAL Q.</div><div id="res-total" class="text-2xl font-black text-slate-800">0</div></div>'
-    +       '</div>'
-    +       '<p id="pass-msg" class="text-center text-sm text-slate-400 mb-8 italic font-bold"></p>'
-    +       '<button id="cert-return-btn" class="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-black transition transform active:scale-95">完成挑戰</button>'
     +     '</div>'
     +   '</div>'
 
     // 5-2. 記憶補給站的結果（不計分、不是通關卡）
     +   (PRACTICE
-        ? '<div id="practice-screen" class="glass-card p-8 hidden animate-pop">'
+        ? '<div id="practice-screen" class="ac-float-backdrop hidden">'
+          + '<div class="ac-float-window theme-orchard p-8 max-w-2xl mx-auto animate-pop">'
+          +   '<div class="ac-window-badge">🌱 陽光溫室 · 記憶栽培報告</div>'
           +   '<h2 class="text-2xl font-black text-amber-600 mb-1">' + PRACTICE.label + '</h2>'
           +   '<p id="prac-chapter" class="text-sm font-bold text-slate-500 mb-6"></p>'
           +   '<div class="text-center mb-6"><span id="prac-score" class="text-5xl font-black text-slate-800"></span>'
@@ -302,26 +329,31 @@
           +     '<button id="prac-again" class="flex-1 py-4 bg-amber-400 text-amber-950 font-black rounded-xl hover:bg-amber-500 transition">再補給一次</button>'
           +   '</div>'
           + '</div>'
+          + '</div>'
         : '')
 
     // 6. 學習狀態警示單
-    +   '<div id="warning-screen" class="glass-card p-8 hidden animate-pop">'
-    +     '<div class="bg-white border-4 border-red-500 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden">'
-    +       '<div class="absolute top-0 left-0 w-full h-4 bg-red-500"></div>'
-    +       '<div class="text-center mb-6 mt-4"><h2 class="text-4xl font-black text-red-600 italic tracking-tighter uppercase">LEARNING WARNING</h2><p class="text-xs text-red-400 font-bold tracking-[0.2em] mt-2">學習狀態警示單</p></div>'
-    +       '<div class="bg-red-50 p-6 rounded-xl border border-red-100 text-center mb-8">'
-    +         '<div class="text-6xl mb-4">⚠️</div>'
-    +         '<h3 class="text-2xl font-black text-slate-800 mb-3">累積答錯已達 ' + MAX_WRONG + ' 題！</h3>'
-    +         '<p class="text-slate-600 font-bold leading-relaxed text-lg">看來學習遇到了一點小瓶頸呢。<br>請先暫停測驗，<span class="text-red-600 underline">重新閱讀課本</span>或<span class="text-red-600 underline">仔細查看重點整理</span>後，準備好再來挑戰吧！</p>'
+    +   '<div id="warning-screen" class="ac-float-backdrop hidden">'
+    +     '<div class="ac-float-window theme-orchard p-6 sm:p-8 max-w-2xl mx-auto animate-pop">'
+    +       '<div class="ac-window-badge">⚠️ 豐收果園 · 學習狀態提醒</div>'
+    +       '<div class="bg-white border-4 border-red-500 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden">'
+    +         '<div class="absolute top-0 left-0 w-full h-4 bg-red-500"></div>'
+    +         '<div class="text-center mb-6 mt-4"><h2 class="text-4xl font-black text-red-600 italic tracking-tighter uppercase">LEARNING WARNING</h2><p class="text-xs text-red-400 font-bold tracking-[0.2em] mt-2">學習狀態警示單</p></div>'
+    +         '<div class="bg-red-50 p-6 rounded-xl border border-red-100 text-center mb-8">'
+    +           '<div class="text-6xl mb-4">⚠️</div>'
+    +           '<h3 class="text-2xl font-black text-slate-800 mb-3">累積答錯已達 ' + MAX_WRONG + ' 題！</h3>'
+    +           '<p class="text-slate-600 font-bold leading-relaxed text-lg">看來學習遇到了一點小瓶頸呢。<br>請先暫停測驗，<span class="text-red-600 underline">重新閱讀課本</span>或<span class="text-red-600 underline">仔細查看重點整理</span>後，準備好再來挑戰吧！</p>'
+    +         '</div>'
+    +         '<button id="warn-back-btn" class="w-full bg-red-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-red-700 transition transform active:scale-95">返回閱讀重點</button>'
     +       '</div>'
-    +       '<button id="warn-back-btn" class="w-full bg-red-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-red-700 transition transform active:scale-95">返回閱讀重點</button>'
     +     '</div>'
     +   '</div>'
     + '</div>'
 
     // 提示框
-    + '<div id="modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">'
-    +   '<div class="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border-4 ' + MAIN.border + '">'
+    + '<div id="modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-[80] backdrop-blur-sm">'
+    +   '<div class="ac-float-window theme-orchard p-8 max-w-sm w-full">'
+    +     '<div class="ac-window-badge">🍎 豐收果園 · 島嶼提示</div>'
     +     '<h3 id="modal-title" class="text-2xl font-black mb-4 ' + MAIN.text + '">提示</h3>'
     +     '<p id="modal-msg" class="text-slate-600 font-bold mb-8 text-lg"></p>'
     +     '<div class="flex justify-end"><button id="modal-ok" class="w-full py-3 ' + MAIN.bg + ' text-white rounded-xl font-black ' + MAIN.bgHover + ' transition">我知道了</button></div>'
@@ -329,8 +361,9 @@
     + '</div>'
 
     // 闖關紀錄
-    + '<div id="action-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">'
-    +   '<div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border-4 border-emerald-500">'
+    + '<div id="action-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-[80] backdrop-blur-sm">'
+    +   '<div class="ac-float-window theme-orchard p-8 max-w-md w-full">'
+    +     '<div class="ac-window-badge">🍎 豐收果園 · 採收成果籃</div>'
     +     '<h3 class="text-2xl font-black mb-2 text-emerald-600">過關紀錄查詢</h3>'
     +     '<p class="text-slate-600 font-bold mb-6 text-sm">你已經通過這個章節了，這是你的輝煌紀錄！</p>'
     +     '<div id="history-list" class="space-y-3 mb-8 max-h-[40vh] overflow-y-auto pr-2"></div>'
@@ -380,9 +413,106 @@
   /* ===================================================================
      5. 畫面流程
      =================================================================== */
+  var lastUnitsMap = {};
+  var qzViewMode = 'island';
+
+  function mountQuizIsland(units) {
+    lastUnitsMap = units || lastUnitsMap || {};
+    var mountEl = $('qz-island-mount');
+    var listEl  = $('qz-list-wrap');
+    if (!mountEl || !listEl) return;
+
+    document.querySelectorAll('.qz-view-btn').forEach(function (b) {
+      var on = b.getAttribute('data-qz-view') === qzViewMode;
+      b.className = 'qz-view-btn px-3 py-1 rounded-full text-xs font-black transition '
+        + (on ? 'bg-emerald-500 text-white shadow' : 'text-stone-600 hover:text-stone-900');
+    });
+
+    if (qzViewMode === 'list' || !window.AC_ISLAND) {
+      mountEl.classList.add('hidden');
+      listEl.classList.remove('hidden');
+      return;
+    }
+    mountEl.classList.remove('hidden');
+    listEl.classList.add('hidden');
+
+    // 10 個章節在島上的座標與「豐收果園 × 玻璃溫室」主題 3D 模型
+    var layout = {
+      '1-1':        { x: 22, y: 66, kind: 'orchard-apple',       icon: '🍎', shortTitle: '1-1 網路禮儀' },
+      '1-2':        { x: 36, y: 55, kind: 'orchard-peach',       icon: '🍑', shortTitle: '1-2 資訊倫理' },
+      '1-3':        { x: 24, y: 40, kind: 'orchard-orange',      icon: '🍊', shortTitle: '1-3 著作權法' },
+      '1-4':        { x: 40, y: 34, kind: 'orchard-pear',        icon: '🍐', shortTitle: '1-4 個資保護' },
+      'ch1-all':    { x: 32, y: 20, kind: 'orchard-barn',        icon: '🏡', shortTitle: '第1章 豐收穀倉' },
+      '3-1':        { x: 64, y: 56, kind: 'orchard-cherry',      icon: '🍒', shortTitle: '3-1 資訊安全' },
+      '3-2':        { x: 78, y: 64, kind: 'orchard-apple',       icon: '🍎', shortTitle: '3-2 網路犯罪' },
+      '3-3':        { x: 76, y: 39, kind: 'orchard-peach',       icon: '🍑', shortTitle: '3-3 媒體素養' },
+      'ch3-all':    { x: 68, y: 20, kind: 'orchard-mill',        icon: '🧃', shortTitle: '第3章 風車果坊' },
+      'review-all': { x: 50, y: 18, kind: 'orchard-golden-tree', icon: '🌟', shortTitle: '黃金神木總測驗' }
+    };
+
+    var firstUnpassed = ORDER.find(function (id) { return !lastUnitsMap[id] || !(lastUnitsMap[id].star > 0); });
+    var islandNodes = ORDER.map(function (id, idx) {
+      var n = NODES[id] || { id: id, title: id };
+      var u = lastUnitsMap[id] || {};
+      var star = Number(u.star) || 0;
+      var lay = layout[id] || { x: 20 + (idx % 5) * 15, y: 30 + Math.floor(idx / 5) * 28, kind: 'orchard-apple', icon: '🍎', shortTitle: n.title };
+      var isNext = firstUnpassed === id;
+      return {
+        id: id,
+        x: lay.x,
+        y: lay.y,
+        kind: lay.kind,
+        icon: lay.icon,
+        tag: id === 'review-all' ? '傳說黃金果樹' : (id.indexOf('all') >= 0 ? '整章豐收驗收' : '果園章節果樹'),
+        title: n.title,
+        shortTitle: lay.shortTitle,
+        desc: star > 0 ? ('已採收通關獲得 ' + '★'.repeat(star) + '（最高分 ' + (u.score || 100) + '%）・點擊可檢視證書或再次挑戰') : '走近搖晃果樹！先讀章節重點，再進行連對 ' + TARGET + ' 題採收挑戰！',
+        pass: star > 0,
+        starsText: star > 0 ? '★'.repeat(star) : '',
+        statusLabel: star > 0 ? '已通關' : '待挑戰',
+        flagText: isNext ? '👉 推薦挑戰' : '',
+        flagKind: isNext ? 'next' : '',
+        locked: false,
+        actions: [{ label: star > 0 ? '查看紀錄 / 再挑戰 →' : '閱讀重點並挑戰 →', primary: true, onClick: function () { openChapter(id); } }]
+      };
+    });
+
+    if (PRACTICE) {
+      var canPrac = passedIds.length > 0;
+      islandNodes.push({
+        id: 'qz-practice-node',
+        x: 52,
+        y: 52,
+        kind: 'orchard-greenhouse',
+        icon: '🌱',
+        tag: '陽光玻璃溫室',
+        title: PRACTICE.label,
+        shortTitle: '記憶補給溫室',
+        desc: '從你已通關的果樹章節抽選 ' + PRACTICE.size + ' 題練習（答錯過的優先栽培複習、當場公布正解、不計分）',
+        pass: canPrac,
+        starsText: canPrac ? ('已解鎖 ' + passedIds.length + ' 章') : '',
+        statusLabel: canPrac ? '可複習' : '未開放',
+        locked: !canPrac,
+        lockReason: '通關任一章節後開放',
+        actions: [{ label: '開始記憶補給 🧠', primary: true, onClick: function () { startPractice(); } }]
+      });
+    }
+
+    window.AC_ISLAND.mount(mountEl, {
+      pageId: 'ethics_' + C.moduleId,
+      variant: 'ethics',
+      playerName: user.name || '島民',
+      startX: 50,
+      startY: 75,
+      initialSelectedId: firstUnpassed || ORDER[0],
+      nodes: islandNodes
+    });
+  }
+
   function enterChapters() {
     hide('login-screen'); show('chapter-screen');
-    $('welcome-info').textContent = user.cls + '班 ' + user.no + '號 ' + user.name + '，歡迎登入';
+    $('welcome-info').textContent = user.cls + '班 ' + user.no + '號 ' + user.name + '，歡迎登島';
+    mountQuizIsland(lastUnitsMap);
     setTimeout(paintBadges, 300);
   }
 
@@ -416,7 +546,8 @@
     var n = NODES[id || currentId];
     $('study-title').textContent = n ? n.title : '建置中';
     $('study-content').innerHTML = n && n.notes ? n.notes : '內容尚未建置';
-    hide('chapter-screen'); show('study-screen');
+    // ★ 保留 chapter-screen（3D 果園島嶼）在背景持續運轉，直接彈出浮動視窗！
+    show('study-screen');
   }
 
   function closeActionModal() {
@@ -426,7 +557,7 @@
   function viewCertificate(idx) {
     var h = recent[idx];
     if (!h) return;
-    closeActionModal(); hide('chapter-screen');
+    closeActionModal();
     // 班級／座號／姓名不必存進每一筆紀錄：這份 progress 文件本來就是這位學生的
     $('res-class').textContent = user.cls; $('res-no').textContent = user.no; $('res-name').textContent = user.name;
     var d = new Date(h.at);
@@ -881,7 +1012,7 @@
       behav = { t: [], copy: 0, away: 0, swap: 0 };
       swapPending = false;
       practiceChrome(true);
-      ['chapter-screen', 'study-screen', 'result-screen', 'warning-screen', 'practice-screen']
+      ['study-screen', 'result-screen', 'warning-screen', 'practice-screen']
         .forEach(function (id) { if ($(id)) hide(id); });
       show('quiz-screen');
       $('current-chapter-title').textContent = PRACTICE.label + '｜已通關的 ' + passedIds.length + ' 個章節';
@@ -1019,6 +1150,7 @@
       var units = (mod && mod.units) || {}, done = 0;
       passedIds = ORDER.filter(function (id) { return units[id] && (units[id].star || 0) > 0; });
       paintPractice();
+      mountQuizIsland(units);
       document.querySelectorAll('.qz-open').forEach(function (btn) {
         var id = btn.getAttribute('data-ch');
         btn.querySelectorAll('.pass-badge').forEach(function (el) { el.remove(); });
@@ -1055,15 +1187,17 @@
      =================================================================== */
   function bind() {
     document.addEventListener('click', function (e) {
+      var vb = e.target.closest('.qz-view-btn');
+      if (vb) { qzViewMode = vb.getAttribute('data-qz-view') || 'island'; mountQuizIsland(lastUnitsMap); return; }
       var t = e.target.closest('.qz-open');   if (t) { openChapter(t.getAttribute('data-ch')); return; }
       var c = e.target.closest('.qz-cert');   if (c) { viewCertificate(c.getAttribute('data-rec')); return; }
       var o = e.target.closest('.qz-opt');    if (o) { selectOption(+o.getAttribute('data-opt')); return; }
     });
     $('start-quiz-btn').addEventListener('click', startQuiz);
     $('next-btn').addEventListener('click', checkAnswer);
-    $('back-chapters-btn').addEventListener('click', function () { hide('study-screen'); show('chapter-screen'); });
+    $('back-chapters-btn').addEventListener('click', function () { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
     $('warn-back-btn').addEventListener('click', function () { hide('warning-screen'); show('study-screen'); });
-    $('cert-return-btn').addEventListener('click', function () { hide('result-screen'); show('chapter-screen'); });
+    $('cert-return-btn').addEventListener('click', function () { hide('result-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
     $('modal-ok').addEventListener('click', function () {
       $('modal').classList.remove('flex'); $('modal').classList.add('hidden');
     });
@@ -1072,7 +1206,7 @@
     if (PRACTICE) {
       $('qz-practice-go').addEventListener('click', startPractice);
       $('prac-again').addEventListener('click', startPractice);
-      $('prac-back').addEventListener('click', function () { hide('practice-screen'); show('chapter-screen'); });
+      $('prac-back').addEventListener('click', function () { hide('practice-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
     }
   }
 

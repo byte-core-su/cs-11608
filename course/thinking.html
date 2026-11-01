@@ -53,10 +53,12 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
 </style>
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
+  <link rel="stylesheet" href="../shared/island.css">
   <script src="../shared/guard.js"></script>
+  <script src="../shared/island.js"></script>
 </head>
-<body class="bg-slate-100 h-screen overflow-hidden">
-    <div id="root" class="h-full"></div>
+<body class="ac-theme-bg min-h-screen">
+    <div id="root" class="min-h-screen"></div>
 
     <!-- 加入 data-type="module" 解決 Babel 解析 import 問題 -->
     <script type="text/babel" data-type="module">
@@ -265,8 +267,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             }, [userClass]);
 
             return (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-auto overflow-hidden relative flex flex-col max-h-[90vh]">
+                <div className="ac-float-backdrop">
+                    <div className="ac-float-window theme-carnival p-5 sm:p-7 max-w-4xl w-full mx-auto relative flex flex-col max-h-[90vh]">
+                        <div className="ac-window-badge">🎪 森林奇幻遊樂園 · 班級通關榜</div>
+                        <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0 border border-pink-100">
                         <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center shrink-0">
                             <h3 className="text-xl font-bold text-white"><i className="fa-solid fa-users mr-2"></i>{userClass} 班過關紀錄查詢</h3>
                             <button onClick={onClose} className="text-indigo-200 hover:text-white transition-colors">
@@ -330,6 +334,7 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                                 </div>
                             )}
                         </div>
+                        </div>
                     </div>
                 </div>
             );
@@ -357,8 +362,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             const passDate = showDate(completedDates[selectedId]) || todayStr;
 
             return (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full mx-auto overflow-hidden flex flex-col md:flex-row min-h-[550px] animate-[fadeIn_0.3s_ease-out]">
+                <div className="ac-float-backdrop">
+                    <div className="ac-float-window theme-carnival p-5 sm:p-7 max-w-5xl w-full mx-auto animate-[fadeIn_0.3s_ease-out]">
+                        <div className="ac-window-badge">🎡 森林奇幻遊樂園 · 榮譽摩天輪證書殿堂</div>
+                        <div className="bg-white rounded-3xl shadow-xl w-full overflow-hidden flex flex-col md:flex-row min-h-[550px] border border-pink-100">
                         
                         <div className="w-full md:w-1/3 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 max-h-[50vh] md:max-h-none">
                             <div className="p-6 bg-indigo-600 text-white flex justify-between items-center shrink-0">
@@ -449,6 +456,7 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                                 </div>
                             )}
                         </div>
+                        </div>
                     </div>
                 </div>
             );
@@ -513,8 +521,9 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             };
 
             return (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white/95 backdrop-blur-xl rounded-[32px] p-6 sm:p-10 shadow-2xl max-w-5xl w-full mx-auto relative border border-white/60 my-auto">
+                <div className="ac-float-backdrop">
+                    <div className="ac-float-window theme-carnival p-6 sm:p-10 max-w-5xl w-full mx-auto relative my-auto">
+                        <div className="ac-window-badge">🎠 森林奇幻遊樂園 · 旋轉木馬通關回報亭</div>
                         <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full w-10 h-10 flex items-center justify-center transition-colors z-10">
                             <i className="fa-solid fa-xmark text-xl"></i>
                         </button>
@@ -636,15 +645,17 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 
         // --- 主應用程式 ---
         const App = () => {
-            const [user, setUser] = useState(null);
-            const [selectedChallenge, setSelectedChallenge] = useState(null);
-            // 闖關基地已存學號 ⇒ 第一次渲染就直接進「登入中…」
-            const [loading, setLoading] = useState(() => {
-                try {
-                    const s = sessionStorage.getItem(SID_KEY);
-                    return !!(s && window.CONFIG.isSid(s));
-                } catch (e) { return false; }
+            // 【測試模式】預設直接帶入測試島民身分，免登入即可直接進入神木林測試
+            const [user, setUser] = useState({
+                classRoom: '801',
+                seatNo: '1',
+                name: '測試島民',
+                docId: '801_1_測試島民',
+                sid: '1410101'
             });
+            const [selectedChallenge, setSelectedChallenge] = useState(null);
+            // 【測試模式】不卡登入讀取畫面
+            const [loading, setLoading] = useState(false);
             const [showCertModal, setShowCertModal] = useState(false);
             const [showQueryModal, setShowQueryModal] = useState(false); 
             const [showMyCertsModal, setShowMyCertsModal] = useState(false); 
@@ -660,6 +671,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             
             // 目前這一關的本班通關人數
             const [classPassCount, setClassPassCount] = useState(null);
+            // 動森島嶼視角 / 傳統挑戰清單視角切換
+            const [viewMode, setViewMode] = useState('island');
+            const islandRef = useRef(null);
+            const islandCtrlRef = useRef(null);
 
             const challenges = [
                 { id: 1, title: "跳格子", url: "https://reurl.cc/mpY8EY", difficulty: "★★" },
@@ -807,10 +822,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             };
 
 
-            // 載入時用闖關基地存的學號登入
+            // 載入時用闖關基地存的學號登入（測試模式下已在預設 state 載入測試島民，背景靜默嘗試同步即可）
             useEffect(() => {
                 const saved = sessionStorage.getItem(SID_KEY);
-                if (saved && window.CONFIG.isSid(saved)) {
+                if (saved && window.CONFIG.isSid(saved) && saved !== '1410101') {
                     setLoading(true);
                     doSidLogin(saved).then(err => { if (err) setLoading(false); });
                 }
@@ -839,6 +854,117 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                 );
             };
 
+            // 掛載動森島嶼探險地圖（森林奇幻遊樂園：10 座主題遊樂設施 ＋ 摩天輪證書所、旋轉木馬證書屋、班級進度榜）
+            useEffect(() => {
+                if (!user || viewMode !== 'island' || !islandRef.current || !window.AC_ISLAND) return;
+                const layout = [
+                    { id: 1,  x: 20, y: 26, kind: 'carnival-hopscotch', sign: '01' }, // 跳格子
+                    { id: 2,  x: 34, y: 23, kind: 'carnival-portal',    sign: '02' }, // 任意門
+                    { id: 3,  x: 49, y: 24, kind: 'carnival-slide',     sign: '03' }, // 滑梯公園
+                    { id: 4,  x: 64, y: 25, kind: 'carnival-dumpling',  sign: '04' }, // 水餃工廠
+                    { id: 5,  x: 78, y: 29, kind: 'carnival-arcade',    sign: '05' }, // 無括號計算機
+                    { id: 6,  x: 22, y: 50, kind: 'carnival-bus',       sign: '06' }, // 遊覽車共乘
+                    { id: 7,  x: 37, y: 49, kind: 'carnival-gacha',     sign: '07' }, // 扭蛋轉轉樂
+                    { id: 8,  x: 52, y: 52, kind: 'carnival-coin',      sign: '08' }, // 換零錢機
+                    { id: 9,  x: 67, y: 50, kind: 'carnival-mole',      sign: '09' }, // 打地鼠
+                    { id: 10, x: 80, y: 52, kind: 'carnival-radish',    sign: '10' }  // 拔蘿蔔
+                ];
+                const nodes = layout.map(pos => {
+                    const ch = challenges.find(c => c.id === pos.id) || { id: pos.id, title: '', difficulty: '★★' };
+                    const passed = isDone(ch.id);
+                    return {
+                        id: 'ch-' + ch.id,
+                        x: pos.x,
+                        y: pos.y,
+                        kind: pos.kind,
+                        sign: pos.sign,
+                        fruit: pos.fruit,
+                        num: String(ch.id).padStart(2, '0'),
+                        label: ch.title,
+                        sub: passed ? '✅ 已通關 · ' + ch.difficulty : '難度 ' + ch.difficulty,
+                        speaker: '🎪 遊樂園關主・第 ' + ch.id + ' 關',
+                        dialog: passed
+                            ? '「' + ch.title + '」遊樂設施你已經拿到證書囉！（難度 ' + ch.difficulty + '）點選可查看本班通關人數。'
+                            : '歡迎來到「' + ch.title + '」主題遊樂設施（難度 ' + ch.difficulty + '）：解開機關後記得截圖，去摩天輪印製通關證書喔！',
+                        actionLabel: passed ? '👥 查看本班通關人數' : '🚀 啟動遊樂設施挑戰',
+                        badgeHtml: passed
+                            ? '<span class="bg-emerald-500 text-white text-[11px] font-black px-2 py-0.5 rounded-full shadow">✓ 已通關</span>'
+                            : '<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-black px-2 py-0.5 rounded-full">' + ch.difficulty + '</span>'
+                    };
+                });
+
+                nodes.push(
+                    {
+                        id: 'cert-make',
+                        x: 34, y: 74,
+                        kind: 'carnival-wheel',
+                        num: '🎡',
+                        label: allDone ? '十關全通關' : '摩天輪證書所',
+                        sub: '上傳截圖領證書',
+                        speaker: '🎡 摩天輪證書照相館',
+                        dialog: allDone
+                            ? '太強啦！遊樂園十座設施的通關證書你全都收集齊全了！'
+                            : '過關後把完整畫面截圖交給摩天輪照相館，就能現場印製專屬通關證書、並計入闖關基地星數喔！',
+                        actionLabel: allDone ? '🎉 已全數通關' : '🏅 製作通關證書'
+                    },
+                    {
+                        id: 'my-certs',
+                        x: 52, y: 75,
+                        kind: 'carnival-carousel',
+                        num: '🎠',
+                        label: '木馬證書屋',
+                        sub: '已拿 ' + challenges.filter(c => isDone(c.id)).length + '/10 張',
+                        speaker: '🎠 旋轉木馬證書展示館',
+                        dialog: '這裡收藏著你在森林遊樂園拿到的每一張通關證書，隨時可以打開來欣賞或下載保存！',
+                        actionLabel: '🏆 查看我的證書'
+                    },
+                    {
+                        id: 'class-query',
+                        x: 70, y: 73,
+                        kind: 'board',
+                        num: '📋',
+                        label: '班級進度榜',
+                        sub: user.classRoom + ' 班排行榜',
+                        speaker: '📢 島民佈告欄',
+                        dialog: '想知道 ' + user.classRoom + ' 班的同學們目前闖到第幾關了嗎？來看看佈告欄吧！',
+                        actionLabel: '📊 查看班級進度'
+                    }
+                );
+
+                islandCtrlRef.current = window.AC_ISLAND.mount(islandRef.current, {
+                    storageKey: 'ac_pos_thinking',
+                    variant: 'thinking',
+                    startX: 48,
+                    startY: 66,
+                    trees: [
+                        { id: 'tk-tree-1', x: 14, y: 38, kind: 'pine-tree' },
+                        { id: 'tk-tree-2', x: 85, y: 39, kind: 'fruit-tree', fruit: 'pear' },
+                        { id: 'tk-tree-3', x: 18, y: 68, kind: 'fruit-tree', fruit: 'peach' },
+                        { id: 'tk-tree-4', x: 84, y: 72, kind: 'palm-tree' }
+                    ],
+                    nodes: nodes,
+                    onOpen: (node) => {
+                        if (node.id === 'cert-make') {
+                            if (!allDone) setShowCertModal(true);
+                            return;
+                        }
+                        if (node.id === 'my-certs') {
+                            setShowMyCertsModal(true);
+                            return;
+                        }
+                        if (node.id === 'class-query') {
+                            setShowQueryModal(true);
+                            return;
+                        }
+                        if (String(node.id).startsWith('ch-')) {
+                            const cid = Number(String(node.id).replace('ch-', ''));
+                            const ch = challenges.find(c => c.id === cid);
+                            if (ch) handleOpenChallenge(ch);
+                        }
+                    }
+                });
+            }, [user, viewMode, completedChallenges]);
+
             if (!user && loading) {
                 return (
                     <div className="min-h-full bg-gradient-to-br from-blue-100 to-indigo-200 flex items-center justify-center p-4 font-sans">
@@ -863,7 +989,7 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             }
 
             return (
-                <div className="h-full bg-slate-100 flex flex-col font-sans relative">
+                <div className="min-h-full flex flex-col font-sans relative pb-8">
                     {/* 傳整份 challenges：關卡由截圖檔名判定 */}
                     {showCertModal && <CertVerificationModal onClose={() => setShowCertModal(false)} user={user} challenges={challenges} studyTime={studyTime} onComplete={handleChallengeComplete} onOpenCerts={() => setShowMyCertsModal(true)} />}
                     
@@ -871,24 +997,81 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                     
                     {showQueryModal && <QueryModal onClose={() => setShowQueryModal(false)} userClass={user.classRoom} />}
 
-                    {/* 登出彈窗已移除：登入／登出統一由闖關基地處理 */}
-
-                    <header className="bg-white shadow-sm z-10 shrink-0">
-                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-                            <div className="flex items-center space-x-2">
-                                <div className="bg-indigo-600 p-2 rounded-lg"><Icons.Award className="w-6 h-6 text-white" /></div>
-                                <span className="text-xl font-bold text-slate-800 hidden sm:block"><span className="underline-doodle px-1">運算思維挑戰</span></span>
+                    {/* 動森 NookPhone 頂部導覽列 */}
+                    <div className="max-w-7xl w-full mx-auto px-4 pt-14 sm:pt-4">
+                        <div className="ac-hud">
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-2xl">🌲</span>
+                                <div>
+                                    <div className="text-[11px] font-black text-emerald-700 tracking-wider">BEBRAS FOREST · 謎題神木林</div>
+                                    <h1 className="text-base sm:text-lg font-black text-amber-950 leading-tight">運算思維挑戰島</h1>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => setShowQueryModal(true)} className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center text-sm font-medium px-4 py-2 rounded-md hover:bg-indigo-50">
-                                    <i className="fa-solid fa-users mr-2"></i>班級進度
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="ac-pill">🧑‍🌾 {user.classRoom}班 {user.seatNo}號 {user.name}</span>
+                                <span className="ac-pill" style={{ background: '#ecfdf5', borderColor: '#6ee7b7', color: '#065f46' }}>
+                                    🏅 進度 {challenges.filter(c => isDone(c.id)).length}/{challenges.length}
+                                </span>
+                                <span className="ac-pill hidden md:inline-flex">⏱️ {formatTime(studyTime)}</span>
+                                <button onClick={() => setShowMyCertsModal(true)} className="ac-pill hover:bg-amber-100 transition cursor-pointer">
+                                    🏆 我的證書
                                 </button>
-                                {/* 返回基地由左上角的共用浮動按鈕提供，這裡不再重複；登出統一在闖關基地處理 */}
+                                <button
+                                    onClick={() => { if (!allDone) setShowCertModal(true); }}
+                                    disabled={allDone}
+                                    className={`ac-pill transition ${allDone ? 'opacity-60 cursor-not-allowed' : 'hover:bg-amber-100 cursor-pointer'}`}
+                                    style={{ background: allDone ? '#e2e8f0' : '#fef3c7', borderColor: '#f59e0b' }}
+                                >
+                                    {allDone ? '✅ 十關全通' : '📸 證書製作'}
+                                </button>
+                                <button onClick={() => setShowQueryModal(true)} className="ac-pill hover:bg-amber-100 transition cursor-pointer">
+                                    📊 班級進度
+                                </button>
+                                <button
+                                    onClick={() => setViewMode(viewMode === 'island' ? 'list' : 'island')}
+                                    className="ac-pill hover:bg-amber-100 transition cursor-pointer"
+                                    style={{ background: '#fef3c7', borderColor: '#f59e0b' }}
+                                >
+                                    {viewMode === 'island' ? '📋 切換挑戰清單' : '🏝️ 切換島嶼探險'}
+                                </button>
                             </div>
                         </div>
-                    </header>
+                    </div>
 
-                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6 overflow-hidden">
+                    {/* 當前選擇關卡的即時狀態與本班通關人數提示條 */}
+                    {selectedChallenge && (
+                        <div className="max-w-7xl w-full mx-auto px-4 mb-2">
+                            <div className="bg-amber-50/95 border-2 border-amber-400 rounded-2xl px-4 py-2.5 shadow-md flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                                    <span>{isDone(selectedChallenge.id) ? '🏆' : '🎮'}</span>
+                                    <span>
+                                        第 {selectedChallenge.id} 關「<b>{selectedChallenge.title}</b>」
+                                        {isDone(selectedChallenge.id) ? '（已拿到證書）' : '（挑戰視窗已開啟，過關後請截圖點「證書製作」）'}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {classPassCount !== null && (
+                                        <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-black border border-emerald-300">
+                                            🔥 本班已通關：{classPassCount} 人
+                                        </span>
+                                    )}
+                                    {!isDone(selectedChallenge.id) && (
+                                        <button onClick={() => handleOpenChallenge(selectedChallenge)} className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold hover:bg-indigo-700">
+                                            重新開啟視窗
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 動森島嶼探險模式 */}
+                    {viewMode === 'island' ? (
+                        <div className="max-w-7xl w-full mx-auto px-4 flex-1">
+                            <div ref={islandRef}></div>
+                        </div>
+                    ) : (
+                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col lg:flex-row gap-6 overflow-hidden">
                         <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-4 h-full">
                             <div className="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-slate-200">
                                 <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
@@ -1021,12 +1204,7 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                             </div>
                         </section>
                     </main>
-
-                    <footer className="bg-white py-3 border-t border-slate-200 shrink-0 z-10">
-                        <div className="max-w-7xl mx-auto px-4 text-center text-sm text-slate-500 font-medium tracking-widest">
-                            {(window.CONFIG.SCHOOL.NAME || '') + (window.CONFIG.SCHOOL.GRADE || '')}
-                        </div>
-                    </footer>
+                    )}
                 </div>
             );
         };

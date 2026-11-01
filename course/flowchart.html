@@ -86,13 +86,15 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 .hl-b{background:linear-gradient(transparent 52%, rgba(147,197,253,.7) 52%);font-weight:800;padding:0 1px;border-radius:2px}
 </style>
   <!-- 全站共用設定（要在 guard 之前載入）-->
+  <link rel="stylesheet" href="../shared/island.css">
   <script src="config.js"></script>
 <!-- 登入邏輯單一來源 -->
 <script src="../shared/auth.js"></script>
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
   <script src="../shared/guard.js"></script>
+  <script src="../shared/island.js"></script>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen ac-theme-bg">
   <a href="hub.html" title="返回闖關基地" class="fixed top-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800 text-white font-bold text-sm px-3.5 py-2 rounded-full shadow-lg hover:bg-slate-700 transition">← 返回基地</a>
   <div id="app"></div>
 
@@ -451,13 +453,15 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
       return shuffle([...u.steps, ...distractors]);
     }
 
-    let state = { status:'loading', studentId:'', studentName:'', slowNote:'', mmdUnit:null, done:{},
+    // 【測試模式】預設直接進入 menu（動森島嶼畫面），不卡「連線中…」等待 Firebase
+    let state = { status:'menu', studentId:'1410101', studentName:'測試島民', slowNote:'', mmdUnit:null, done:{},
                   progStars:{}, imgUnits:{}, imgReview:{}, unit:null, candidates:[], selected:{}, selMsg:'', placed:[], pool:[], mistakes:0,
                   qIdx:0, qPicked:null, qScore:0, refOpen:false, leadOpen:false, graderOpen:false,
                   readLeft:0, hintUsed:false, hintLeft:0, selTries:0,
                   quizSet:[], quizPassed:false, qPulled:false,
                   leadDone:false,      // 前導教材「Scratch 清單學習機」是否已通過結業測驗
-                  leadMsg:'' };        // 前導教材完成紀錄存不進去時的提示
+                  leadMsg:'',          // 前導教材完成紀錄存不進去時的提示
+                  viewMode:'island' }; // 'island' (動森島嶼探險) | 'list' (卡片清單)
 
     /* ===== 關卡開放 =====
        十關全部開放，順序學生自己決定。
@@ -675,15 +679,9 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
     //    就不要再匿名登入，否則會把 Google 身分蓋掉，安全規則的 isOwner() 失效。
     AUTH.attachSession(auth, signInAnonymously, onAuthStateChanged);
     onAuthStateChanged(auth, user=>{
-      if(user && state.status==='loading'){
-        const saved = sessionStorage.getItem(SAVED_KEY);
-        if(saved && window.CONFIG.isSid(saved)) autoLogin(saved);
-        /* ⚠️ guard.js 已經擋掉沒登入的人，走到這裡幾乎只會是時序問題。
-           不論如何都不該畫那個沒有功能的登入頁 —— 回闖關基地重登。 */
-        else {
-          const hub = (window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html';
-          location.replace(hub + '?next=' + encodeURIComponent('flowchart.html'));
-        }
+      if(user){
+        const saved = sessionStorage.getItem(SAVED_KEY) || state.studentId;
+        if(saved && window.CONFIG.isSid(saved) && saved !== '1410101') autoLogin(saved);
       }
     });
     /* 連線慢（autoLogin 要讀名冊＋進度兩次）：只補一行提示，不換畫面 */
@@ -1004,18 +1002,32 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
       paintView();
       if(state.status !== _lastStatus){
         _lastStatus = state.status;
-        try{ window.scrollTo({ top:0, behavior:'auto' }); }catch(e){ window.scrollTo(0,0); }
+        const m = document.getElementById('fc-float-modal');
+        if (m) m.scrollTop = 0;
       }
     }
 
     function paintView(){
       const el=document.getElementById('app');
+      let modalEl = document.getElementById('fc-float-modal');
+      if (!modalEl) {
+        modalEl = document.createElement('div');
+        modalEl.id = 'fc-float-modal';
+        modalEl.className = 'ac-float-backdrop hidden';
+        document.body.appendChild(modalEl);
+      }
+
       /* ⚠️ 逾時不再換成登入畫面，只補一行「比較慢」的提示。
          換畫面會讓學生以為要重新登入，而那個登入頁根本沒有功能。 */
       if(state.status==='loading'){ el.innerHTML=`<div class="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-500 font-bold text-lg"><div>系統連線中…</div>${state.slowNote?`<div class="text-sm text-slate-400 font-normal">${state.slowNote}</div>`:''}</div>`; return; }
 
-
-      if(state.status==='menu'){
+      // ★ 只有真正在 menu 狀態（或背景還沒有掛載過島嶼）時，才重新繪製背景的 3D 蒸氣齒輪木工村！
+      //   當進入 read / select / play / clear / program / mermaid 時，保留背景 3D 島嶼持續運轉，把作答畫面渲染在浮動視窗 modalEl 中！
+      if(state.status==='menu' || !el.querySelector('#fc-island-mount')){
+        if (state.status === 'menu') {
+          modalEl.classList.add('hidden');
+          modalEl.innerHTML = '';
+        }
         const doneCount = Object.keys(state.done).length;
         // 程式設計：由評分星數認定（0 星不算通關）
         const progStarTotal = Object.values(state.progStars||{}).reduce((a,b)=>a+(Number(b)||0),0);
@@ -1088,55 +1100,207 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             </button>`;
         }).join('');
         el.innerHTML = `
-          <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-            <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6 relative pop">
-              <span class="tape"></span>
-              <!-- 登出由「闖關基地」統一處理，這裡不再提供 -->
-              <div class="text-sm text-purple-600 font-bold mb-1">🧩 流程圖與程式設計${state.studentName?`　${state.studentName}`:''}</div>
-              <h1 class="text-xl sm:text-2xl font-black leading-relaxed">
-                <span class="block sm:inline text-emerald-600">🧩 流程圖完成 ${doneCount} / ${UNITS.length} 關　<span class="text-amber-500 text-lg">共 ${doneCount*STARS_PER_UNIT}⭐</span></span>
-                <span class="text-slate-300 mx-1 hidden sm:inline">|</span>
-                <span class="block sm:inline text-orange-600">🐱 程式設計完成 ${progDoneCount} / ${UNITS.length} 關　<span class="text-amber-500 text-lg">共 ${progStarTotal}⭐</span></span>
-              </h1>
-              <p class="text-sm font-bold mt-1">
-                🎁 老師審核加分 <span class="text-amber-500">${bonusAll}⭐</span>
-                <span class="text-slate-400 font-normal">（交流程圖圖片 +${B_IMG}，每關一次）</span>
-                　｜　合計 <span class="text-amber-500 text-lg">${grand}⭐</span>
-                <span class="text-slate-400 font-normal">＝ 闖關基地那張卡的數字</span>
-              </p>
-              <p class="text-slate-500 text-sm mt-1"><b class="text-purple-600">十關全部開放</b>，順序自己決定：排流程圖(+${STARS_PER_UNIT}⭐) → ${WORK ? '寫 Scratch 上傳評分（最多 3⭐）' : '寫 Scratch，作品交給老師'}。看不懂先讀 <a href="reference.html" class="text-purple-600 underline font-bold">參考說明</a>。</p>
+          <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+            <header class="ac-hud mb-5 relative pop">
+              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div class="text-xs font-extrabold text-amber-800 mb-0.5">🏡 創客木工島 · 流程圖與程式設計${state.studentName?`　｜　島民 ${state.studentName}`:''}</div>
+                  <h1 class="text-lg sm:text-2xl font-black text-amber-950 leading-relaxed">
+                    <span class="inline-block text-emerald-700">🧩 流程圖 ${doneCount}/${UNITS.length} 關 (${doneCount*STARS_PER_UNIT}⭐)</span>
+                    <span class="text-stone-300 mx-1.5">|</span>
+                    <span class="inline-block text-orange-700">🐱 程式 ${progDoneCount}/${UNITS.length} 關 (${progStarTotal}⭐)</span>
+                    <span class="text-stone-300 mx-1.5">|</span>
+                    <span class="inline-block text-amber-600">🎁 加分 ${bonusAll}⭐ ＝ 合計 ${grand}⭐</span>
+                  </h1>
+                  <p class="text-stone-600 text-xs sm:text-sm font-medium mt-0.5"><b class="text-emerald-700">十關全部開放</b>，順序自己決定：排流程圖(+${STARS_PER_UNIT}⭐) → ${WORK ? '寫 Scratch 上傳評分（最多 3⭐）' : '寫 Scratch，作品交給老師'}。看不懂先讀 <a href="reference.html" class="text-amber-800 underline font-black">📖 參考說明</a>。</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap shrink-0">
+                  <button id="toggle-lead" class="ac-pill ac-pill-btn ${state.leadDone?'bg-emerald-50 border-emerald-300 text-emerald-800':'bg-teal-100 border-teal-400 text-teal-900'}">
+                    <span>${state.leadDone?'✅':'🔰'} 前導：${LEAD.title}</span>
+                    <span class="text-xs font-black">${state.leadOpen?'▾ 收合':'▸ 展開'}</span>
+                  </button>
+                  <div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">
+                    <button type="button" data-fc-view="island" class="fc-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode!=='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">🏝️ 島嶼探險</button>
+                    <button type="button" data-fc-view="list" class="fc-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode==='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">📋 關卡清單</button>
+                  </div>
+                </div>
+              </div>
             </header>
             ${(()=>{ /* 有退件就在最上面講，不要讓他一關一關翻才發現 */
               const n = UNITS.filter(u => !(state.imgUnits||{})[u.id] && (state.imgReview||{})[u.id]).length;
               return n ? `<div class="bg-rose-50 border-2 border-rose-300 rounded-2xl px-4 py-3 mb-4 flex items-start gap-3">
                 <span class="text-2xl flex-shrink-0">↩️</span>
                 <div class="flex-1 text-sm text-rose-800 leading-relaxed"><b>老師已經看過你交的作業，有 ${n} 關需要補件。</b>
-                  下面標了「還差一點」的關卡寫著原因，改好之後到 Google Classroom 重新繳交就可以拿到加分⭐。</div>
+                  標了「↩️ 補件」的關卡寫著原因，改好之後到 Google Classroom 重新繳交就可以拿到加分⭐。</div>
               </div>` : ''; })()}
             ${state.leadMsg?`<div class="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3 mb-4 text-sm text-amber-800 leading-relaxed pop">⚠️ ${state.leadMsg}</div>`:''}
-            <div class="border-2 ${state.leadDone?'border-teal-200':'border-teal-400 ring-4 ring-teal-100'} rounded-2xl overflow-hidden mb-6 shadow-sm">
-              <button id="toggle-lead" class="w-full flex items-center justify-between gap-2 bg-teal-50 hover:bg-teal-100 px-4 py-3 text-left transition">
-                <span class="flex items-center gap-3"><span class="text-2xl">${state.leadDone?'✅':'🔰'}</span><span>
-                  <span class="text-sm font-black text-teal-700">前導教材：${LEAD.title}　${state.leadDone?'<span class="text-emerald-600">已通過</span>':'<span class="text-rose-600">建議先完成</span>'}</span>
-                  <span class="block text-xs text-teal-600 leading-snug">${state.leadDone?'隨時可以回來複習清單積木。':'十關都會用到清單積木：先走完清單特訓、考過結業測驗（3 題全對）再開始闖關。'}</span>
-                </span></span>
-                <span class="text-teal-600 font-black flex-shrink-0 whitespace-nowrap">${state.leadOpen?'▾ 收合':'▸ 展開'}</span>
-              </button>
-              ${state.leadOpen?`<iframe src="${LEAD.href}${state.leadDone?'?done=1':''}" class="w-full block bg-white" style="height:72vh;border:0" title="${LEAD.title}" loading="lazy"></iframe><div class="text-[11px] text-slate-400 px-3 py-1.5 text-center bg-teal-50">前導教材已嵌在此，${state.leadDone?'看完往下繼續闖關':'考過結業測驗就會自動記錄完成'}</div>`:''}
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${cards}</div>
-            ${morningstarCard()}
+            ${state.leadOpen?`
+              <div class="ac-float-backdrop">
+                <div class="ac-float-window theme-craft p-5 sm:p-7 max-w-5xl mx-auto pop">
+                  <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 發條機器人前導工坊</div>
+                  <div class="border-2 border-teal-400 rounded-2xl overflow-hidden shadow-lg bg-white">
+                    <div class="bg-teal-50 px-4 py-2.5 flex items-center justify-between border-b border-teal-200">
+                      <span class="text-sm font-black text-teal-800">${state.leadDone?'✅':'🔰'} 前導教材：${LEAD.title}</span>
+                      <button id="toggle-lead-close" class="text-xs font-black text-teal-700 hover:text-teal-950 bg-white px-3 py-1 rounded-full border border-teal-300">✕ 收合教材</button>
+                    </div>
+                    <iframe src="${LEAD.href}${state.leadDone?'?done=1':''}" class="w-full block bg-white" style="height:70vh;border:0" title="${LEAD.title}" loading="lazy"></iframe>
+                    <div class="text-[11px] text-slate-400 px-3 py-1.5 text-center bg-teal-50">前導教材已嵌在此，${state.leadDone?'看完往下繼續闖關':'考過結業測驗就會自動記錄完成'}</div>
+                  </div>
+                </div>
+              </div>`:''}
+            ${state.viewMode !== 'list' ? `
+              <div id="fc-island-mount" class="mb-6"></div>
+            ` : `
+              <div class="max-w-4xl mx-auto">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${cards}</div>
+                ${morningstarCard()}
+              </div>
+            `}
           </div>`;
-        return;
+
+        if (state.viewMode !== 'list' && window.AC_ISLAND) {
+          const mountEl = document.getElementById('fc-island-mount');
+          const unitCoords = [
+            { x: 20, y: 68, kind: 'craft-forge'     }, // 01 班級置物櫃（蒸氣齒輪鍛造屋）
+            { x: 35, y: 62, kind: 'craft-watermill' }, // 02 集合點名（動力水車木工坊）
+            { x: 24, y: 47, kind: 'craft-clockwork' }, // 03 演奏小星星（精密鐘錶機關屋）
+            { x: 42, y: 44, kind: 'craft-minecart'  }, // 04 計算成績（晶石礦車轉運站）
+            { x: 58, y: 48, kind: 'craft-sawmill'   }, // 05 抽號碼（蒸氣圓鋸木工屋）
+            { x: 74, y: 63, kind: 'craft-forge'     }, // 06 撲克發牌（蒸氣齒輪鍛造屋）
+            { x: 77, y: 42, kind: 'craft-watermill' }, // 07 動物點點名（動力水車木工坊）
+            { x: 32, y: 24, kind: 'craft-minecart'  }, // 08 戰車王（晶石礦車轉運站）
+            { x: 52, y: 23, kind: 'craft-sawmill'   }, // 09 分身小貓（蒸氣圓鋸木工屋）
+            { x: 70, y: 22, kind: 'craft-clockwork' }  // 10 螞蟻搬乳酪（精密鐘錶機關屋）
+          ];
+          const firstTodo = UNITS.find(u => {
+            const done = !!state.done[u.id];
+            const st = Number((state.progStars||{})[u.id]||0);
+            return !(WORK ? (done && st >= 2) : done);
+          });
+          const islandNodes = UNITS.map((u, idx) => {
+            const done = !!state.done[u.id];
+            const st = Number((state.progStars||{})[u.id]||0);
+            const both = WORK ? (done && st >= 2) : done;
+            const imgOn = !!(state.imgUnits||{})[u.id];
+            const imgRej = !imgOn && (state.imgReview||{})[u.id];
+            const flowSt = done ? STARS_PER_UNIT + (imgOn ? B_IMG : 0) : 0;
+            const totalSt = flowSt + (WORK ? st : 0);
+            const pos = unitCoords[idx] || { x: 50, y: 50, kind: 'cottage-amber' };
+
+            const actions = [];
+            if (done) {
+              actions.push({
+                label: st === 0 ? '🐱 寫程式 / 評分 →' : (st < 3 ? `🐱 挑戰 ${st+1}⭐ →` : '🐱 程式設計 →'),
+                primary: true,
+                onClick: () => { clearTimers(); state.unit = u; state.refOpen = false; startProgram(); }
+              });
+              actions.push({
+                label: '🧩 重排流程圖',
+                primary: false,
+                onClick: () => { startUnit(u); }
+              });
+              actions.push({
+                label: '🧜 流程圖代碼',
+                primary: false,
+                onClick: () => { clearTimers(); state.mmdUnit = u; state.status = 'mermaid'; render(); }
+              });
+            } else {
+              actions.push({
+                label: '🧩 開始排流程圖 →',
+                primary: true,
+                onClick: () => { startUnit(u); }
+              });
+            }
+
+            let descTxt = u.desc || u.subtitle || '';
+            if (imgRej && imgRej.reason) {
+              descTxt = `↩️ 老師退件提醒：${imgRej.reason}（改好請至 Classroom 重交）｜ ` + descTxt;
+            }
+
+            return {
+              id: u.id,
+              x: pos.x,
+              y: pos.y,
+              kind: pos.kind,
+              icon: u.icon,
+              badge: String(u.no).padStart(2, '0'),
+              tag: `第 ${u.no} 關 · ${u.id}`,
+              title: `${String(u.no).padStart(2, '0')}. ${u.title}`,
+              shortTitle: u.title,
+              desc: descTxt,
+              pass: both,
+              starsText: totalSt > 0 ? `⭐${totalSt}` : '',
+              statusLabel: both ? '已完成' : (done ? '流程圖完成' : '待挑戰'),
+              flagText: imgRej ? '↩️ 需補件' : (firstTodo && firstTodo.id === u.id ? '👉 推薦下一關' : ''),
+              flagKind: imgRej ? 'warn' : 'next',
+              locked: false,
+              actions: actions
+            };
+          });
+
+          // 前導教材：發條機器人控制塔
+          islandNodes.push({
+            id: 'lead-list',
+            x: 16,
+            y: 32,
+            kind: 'craft-robot',
+            icon: state.leadDone ? '✅' : '🤖',
+            tag: '發條機器人控制塔',
+            title: `前導教材：${LEAD.title}`,
+            shortTitle: '清單學習機',
+            desc: state.leadDone ? '已通過清單特訓！隨時可以啟動發條機器人複習清單積木。' : '十座蒸氣工坊都會用到清單積木：先啟動發條機器人走完清單特訓、考過結業測驗再開始闖關！',
+            pass: state.leadDone,
+            starsText: state.leadDone ? '已通過' : '必讀前導',
+            flagText: !state.leadDone ? '🔰 建議先做' : '',
+            flagKind: 'next',
+            locked: false,
+            actions: [{ label: state.leadOpen ? '收合前導教材' : '打開清單學習機 🔰', primary: true, onClick: () => { state.leadOpen = !state.leadOpen; render(); } }]
+          });
+
+          // 🌟 晨星勇者黃金齒輪神殿
+          if (window.GAMESAVE) {
+            const g = window.GAMESAVE.unlocked(UNITS, state.done, state.progStars, GATE);
+            islandNodes.push({
+              id: 'morningstar',
+              x: 86,
+              y: 22,
+              kind: 'craft-temple',
+              icon: '🌟',
+              tag: '黃金雙齒輪神殿',
+              title: '🌟 晨星勇者',
+              shortTitle: '晨星勇者神殿',
+              desc: '十座蒸氣工坊全部完成後開放的 RPG 冒險！背包是一份清單、怪物會分身，把學過的程式觀念都用上。',
+              pass: g.ok,
+              starsText: `${g.done}/${g.total} 關`,
+              statusLabel: g.ok ? '已解鎖' : '未開放',
+              locked: !g.ok,
+              lockReason: `十關都通關（${!WORK ? '流程圖都排對' : '流程圖排對且程式 ≥ 2⭐'}）後開放（目前 ${g.done}/${g.total}）`,
+              actions: [{ label: '出發冒險 🌟', href: 'morningstar.html', primary: true }]
+            });
+          }
+
+          window.AC_ISLAND.mount(mountEl, {
+            pageId: 'flowchart',
+            variant: 'code',
+            playerName: state.studentName || state.studentId || '島民',
+            startX: 50,
+            startY: 76,
+            initialSelectedId: (firstTodo && firstTodo.id) || UNITS[0].id,
+            nodes: islandNodes
+          });
+        }
+        if (state.status === 'menu') return;
       }
 
       if(state.status==='read'){
         const u=state.unit; const c=COLORS[u.color]||COLORS.purple;
-        el.innerHTML = `
-          <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        modalEl.classList.remove('hidden');
+        modalEl.innerHTML = `
+          <div class="ac-float-window theme-craft max-w-4xl mx-auto px-5 sm:px-8 py-7">
+            <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 機關設計藍圖</div>
             <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
-              <div class="text-xs text-slate-400">第 ${u.no} 關 · 先閱讀資料</div>
+              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs font-bold text-amber-800">第 ${u.no} 關 · 先閱讀資料</div>
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden pop">
               <div class="p-5 flex items-center gap-4 border-b border-slate-100">
@@ -1176,11 +1340,13 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
           return `<button data-sel="${i}" class="sel-chip text-left rounded-lg px-3 py-2.5 text-sm font-medium border-2 transition active:scale-95 ${on?'bg-purple-600 text-white border-purple-600':'bg-white border-slate-200 hover:border-purple-300'}">${on?'✓ ':''}${s}</button>`;
         }).join('');
         const chosenCount = Object.keys(state.selected).filter(s=>state.selected[s]).length;
-        el.innerHTML = `
-          <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        modalEl.classList.remove('hidden');
+        modalEl.innerHTML = `
+          <div class="ac-float-window theme-craft max-w-3xl mx-auto px-5 sm:px-8 py-7">
+            <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 挑選機關零件</div>
             <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
-              <div class="text-xs text-slate-400">第 ${u.no} 關 · 步驟 1／2：選元件</div>
+              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs font-bold text-amber-800">第 ${u.no} 關 · 步驟 1／2：選元件</div>
             </div>
             <div class="flex items-start gap-3 mb-5 pop">
               <div class="text-3xl flex-shrink-0">🤖</div>
@@ -1201,7 +1367,7 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">${chips}</div>
             ${state.selMsg?`<div class="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-3 py-2 mb-3">🤖 ${state.selMsg}</div>`:''}
             <div class="flex items-center justify-between">
-              <span class="text-xs text-slate-400">已選 ${chosenCount} 個　·　可確認 <b class="text-purple-600">${SELECT_TRIES - state.selTries}</b> / ${SELECT_TRIES} 次</span>
+              <span class="text-xs text-slate-500">已選 ${chosenCount} 個　·　可確認 <b class="text-purple-600">${SELECT_TRIES - state.selTries}</b> / ${SELECT_TRIES} 次</span>
               <button id="confirm-sel" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2.5 rounded-lg active:scale-95 transition">確認選擇，開始拼圖 →</button>
             </div>
             <p class="text-xs text-slate-400 mt-3 text-center">看不懂？先讀 <a href="reference.html" class="text-purple-600 underline">參考說明</a></p>
@@ -1241,11 +1407,13 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
             ${note?`<div class="text-xs text-slate-400 font-normal mt-1 leading-snug">${note}</div>`:''}
           </button>`;
         }).join('');
-        el.innerHTML = `
-          <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        modalEl.classList.remove('hidden');
+        modalEl.innerHTML = `
+          <div class="ac-float-window theme-craft max-w-3xl mx-auto px-5 sm:px-8 py-7">
+            <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 組裝流程圖齒輪</div>
             <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
-              <div class="text-xs ${state.mistakes >= state.unit.steps.length ? 'text-red-500 font-bold' : 'text-slate-400'}">錯誤 ${state.mistakes} / ${state.unit.steps.length} 次（超過就要回去重讀）</div>
+              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs ${state.mistakes >= state.unit.steps.length ? 'text-red-500 font-bold' : 'text-amber-800 font-bold'}">錯誤 ${state.mistakes} / ${state.unit.steps.length} 次（超過就要回去重讀）</div>
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-5 pop">
               <div class="text-xs text-purple-600 font-bold mb-1">第 ${u.no} 關</div>
@@ -1271,11 +1439,11 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                 </ul>
               </details>
             </div>
-            <div class="mb-2 text-xs font-black text-purple-500">🧩 流程圖（${state.placed.length}/${u.steps.length}）</div>
-            <div class="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-4 mb-6 min-h-[80px]">
+            <div class="mb-2 text-xs font-black text-purple-600">🧩 流程圖（${state.placed.length}/${u.steps.length}）</div>
+            <div class="bg-white/90 border-2 border-dashed border-amber-300 rounded-xl p-4 mb-6 min-h-[80px]">
               ${state.placed.length?placedHtml:'<div class="text-slate-400 text-sm text-center py-4">點下方步驟開始排列…</div>'}
             </div>
-            <div class="text-xs font-black text-slate-500 mb-2">👇 選出下一步</div>
+            <div class="text-xs font-black text-amber-900 mb-2">👇 選出下一步</div>
             <div id="pool" class="grid grid-cols-1 sm:grid-cols-2 gap-2">${poolHtml||'<div class="text-emerald-600 font-bold">全部排完了！</div>'}</div>
           </div>`;
         return;
@@ -1285,8 +1453,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
          ⚠️ 沒排過的關卡看不到：那等於直接給答案。 */
       if(state.status==='mermaid'){
         const u = state.mmdUnit;
-        el.innerHTML = `
-          <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        modalEl.classList.remove('hidden');
+        modalEl.innerHTML = `
+          <div class="ac-float-window theme-craft max-w-3xl mx-auto px-5 sm:px-8 py-7">
+            <div class="ac-window-badge">🧜 蒸氣齒輪木工村 · 流程圖代碼</div>
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 pop">
               <div class="text-[11px] text-slate-400 font-mono">第 ${u.no} 關 · ${u.id}</div>
               <h2 class="font-black text-2xl mb-1">${u.title}</h2>
@@ -1306,8 +1476,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
         const u=state.unit;
         const fc = u.steps.map((s,i)=>`<div class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">${i+1}</span><span class="text-sm">${s}</span></div>${i<u.steps.length-1?'<div class="text-purple-300 text-center leading-none">↓</div>':''}`).join('');
         const doneCount = Object.keys(state.done).length;
-        el.innerHTML = `
-          <div class="max-w-xl mx-auto px-4 sm:px-6 py-10">
+        modalEl.classList.remove('hidden');
+        modalEl.innerHTML = `
+          <div class="ac-float-window theme-craft max-w-xl mx-auto px-5 sm:px-8 py-7">
+            <div class="ac-window-badge">🎉 蒸氣齒輪木工村 · 機關組裝完成</div>
             <div class="bg-white rounded-2xl border border-emerald-200 shadow-lg p-6 text-center pop">
               <div class="text-5xl mb-2">🎉</div>
               <h2 class="text-2xl font-black text-emerald-700 mb-1">流程圖完成！</h2>
@@ -1335,12 +1507,14 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
         const u=state.unit; const p=PROG[u.id]; const c=COLORS[u.color]||COLORS.purple;
         const total=(state.quizSet||[]).length; const q=(state.quizSet||[])[state.qIdx];
         const quizArea = quizAreaHTML();
-        el.innerHTML = `
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        modalEl.classList.remove('hidden');
+        modalEl.innerHTML = `
+          <div class="ac-float-window theme-craft max-w-6xl mx-auto px-5 sm:px-8 py-7">
+            <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 程式設計與檢核工作台</div>
             <div class="flex items-center justify-between mb-4">
               <!-- 這一頁的返回鍵同時會重讀進度，星數才會即時更新（不另設第二顆按鈕） -->
-              <button id="back-refresh" class="text-slate-400 hover:text-slate-700 text-sm font-bold">← 關卡列表</button>
-              <div class="text-xs text-slate-400">第 ${u.no} 關 · 程式設計</div>
+              <button id="back-refresh" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <div class="text-xs font-bold text-amber-800">第 ${u.no} 關 · 程式設計</div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
             <!-- 左：教材與檢核 -->
@@ -1426,8 +1600,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 
     // ===== 事件 =====
     document.addEventListener('click', e=>{
+      const fvb = e.target.closest('.fc-view-btn');
+      if(fvb){ state.viewMode = fvb.dataset.fcView || 'island'; render(); return; }
       if(e.target.closest('#logout')){ logout(); return; }
-      if(e.target.closest('#toggle-lead')){ state.leadOpen=!state.leadOpen; render(); return; }
+      if(e.target.closest('#toggle-lead') || e.target.closest('#toggle-lead-close')){ state.leadOpen=!state.leadOpen; render(); return; }
       if(e.target.closest('#toggle-ref')){ state.refOpen=!state.refOpen; render(); return; }
       if(e.target.closest('#hint-btn')){
         if(state.hintUsed){                    // 已用掉提示 → 退回上一步重新閱讀（重新計時 30 秒）

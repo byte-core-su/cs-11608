@@ -1,0 +1,610 @@
+/* =====================================================================
+   🏝️ 動物森友會風格 · 真 3D 立體島嶼探險引擎樣式 (shared/island.css)
+   ---------------------------------------------------------------------
+   搭配 Three.js WebGL 3D 島嶼場景（微曲面滾筒地球視角、立體建築、球體果樹、
+   即時光影陰影、鏡頭跟隨），提供 3D 投影木牌、NookPhone 狀態列與動森對話框。
+   ===================================================================== */
+
+:root {
+  --ac-sky: #bae6fd;
+  --ac-sea-deep: #0ea5e9;
+  --ac-sea-mid: #38bdf8;
+  --ac-sea-shallow: #67e8f9;
+  --ac-sand: #fde68a;
+  --ac-sand-edge: #fcd34d;
+  --ac-grass-low: #65c466;
+  --ac-grass-high: #4eb857;
+  --ac-cliff: #8d6e4c;
+  --ac-cliff-dark: #6d5235;
+  --ac-cream: #fffdf5;
+  --ac-cream-border: #e6dcc8;
+  --ac-wood: #8b5a2b;
+  --ac-wood-light: #b87d4b;
+  --ac-leaf: #22c55e;
+  --ac-text: #4a3b2c;
+}
+
+/* ── 全站動森柔和背景 ── */
+body.ac-theme-bg,
+body.ac-sky-bg {
+  background-color: #dff4ec !important;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(167, 243, 208, 0.45) 0%, transparent 45%),
+    radial-gradient(circle at 80% 75%, rgba(186, 230, 253, 0.5) 0%, transparent 50%),
+    radial-gradient(#b7e4c7 1.5px, transparent 1.5px) !important;
+  background-size: 100% 100%, 100% 100%, 28px 28px !important;
+  color: #3d3126;
+}
+
+/* ── NookPhone 頂部狀態列 ── */
+.ac-hud {
+  background: var(--ac-cream);
+  border: 3px solid #d6c7ae;
+  border-radius: 28px;
+  box-shadow: 0 8px 0 #c9b89c, 0 12px 24px rgba(74, 59, 44, 0.12);
+  padding: 12px 18px;
+  color: var(--ac-text);
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ac-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f5efe0;
+  border: 2px solid #dfcfb4;
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #5c4938;
+  transition: all 0.18s ease;
+}
+
+.ac-pill-btn {
+  cursor: pointer;
+  user-select: none;
+}
+.ac-pill-btn:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+}
+.ac-pill-btn.active {
+  background: #22c55e;
+  border-color: #16a34a;
+  color: #ffffff;
+  box-shadow: 0 3px 0 #15803d;
+}
+
+/* ── 3D 島嶼視窗外框 ── */
+.ac-island-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: 32px;
+  border: 5px solid #fffdf5;
+  box-shadow:
+    0 0 0 3px #d6c7ae,
+    0 18px 42px rgba(14, 116, 144, 0.28);
+  overflow: hidden;
+  background: linear-gradient(180deg, #7dd3fc 0%, #bae6fd 38%, #38bdf8 100%);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── 3D 島嶼舞台容器 ── */
+.ac-island-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9.6;
+  min-height: 540px;
+  max-height: 760px;
+  overflow: hidden;
+  cursor: grab;
+}
+.ac-island-stage:active {
+  cursor: grabbing;
+}
+
+@media (max-width: 768px) {
+  .ac-island-stage {
+    aspect-ratio: auto;
+    height: 560px;
+    min-height: 500px;
+  }
+}
+
+.ac-webgl-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  z-index: 1;
+}
+
+.ac-overlay-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+  overflow: hidden;
+}
+
+/* ── 3D 空間投影木牌與狀態氣泡 (Projected 3D Pins) ── */
+.ac-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 20;
+  transition: filter 0.18s ease;
+  outline: none;
+  will-change: transform, left, top;
+}
+
+.ac-node:hover,
+.ac-node:focus-visible,
+.ac-node.is-near {
+  z-index: 38 !important;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.28));
+}
+
+.ac-node.is-locked {
+  filter: saturate(0.5) opacity(0.88);
+}
+
+/* 頭頂星星與狀態氣泡 */
+.ac-node-stars {
+  background: #fffbeb;
+  border: 2px solid #f59e0b;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.18);
+  margin-bottom: 3px;
+}
+
+.ac-node-stars.is-pass {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #047857;
+}
+
+/* 「下一關」或「補件」漂浮提示標記 */
+@keyframes acBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.ac-node-flag {
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.35);
+  white-space: nowrap;
+  animation: acBob 1.4s ease-in-out infinite;
+  margin-bottom: 3px;
+}
+.ac-node-flag.flag-next {
+  background: #4f46e5;
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.35);
+}
+
+/* 動森立體木牌名稱標籤 */
+.ac-node-label {
+  background: rgba(255, 253, 245, 0.96);
+  border: 2.5px solid #8b5a2b;
+  border-radius: 14px;
+  padding: 3.5px 11px;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #4a3b2c;
+  white-space: nowrap;
+  box-shadow: 0 4px 0 #6d441e, 0 6px 12px rgba(0, 0, 0, 0.24);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 185px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s;
+}
+.ac-node-label::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px 6px 0;
+  border-style: solid;
+  border-color: #6d441e transparent transparent;
+}
+.ac-node.is-near .ac-node-label,
+.ac-node:hover .ac-node-label {
+  background: #fef3c7;
+  border-color: #d97706;
+  color: #78350f;
+  transform: scale(1.09) translateY(-2px);
+}
+
+@media (max-width: 640px) {
+  .ac-node-label {
+    font-size: 11px;
+    padding: 2px 8px;
+    max-width: 135px;
+  }
+}
+
+/* 玩家 3D 頭頂名牌 */
+.ac-player-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -100%);
+  background: rgba(15, 23, 42, 0.82);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  z-index: 36;
+}
+
+/* 搖樹掉落果實飄字 */
+@keyframes acFloatUp {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
+  50% { opacity: 1; transform: translate(-50%, -28px) scale(1.18); }
+  100% { opacity: 0; transform: translate(-50%, -48px) scale(0.95); }
+}
+.ac-float-pop {
+  position: absolute;
+  pointer-events: none;
+  z-index: 60;
+  font-weight: 900;
+  font-size: 16px;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.55);
+  animation: acFloatUp 0.95s ease-out forwards;
+}
+
+/* ── 動森底部對話框 (Animal Crossing Dialog Box) ── */
+.ac-dialog-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: min(94%, 700px);
+  background: rgba(255, 253, 245, 0.97);
+  backdrop-filter: blur(6px);
+  border: 4px solid #e2cfa9;
+  border-radius: 26px;
+  padding: 14px 20px;
+  box-shadow: 0 8px 0 #c7b28b, 0 14px 28px rgba(0, 0, 0, 0.28);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ac-dialog-speaker {
+  position: absolute;
+  top: -15px;
+  left: 22px;
+  background: #f59e0b;
+  color: #fff;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 2px 14px;
+  border-radius: 999px;
+  border: 2px solid #fffdf5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.ac-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #22c55e;
+  color: #fff;
+  font-weight: 900;
+  font-size: 14px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 2px solid #16a34a;
+  box-shadow: 0 4px 0 #15803d;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ac-btn-primary:hover {
+  background: #16a34a;
+  transform: translateY(-1px);
+}
+.ac-btn-primary:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #15803d;
+}
+
+.ac-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 2px solid #f59e0b;
+  box-shadow: 0 3px 0 #d97706;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ac-btn-secondary:hover {
+  background: #fde68a;
+  transform: translateY(-1px);
+}
+
+/* ── 操作說明與鏡頭切換列 ── */
+.ac-controls-bar {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.ac-controls-hint {
+  background: rgba(255, 253, 245, 0.92);
+  border: 2px solid #d6c7ae;
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #5c4938;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+
+.ac-cam-btn {
+  pointer-events: auto;
+  background: rgba(255, 253, 245, 0.95);
+  border: 2px solid #d6c7ae;
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #4a3b2c;
+  box-shadow: 0 3px 0 #c9b89c, 0 4px 10px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ac-cam-btn:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+}
+
+/* ── 動森隨身梳妝鏡／造型試衣間面板 ── */
+.ac-wardrobe-panel {
+  position: absolute;
+  top: 56px;
+  left: 14px;
+  width: min(92vw, 360px);
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  background: rgba(255, 253, 245, 0.98);
+  border: 4px solid #e2cfa9;
+  border-radius: 24px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 0 #c7b28b, 0 16px 32px rgba(0, 0, 0, 0.28);
+  z-index: 52;
+  color: #4a3b2c;
+}
+.ac-wardrobe-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f5efe0;
+  border: 2px solid #dfcfb4;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #5c4938;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.ac-wardrobe-chip:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.ac-wardrobe-chip.is-active {
+  background: #22c55e;
+  border-color: #15803d;
+  color: #fff;
+  box-shadow: 0 2px 0 #166534;
+}
+.ac-color-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px #d6c7ae, 0 2px 4px rgba(0,0,0,0.15);
+  cursor: pointer;
+  transition: transform 0.14s ease;
+}
+.ac-color-dot:hover {
+  transform: scale(1.12);
+}
+.ac-color-dot.is-active {
+  transform: scale(1.18);
+  box-shadow: 0 0 0 3px #16a34a, 0 3px 6px rgba(0,0,0,0.25);
+}
+
+/* =====================================================================
+   🪟 動森主題浮動作答／學習視窗 (Floating Island Modal Overlay)
+   ---------------------------------------------------------------------
+   讓 3D 島嶼持續在背景運轉，將閱讀重點、測驗作答、流程圖拼圖與機電實驗
+   變為浮動在島嶼正上方的主題木框／齒輪／科技視窗！
+   ===================================================================== */
+
+.ac-float-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 58px 14px 24px;
+  overflow-y: auto;
+  animation: acModalFadeIn 0.22s ease-out;
+}
+
+@keyframes acModalFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes acWindowPop {
+  0%   { opacity: 0; transform: translateY(14px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.ac-float-window {
+  position: relative;
+  width: 100%;
+  margin: auto 0;
+  border-radius: 30px;
+  background: rgba(255, 253, 245, 0.96) !important;
+  border: 5px solid #e2cfa9 !important;
+  box-shadow:
+    0 12px 0 #c7b28b,
+    0 24px 56px rgba(15, 23, 42, 0.42) !important;
+  animation: acWindowPop 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 頂部主題橫幅徽章 */
+.ac-window-badge {
+  position: absolute;
+  top: -18px;
+  left: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 16px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #fff;
+  border: 3px solid #fffdf5;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ── 系列 1：🍎 豐收果園與陽光溫室主題 (theme-orchard) ── */
+.ac-float-window.theme-orchard {
+  background: linear-gradient(180deg, #fffdf5 0%, #fefce8 100%) !important;
+  border: 5px solid #b45309 !important;
+  box-shadow:
+    0 0 0 3px #fde68a,
+    0 12px 0 #78350f,
+    0 26px 56px rgba(69, 26, 3, 0.42) !important;
+}
+.ac-float-window.theme-orchard .ac-window-badge {
+  background: linear-gradient(90deg, #dc2626, #ea580c);
+}
+.ac-float-window.theme-orchard .study-note-box {
+  background: #fffbeb !important;
+  border: 2px dashed #f59e0b !important;
+  border-radius: 20px !important;
+}
+.ac-float-window.theme-orchard .qz-opt {
+  background: #ffffff;
+  border: 2.5px solid #e7d5bc;
+  border-radius: 18px;
+  box-shadow: 0 4px 0 #d6c7ae;
+}
+.ac-float-window.theme-orchard .qz-opt:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+}
+
+/* ── 系列 2：🎪 森林奇幻遊樂園主題 (theme-carnival) ── */
+.ac-float-window.theme-carnival {
+  background: linear-gradient(180deg, #fffdf9 0%, #fdf2f8 100%) !important;
+  border: 5px solid #f43f5e !important;
+  box-shadow:
+    0 0 0 3px #fde047,
+    0 12px 0 #be123c,
+    0 26px 56px rgba(136, 19, 55, 0.38) !important;
+}
+.ac-float-window.theme-carnival .ac-window-badge {
+  background: linear-gradient(90deg, #ec4899, #8b5cf6);
+}
+
+/* ── 系列 3：⚙️ 蒸氣齒輪木工村・礦山鐵道主題 (theme-craft) ── */
+.ac-float-window.theme-craft {
+  background: linear-gradient(180deg, #fffbeb 0%, #f5efe0 100%) !important;
+  border: 5px solid #92400e !important;
+  box-shadow:
+    0 0 0 3px #f59e0b,
+    0 12px 0 #451a03,
+    0 26px 56px rgba(30, 41, 59, 0.45) !important;
+}
+.ac-float-window.theme-craft .ac-window-badge {
+  background: linear-gradient(90deg, #b45309, #334155);
+}
+
+/* ── 系列 4：🤖 未來科技創客實驗島主題 (theme-tech) ── */
+.ac-float-window.theme-tech {
+  background: linear-gradient(180deg, #f8fafc 0%, #f0fdfa 100%) !important;
+  border: 4px solid #0ea5e9 !important;
+  box-shadow:
+    0 0 0 3px #67e8f9,
+    0 12px 0 #0f172a,
+    0 26px 60px rgba(2, 132, 199, 0.38) !important;
+}
+.ac-float-window.theme-tech .ac-window-badge {
+  background: linear-gradient(90deg, #0284c7, #10b981);
+}
+

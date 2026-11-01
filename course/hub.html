@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資訊科技 闖關基地</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/island.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body{
       font-family:'Noto Sans TC',sans-serif;
-      background-color:#e7e5e4;
+      background-color:#dff4ec;
       background-image:
-        linear-gradient(rgba(120,113,108,.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(120,113,108,.06) 1px, transparent 1px);
-      background-size:26px 26px;
+        radial-gradient(circle at 20% 20%, rgba(167, 243, 208, 0.45) 0%, transparent 45%),
+        radial-gradient(circle at 80% 75%, rgba(186, 230, 253, 0.5) 0%, transparent 50%),
+        radial-gradient(#b7e4c7 1.5px, transparent 1.5px);
+      background-size: 100% 100%, 100% 100%, 28px 28px;
     }
     .tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;backdrop-filter:blur(1px);border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
     @keyframes pop{0%{opacity:0;transform:translateY(12px) scale(.96)}100%{opacity:1;transform:none}}
@@ -21,7 +23,7 @@
     .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
   </style>
 </head>
-<body class="min-h-screen text-slate-800">
+<body class="min-h-screen text-slate-800 ac-theme-bg">
   <div id="app"></div>
 
   <!-- 全站共用計分規則（單一來源，與各關卡頁、教師端同一份） -->
@@ -31,6 +33,8 @@
   <script src="../shared/grading.js"></script>
   <!-- 課表與「這週有沒有上課日」的判定（教師端同一支）-->
   <script src="../shared/schedule.js"></script>
+  <!-- 🏝️ 動物森友會島嶼探險引擎 -->
+  <script src="../shared/island.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut,
@@ -161,21 +165,32 @@
     };
 
     // ===== 全域狀態 =====
+    // 【測試模式】預設直接進入島嶼主畫面（關閉登入介面以便測試）
+    try {
+      if (!sessionStorage.getItem(SAVED_KEY)) {
+        sessionStorage.setItem(SAVED_KEY, '1410101');
+        sessionStorage.setItem('me' + (window.CONFIG.TERM || '11501'), JSON.stringify({
+          sid: '1410101', cls: '801', no: '01', name: '測試島民', key: '801_01_測試島民', at: Date.now()
+        }));
+      }
+    } catch (e) {}
+
     let state = {
-      status: 'loading',   // loading | login | main
+      status: 'main',      // 【測試模式】預設直接進 main（原為 'loading'）
       /* 出席判定要用的兩份資料（週分數規則）：
          cls   = 這個學生哪一班（從名冊來）
          sched = 課表（整班共用一份，登入後讀一次） */
-      cls: '', sched: null,
+      cls: '801', sched: null,
       authReady: false,
-      studentId: '',
-      studentName: '',
+      studentId: '1410101',
+      studentName: '測試島民',
       loginError: '',
       loginSid: '',        // 剛剛打的學號（登入失敗時不必重打）
       setup: null,         // 第一次登入：{ sid, code } → 顯示設定驗證碼的畫面
       data: null,          // Firestore 文件內容
-      demo: false,
-      showWeek: false      // 是否顯示「本週成績卡」
+      demo: true,          // 【測試模式】預設啟用範例預覽資料
+      showWeek: false,     // 是否顯示「本週成績卡」
+      viewMode: 'island'   // 'island' (動森島嶼探險) | 'list' (卡片清單)
     };
     let unsub = null;
 
@@ -197,6 +212,7 @@
       /* 這台電腦目前登入的不是學生（多半是老師剛在這台示範過）。
            先登出，再讓學生用學號登入 —— 不然規則會把他當成那個帳號。 */
       onMismatch: (user) => {
+        if (state.demo) return; // 【測試模式】範例預覽模式不踢回登入頁
         AUTH.signOut().catch(()=>{});
         state.status = 'login';
         state.loginError = `這台電腦剛才登入的是 ${user.email || '其他帳號'}（不是學生帳號），已經幫你登出了，請用自己的學號登入。`;
@@ -413,36 +429,36 @@
           <div class="min-h-screen flex items-center justify-center p-4">
             <div class="w-full max-w-md pop">
               <div class="text-center mb-6">
-                <span class="inline-block transform -rotate-2 bg-amber-200 text-amber-900 text-xs font-bold px-4 py-1.5 rounded shadow-sm border border-amber-300">📝 ${window.CONFIG.SCHOOL.NAME} ${window.CONFIG.SCHOOL.GRADE}</span>
-                <h1 class="text-3xl font-black mt-4">資訊科技 <span class="underline-doodle">闖關基地</span></h1>
-                <p class="text-slate-500 text-sm mt-2">${state.setup ? '第一次登入，先設定你自己的驗證碼 🔑' : '輸入學號和六位數驗證碼就可以了 🚀'}</p>
+                <span class="inline-flex items-center gap-1.5 transform -rotate-2 bg-amber-100 text-amber-900 text-xs font-black px-4 py-1.5 rounded-full shadow-sm border-2 border-amber-300">🍃 ${window.CONFIG.SCHOOL.NAME} ${window.CONFIG.SCHOOL.GRADE} · 科技島移居處</span>
+                <h1 class="text-3xl font-black mt-4 text-amber-950">🏝️ 資訊科技 <span class="underline-doodle">探險之島</span></h1>
+                <p class="text-stone-600 text-sm font-bold mt-2">${state.setup ? '第一次登島，先設定你的六位數島民通行碼 🔑' : '輸入學號與六位數驗證碼，搭乘水上飛機出發 ✈️'}</p>
                 ${new URLSearchParams(location.search).get('next') ? `<p class="mt-3 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">🔒 請先在這裡確認身分，登入後會自動帶你回到剛才要去的頁面。</p>` : ''}
                 ${(() => { const sw = new URLSearchParams(location.search).get('switched');
                    return sw ? `<p class="mt-3 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 leading-relaxed">🔄 這台電腦目前登入的是 <b>${esc(sw)}</b>，那不是學生帳號（可能是老師帳號），所以沒辦法用來闖關。<br>請在下面用自己的學號登入。</p>` : ''; })()}
               </div>
-              <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+              <div class="ac-hud p-6 sm:p-7">
                 <form id="login-form" autocomplete="off" class="space-y-4">
                   ${state.setup ? `
-                    <div class="text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">學號：${esc(state.setup.sid)}</div>
-                    <label class="block text-sm font-bold text-slate-700">設定六位數驗證碼
-                      <input id="code" type="password" inputmode="numeric" maxlength="6" value="${esc(state.setup.code)}" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg tracking-widest focus:border-indigo-400 outline-none"></label>
-                    <label class="block text-sm font-bold text-slate-700">再輸入一次
-                      <input id="code2" type="password" inputmode="numeric" maxlength="6" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg tracking-widest focus:border-indigo-400 outline-none"></label>
-                    <p class="text-xs text-slate-500 leading-relaxed">⚠️ 自己記好，不要讓別人看到。忘記了要找老師查看或重設。</p>
-                    <button id="login-go" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-lg active:scale-95 transition">設定並進入</button>
-                    <button id="setup-back" type="button" class="w-full text-slate-400 hover:text-slate-600 text-sm underline">← 回上一步</button>
+                    <div class="text-sm font-bold text-stone-700 bg-amber-50/70 border-2 border-amber-200 rounded-xl px-3 py-2">🪪 島民學號：${esc(state.setup.sid)}</div>
+                    <label class="block text-sm font-black text-stone-700">設定六位數驗證碼
+                      <input id="code" type="password" inputmode="numeric" maxlength="6" value="${esc(state.setup.code)}" class="mt-1 w-full bg-white border-2 border-amber-200 rounded-xl px-3 py-2.5 text-lg tracking-widest focus:border-emerald-500 outline-none"></label>
+                    <label class="block text-sm font-black text-stone-700">再輸入一次
+                      <input id="code2" type="password" inputmode="numeric" maxlength="6" class="mt-1 w-full bg-white border-2 border-amber-200 rounded-xl px-3 py-2.5 text-lg tracking-widest focus:border-emerald-500 outline-none"></label>
+                    <p class="text-xs text-stone-500 leading-relaxed">⚠️ 自己記好，不要讓別人看到。忘記了要找老師查看或重設。</p>
+                    <button id="login-go" type="submit" class="w-full ac-btn-primary py-3 text-base">設定並登島 🏝️</button>
+                    <button id="setup-back" type="button" class="w-full text-stone-400 hover:text-stone-600 text-sm underline">← 回上一步</button>
                   ` : `
-                    <label class="block text-sm font-bold text-slate-700">學號
-                      <input id="sid" inputmode="numeric" value="${esc(state.loginSid||'')}" placeholder="${esc(window.CONFIG.SCHOOL.SID_HINT||'')}" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg focus:border-indigo-400 outline-none"></label>
-                    <label class="block text-sm font-bold text-slate-700">六位數驗證碼
-                      <input id="code" type="password" inputmode="numeric" maxlength="6" class="mt-1 w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-lg tracking-widest focus:border-indigo-400 outline-none"></label>
-                    <button id="login-go" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-lg active:scale-95 transition">登入</button>
-                    <p class="text-xs text-slate-400 text-center">還沒設定過驗證碼？輸入你想用的六位數字，系統會帶你設定。</p>
+                    <label class="block text-sm font-black text-stone-700">🪪 島民學號
+                      <input id="sid" inputmode="numeric" value="${esc(state.loginSid||'')}" placeholder="${esc(window.CONFIG.SCHOOL.SID_HINT||'')}" class="mt-1 w-full bg-white border-2 border-amber-200 rounded-xl px-3 py-2.5 text-lg focus:border-emerald-500 outline-none"></label>
+                    <label class="block text-sm font-black text-stone-700">🔑 六位數驗證碼
+                      <input id="code" type="password" inputmode="numeric" maxlength="6" class="mt-1 w-full bg-white border-2 border-amber-200 rounded-xl px-3 py-2.5 text-lg tracking-widest focus:border-emerald-500 outline-none"></label>
+                    <button id="login-go" type="submit" class="w-full ac-btn-primary py-3 text-base">出發登島 ✈️</button>
+                    <p class="text-xs text-stone-400 text-center">還沒設定過驗證碼？輸入你想用的六位數字，系統會帶你設定。</p>
                   `}
                 </form>
-                ${state.loginError?`<p class="text-red-500 text-sm mt-3 leading-relaxed">${state.loginError}</p>`:''}
+                ${state.loginError?`<p class="text-red-600 font-bold text-sm mt-3 leading-relaxed">${state.loginError}</p>`:''}
 
-                <button id="demo" class="mt-4 w-full text-slate-400 hover:text-slate-600 text-sm underline">先看範例畫面</button>
+                <button id="demo" class="mt-4 w-full text-stone-500 hover:text-emerald-700 text-sm font-bold underline">🍃 先逛逛範例島嶼</button>
               </div>
             </div>
           </div>`;
@@ -598,55 +614,153 @@
 
       el.innerHTML = `
         ${weekCard}
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-          ${isDemo?`<div class="mb-4 text-center"><span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full border border-amber-300">🔎 範例預覽模式（非真實資料）</span></div>`:''}
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5">
+          ${isDemo?`<div class="mb-3 text-center"><span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full border border-amber-300">🔎 範例預覽模式（非真實資料）</span></div>`:''}
 
-          <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-8 relative pop">
-            <button id="logout" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xs bg-slate-50 px-2 py-1 rounded-md border border-slate-100">${isDemo?'返回':'登出'}</button>
-            <div class="flex flex-col md:flex-row md:items-center gap-6">
-              <div class="flex-shrink-0 flex items-center gap-3">
-                <div class="w-14 h-14 rounded-full border-2 ${avatarColor} flex items-center justify-center text-2xl font-black flex-shrink-0 shadow-sm">${avatarChar}</div>
+          <header class="ac-hud mb-5 pop">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full border-2 ${avatarColor} flex items-center justify-center text-xl font-black flex-shrink-0 shadow-sm">${avatarChar}</div>
                 <div>
-                  <span class="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold mb-1 border border-indigo-100">學號 ${isDemo?'DEMO':state.studentId}</span>
-                  <h1 class="text-2xl font-black">${displayName?`嗨，${displayName}！`:'闖關進度'}</h1>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="ac-pill text-xs">🍃 島民 ${isDemo?'DEMO':state.studentId}</span>
+                    <span class="text-xs font-extrabold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">進度 ${s.pct}%（${s.subDone}/${s.subTotal} 關）</span>
+                  </div>
+                  <h1 class="text-xl sm:text-2xl font-black text-amber-950 mt-0.5">${displayName?`嗨，${displayName}！歡迎來到科技探險島`:'歡迎來到科技探險島 🏝️'}</h1>
                 </div>
               </div>
-              <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                  <div class="flex justify-between items-end mb-2"><span class="text-sm font-semibold text-slate-600">通關進度</span><span class="text-2xl font-black text-indigo-600">${s.pct}%</span></div>
-                  <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden"><div class="bg-indigo-600 h-3 rounded-full transition-all duration-700" style="width:${s.pct}%"></div></div>
-                  <div class="text-right text-xs text-slate-400 mt-1">${s.subDone} / ${s.subTotal} 個小關卡</div>
-                </div>
-                <button id="open-week" class="bg-amber-50 rounded-xl p-4 border border-amber-100 flex flex-col justify-center text-left hover:bg-amber-100 hover:shadow-md transition group relative">
-                  <span class="absolute top-2 right-3 text-[10px] font-bold text-amber-600 opacity-70 group-hover:opacity-100">點我看本週成績卡 →</span>
-                  <span class="text-sm font-semibold text-amber-700 mb-1">累積星星</span>
-                  <span class="text-2xl font-black text-amber-500 tracking-wider">★ ${s.stars} <span class="text-sm font-medium text-amber-400">/ ${s.maxTotal}</span></span>
-                  <span class="text-xs font-bold text-amber-700 mt-1.5 bg-white/70 inline-block px-2 py-0.5 rounded-full border border-amber-200 w-max">本週 ⭐ ${wk.thisWeekStars}　${wk.thisWeekScore} 分</span>
+
+              <div class="flex items-center gap-2.5 flex-wrap">
+                <button id="open-week" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900">
+                  <span>⭐ 總星數 ${s.stars}/${s.maxTotal}</span>
+                  <span class="text-xs bg-white/80 px-2 py-0.5 rounded-full border border-amber-300">本週 +${wk.thisWeekStars}⭐ (${wk.thisWeekScore}分) 📋</span>
                 </button>
+                <div class="inline-flex rounded-full bg-amber-100/70 p-1 border-2 border-amber-200">
+                  <button type="button" data-view="island" class="ac-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode!=='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">🏝️ 島嶼探險</button>
+                  <button type="button" data-view="list" class="ac-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode==='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">📋 卡片清單</button>
+                </div>
+                <button id="logout" class="ac-pill ac-pill-btn text-xs">${isDemo?'✈️ 返回登入':'✈️ 登出'}</button>
               </div>
             </div>
           </header>
 
-          ${nextModule ? `
-            <a href="${nextModule.href}" class="block mb-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl p-4 sm:p-5 shadow-md transition flex items-center justify-between gap-3 pop">
-              <div>
-                <div class="text-xs font-bold text-indigo-200 mb-0.5">👉 建議下一關</div>
-                <div class="text-lg font-black">${nextModule.icon} ${nextModule.title}</div>
-              </div>
-              <span class="text-2xl flex-shrink-0">開始 →</span>
-            </a>` : `
-            <div class="mb-8 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl p-4 text-center font-black shadow-sm">🏆 太厲害了，所有關卡都通關了！</div>`}
+          ${state.viewMode !== 'list' ? `
+            <div id="hub-island-mount" class="mb-6"></div>
+          ` : `
+            ${nextModule ? `
+              <a href="${nextModule.href}" class="block mb-8 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl p-4 sm:p-5 shadow-md transition flex items-center justify-between gap-3 pop">
+                <div>
+                  <div class="text-xs font-bold text-emerald-100 mb-0.5">👉 建議下一關</div>
+                  <div class="text-lg font-black">${nextModule.icon} ${nextModule.title}</div>
+                </div>
+                <span class="text-2xl flex-shrink-0">開始 →</span>
+              </a>` : `
+              <div class="mb-8 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl p-4 text-center font-black shadow-sm">🏆 太厲害了，所有關卡都通關了！</div>`}
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 ${SZ.gap} pb-12 ${SZ.wrap} mx-auto">
-            ${cards}
-          </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 ${SZ.gap} pb-8 ${SZ.wrap} mx-auto">
+              ${cards}
+            </div>
+          `}
 
-          <footer class="mt-6 text-center text-xs text-slate-400">${window.CONFIG.SCHOOL.NAME} · 資訊科技課程</footer>
+          <footer class="mt-4 text-center text-xs font-bold text-stone-500">🍃 ${window.CONFIG.SCHOOL.NAME} · 資訊科技探險島</footer>
         </div>`;
+
+      if (state.viewMode !== 'list' && window.AC_ISLAND) {
+        const islandEl = document.getElementById('hub-island-mount');
+        const islandLayout = {
+          ethics:   { x: 27, y: 38, kind: 'museum',     shortTitle: '資訊倫理市政廳' },
+          thinking: { x: 52, y: 22, kind: 'treehouse',  shortTitle: '運算思維神木屋' },
+          listprog: { x: 73, y: 38, kind: 'workshop',   shortTitle: '程式設計木工坊' },
+          arduino:  { x: 28, y: 66, kind: 'lighthouse', shortTitle: '智慧家居風車燈塔' }
+        };
+        const islandNodes = MODULES.map(m => {
+          const d = cardData(m, mods);
+          const st = STATUS[d.status] || STATUS['todo'];
+          const isNext = nextModule && m.id === nextModule.id;
+          const openOK = !(window.SCHEDULE && SCHEDULE.moduleOpen) || SCHEDULE.moduleOpen(state.sched, m.id);
+          const openMsg = (window.SCHEDULE && SCHEDULE.openLabel) ? SCHEDULE.openLabel(state.sched, m.id) : '';
+          const lay = islandLayout[m.id] || { x: 50, y: 50, kind: 'cottage-amber', shortTitle: m.title };
+          const starsText = (d.stars || 0) > 0 ? `⭐ ${d.stars}` : (m.maxStars === 0 ? '體驗專題' : '');
+          return {
+            id: m.id,
+            x: lay.x,
+            y: lay.y,
+            kind: lay.kind,
+            icon: m.icon,
+            tag: m.tag,
+            title: m.title,
+            shortTitle: lay.shortTitle,
+            desc: m.desc,
+            pass: d.status === 'pass',
+            starsText: starsText,
+            statusLabel: st.label,
+            flagText: !openOK ? '尚未開放' : (isNext ? '👉 建議下一關' : ''),
+            flagKind: isNext ? 'next' : '',
+            locked: !openOK,
+            lockReason: openMsg || '尚未開放',
+            actions: [{ label: d.status === 'pass' ? '再進去逛逛 →' : '進入探險 →', href: m.href, primary: true }]
+          };
+        });
+
+        // 中央廣場：島民佈告欄（點開本週成績卡）
+        islandNodes.push({
+          id: 'week-board',
+          x: 52,
+          y: 50,
+          kind: 'board',
+          icon: '📋',
+          tag: '島民服務處',
+          title: `第 ${wk.curWeekNo} 週 · 島民成績佈告欄`,
+          shortTitle: '本週成績佈告欄',
+          desc: `本週獲得 ⭐ ${wk.thisWeekStars}（${wk.thisWeekScore} 分）· 點擊查看近八週星星統計與明細！`,
+          pass: wk.thisWeekStars > 0,
+          starsText: `本週 ${wk.thisWeekScore}分`,
+          statusLabel: '成績查詢',
+          locked: false,
+          actions: [{ label: '查看本週成績卡 📋', primary: true, onClick: () => { state.showWeek = true; render(); } }]
+        });
+
+        // 闖關排行賽露營地（若有開啟）
+        if (ARENA_ON) {
+          const passed = standInPassed(ARENA_CARD, mods);
+          const need = ARENA_CARD.needUnits.length;
+          const unlocked = passed >= need;
+          islandNodes.push({
+            id: 'arena',
+            x: 74,
+            y: 66,
+            kind: 'camp',
+            icon: '🏆',
+            tag: '排行挑戰',
+            title: ARENA_CARD.title,
+            shortTitle: '排行賽露營地',
+            desc: ARENA_CARD.desc,
+            pass: unlocked,
+            starsText: `${passed}/${need} 章`,
+            statusLabel: unlocked ? '開放挑戰' : '尚未解鎖',
+            locked: !unlocked,
+            lockReason: `資訊倫理 ${need} 個章節全部通關才能挑戰（目前 ${passed} / ${need}）`,
+            actions: [{ label: '進入排行賽 🏆', href: ARENA_CARD.href, primary: true }]
+          });
+        }
+
+        window.AC_ISLAND.mount(islandEl, {
+          pageId: 'hub',
+          variant: 'hub',
+          playerName: displayName || (isDemo ? '範例學生' : state.studentId) || '島民',
+          genderCode: genderCode,
+          startX: 50,
+          startY: 75,
+          initialSelectedId: (nextModule && nextModule.id) || 'ethics',
+          nodes: islandNodes
+        });
+      }
     }
 
     // ===== 事件 =====
     document.addEventListener('click', e=>{
+      const vb = e.target.closest('.ac-view-btn');
+      if(vb){ state.viewMode = vb.dataset.view || 'island'; render(); return; }
       if(e.target.closest('#setup-back')){ state.setup=null; state.loginError=''; render(); return; }
       if(e.target.closest('#demo')){ state.demo=true; state.status='main'; render(); return; }
       if(e.target.closest('#logout')){ logout(); return; }

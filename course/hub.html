@@ -487,10 +487,10 @@
       const SZ = roomy
         ? { pad:'p-7', icon:'text-5xl', title:'text-xl',  desc:'text-sm',
             tag:'text-xs',    badge:'text-xs',    go:'text-sm',
-            wrap:'max-w-4xl', gap:'gap-7' }
+            wrap:'max-w-6xl', gap:'gap-7' }
         : { pad:'p-5', icon:'text-3xl', title:'text-base', desc:'text-xs',
             tag:'text-[11px]', badge:'text-[11px]', go:'text-xs',
-            wrap:'max-w-3xl', gap:'gap-6' };
+            wrap:'max-w-5xl', gap:'gap-6' };
 
       const cards = MODULES.map(m=>{
         const d = cardData(m, mods);
@@ -614,7 +614,7 @@
 
       el.innerHTML = `
         ${weekCard}
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5">
+        <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 py-3">
           ${isDemo?`<div class="mb-3 text-center"><span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full border border-amber-300">🔎 範例預覽模式（非真實資料）</span></div>`:''}
 
           <header class="ac-hud mb-5 pop">

@@ -998,7 +998,7 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                     {showQueryModal && <QueryModal onClose={() => setShowQueryModal(false)} userClass={user.classRoom} />}
 
                     {/* 動森 NookPhone 頂部導覽列 */}
-                    <div className="max-w-7xl w-full mx-auto px-4 pt-14 sm:pt-4">
+                    <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 pt-14 sm:pt-3">
                         <div className="ac-hud">
                             <div className="flex items-center gap-2.5">
                                 <span className="text-2xl">🌲</span>
@@ -1040,7 +1040,7 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 
                     {/* 當前選擇關卡的即時狀態與本班通關人數提示條 */}
                     {selectedChallenge && (
-                        <div className="max-w-7xl w-full mx-auto px-4 mb-2">
+                        <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 mb-2">
                             <div className="bg-amber-50/95 border-2 border-amber-400 rounded-2xl px-4 py-2.5 shadow-md flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 text-sm font-bold text-amber-950">
                                     <span>{isDone(selectedChallenge.id) ? '🏆' : '🎮'}</span>
@@ -1067,11 +1067,11 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 
                     {/* 動森島嶼探險模式 */}
                     {viewMode === 'island' ? (
-                        <div className="max-w-7xl w-full mx-auto px-4 flex-1">
+                        <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 flex-1">
                             <div ref={islandRef}></div>
                         </div>
                     ) : (
-                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col lg:flex-row gap-6 overflow-hidden">
+                    <main className="flex-1 max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 py-4 flex flex-col lg:flex-row gap-6 overflow-hidden">
                         <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-4 h-full">
                             <div className="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-slate-200">
                                 <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">

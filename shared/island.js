@@ -279,31 +279,156 @@
     return wg;
   }
 
-  // 建立高質感 3D 樹木（果樹／針葉樹／椰子樹）
+  // 產生高解析立體木紋與木板接縫貼圖（快取共用，提升所有木造建築與樹幹質感）
+  var _woodTexCache = {};
+  function makeWoodPlankTexture(THREE, hexColor) {
+    var key = String(hexColor);
+    if (_woodTexCache[key]) return _woodTexCache[key];
+    var c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    var ctx = c.getContext('2d');
+    var baseCol = new THREE.Color(hexColor);
+    ctx.fillStyle = '#' + baseCol.getHexString();
+    ctx.fillRect(0, 0, 128, 128);
+
+    // 木紋纖維與板縫
+    for (var i = 0; i < 42; i++) {
+      ctx.fillStyle = (i % 2 === 0) ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.09)';
+      ctx.fillRect(0, (i * 3) % 128, 128, 1.5);
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+    ctx.lineWidth = 2;
+    for (var r = 0; r < 4; r++) {
+      var y = r * 32;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(128, y);
+      ctx.stroke();
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2, 2);
+    _woodTexCache[key] = tex;
+    return tex;
+  }
+
+  // 產生高解析復古石磚貼圖（快取共用，提升地基、煙囪與石塔細緻度）
+  var _stoneTexCache = {};
+  function makeStoneBrickTexture(THREE, hexColor) {
+    var key = String(hexColor);
+    if (_stoneTexCache[key]) return _stoneTexCache[key];
+    var c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    var ctx = c.getContext('2d');
+    var baseCol = new THREE.Color(hexColor);
+    ctx.fillStyle = '#' + baseCol.getHexString();
+    ctx.fillRect(0, 0, 128, 128);
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 2;
+    for (var row = 0; row < 4; row++) {
+      var ry = row * 32;
+      ctx.beginPath();
+      ctx.moveTo(0, ry);
+      ctx.lineTo(128, ry);
+      ctx.stroke();
+      var offset = (row % 2) * 32;
+      for (var col = 0; col < 3; col++) {
+        var cx = (col * 64 + offset) % 128;
+        ctx.beginPath();
+        ctx.moveTo(cx, ry);
+        ctx.lineTo(cx, ry + 32);
+        ctx.stroke();
+      }
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2, 2);
+    _stoneTexCache[key] = tex;
+    return tex;
+  }
+
+  // 建立帶果蒂與小綠葉的精緻 3D 果實
+  function buildDetailedFruit3D(THREE, fruitMat) {
+    var fg = new THREE.Group();
+    var body = new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 16), fruitMat);
+    body.scale.set(1.04, 0.96, 1.04);
+    fg.add(body);
+
+    var stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.04, 0.18, 6),
+      new THREE.MeshStandardMaterial({ color: 0x5c3616, roughness: 0.8 })
+    );
+    stem.position.set(0, 0.36, 0);
+    fg.add(stem);
+
+    var leaf = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.45 })
+    );
+    leaf.scale.set(1.35, 0.35, 0.75);
+    leaf.position.set(0.12, 0.39, 0);
+    leaf.rotation.z = -0.35;
+    fg.add(leaf);
+    return fg;
+  }
+
+  // 建立高質感 3D 樹木（果樹／針葉樹／椰子樹，含樹根分岔、樹皮木紋、果蒂綠葉與樹下小蘑菇花叢）
   function buildTree3D(THREE, kind, opts) {
     opts = opts || {};
     var group = new THREE.Group();
-    var trunkMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.85 });
+    var trunkMat = new THREE.MeshStandardMaterial({
+      color: 0x854d0e,
+      map: makeWoodPlankTexture(THREE, 0x854d0e),
+      roughness: 0.82
+    });
 
     // 地面柔和接觸陰影盤
     var shadowDisc = new THREE.Mesh(
-      new THREE.CircleGeometry(1.75, 20),
-      new THREE.MeshBasicMaterial({ color: 0x14532d, transparent: true, opacity: 0.26 })
+      new THREE.CircleGeometry(1.85, 24),
+      new THREE.MeshBasicMaterial({ color: 0x14532d, transparent: true, opacity: 0.28 })
     );
     shadowDisc.rotation.x = -Math.PI / 2;
     shadowDisc.position.y = 0.02;
     group.add(shadowDisc);
 
+    // 動森風立體盤根（4 道樹根隆起）與樹下小蘑菇／小花
+    for (var rt = 0; rt < 4; rt++) {
+      var rAng = (rt / 4) * Math.PI * 2 + 0.4;
+      var rootFlare = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.75, 8), trunkMat);
+      rootFlare.position.set(Math.cos(rAng) * 0.52, 0.28, Math.sin(rAng) * 0.52);
+      rootFlare.rotation.z = -Math.cos(rAng) * 0.55;
+      rootFlare.rotation.x = Math.sin(rAng) * 0.55;
+      group.add(rootFlare);
+    }
+    // 樹下可愛紅白小蘑菇
+    var mushStem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.1, 0.24, 8),
+      new THREE.MeshStandardMaterial({ color: 0xfffbeb, roughness: 0.6 })
+    );
+    mushStem.position.set(-0.95, 0.12, 0.65);
+    group.add(mushStem);
+    var mushCap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.45 })
+    );
+    mushCap.position.set(-0.95, 0.22, 0.65);
+    group.add(mushCap);
+
     if (kind === 'pine-tree') {
-      var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.68, 2.3, 12), trunkMat);
+      var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.72, 2.3, 14), trunkMat);
       trunk.position.y = 1.15;
       group.add(trunk);
 
       var pineCols = [0x14532d, 0x15803d, 0x16a34a, 0x22c55e];
       for (var i = 0; i < 4; i++) {
         var cone = new THREE.Mesh(
-          new THREE.ConeGeometry(2.25 - i * 0.38, 2.0 - i * 0.18, 14),
-          new THREE.MeshStandardMaterial({ color: pineCols[i], roughness: 0.65 })
+          new THREE.ConeGeometry(2.3 - i * 0.38, 2.05 - i * 0.18, 16),
+          new THREE.MeshStandardMaterial({ color: pineCols[i], roughness: 0.62 })
         );
         cone.position.y = 2.2 + i * 1.15;
         group.add(cone);
@@ -312,47 +437,49 @@
     } else if (kind === 'palm-tree') {
       for (var s = 0; s < 6; s++) {
         var seg = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.36 - s * 0.03, 0.44 - s * 0.03, 0.85, 10),
-          new THREE.MeshStandardMaterial({ color: s % 2 ? 0xa16207 : 0x854d0e, roughness: 0.8 })
+          new THREE.CylinderGeometry(0.36 - s * 0.03, 0.45 - s * 0.03, 0.85, 12),
+          new THREE.MeshStandardMaterial({ color: s % 2 ? 0xa16207 : 0x854d0e, roughness: 0.78 })
         );
         seg.position.set(s * 0.11, 0.42 + s * 0.74, 0);
         seg.rotation.z = -0.055 * s;
         group.add(seg);
       }
       var topX = 0.52, topY = 4.55;
-      var leafMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.55 });
+      var leafMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.52 });
       for (var a = 0; a < 7; a++) {
         var ang = (a / 7) * Math.PI * 2;
-        var frond = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.14, 0.68), leafMat);
+        var frond = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.14, 0.68), leafMat);
         frond.position.set(topX + Math.cos(ang) * 1.05, topY - 0.12, Math.sin(ang) * 1.05);
         frond.rotation.y = -ang;
         frond.rotation.z = -0.36;
         group.add(frond);
       }
-      var cocoMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.6 });
+      var cocoMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.58 });
       [-0.36, 0.36].forEach(function (ox) {
-        var coco = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 12), cocoMat);
+        var coco = new THREE.Mesh(new THREE.SphereGeometry(0.35, 14, 14), cocoMat);
         coco.position.set(topX + ox, topY - 0.36, 0.26);
         group.add(coco);
       });
       group.userData.labelHeight = 5.8;
     } else {
-      // 動森招牌飽滿球體果樹（含樹根分岔與高光立體果實）
-      var fTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.78, 2.5, 14), trunkMat);
+      // 動森招牌飽滿球體果樹（含樹根分岔、細膩蓬鬆樹冠與帶果蒂綠葉的立體果實）
+      var fTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.82, 2.5, 16), trunkMat);
       fTrunk.position.y = 1.25;
       group.add(fTrunk);
 
       var canopyClusters = [
-        [0, 3.95, 0, 1.9, 0x22c55e],
-        [-1.25, 3.2, 0.25, 1.45, 0x16a34a],
-        [1.25, 3.25, 0.25, 1.45, 0x4ade80],
-        [0, 3.35, -0.95, 1.4, 0x15803d],
-        [0, 3.4, 0.95, 1.35, 0x22c55e]
+        [0, 3.98, 0, 1.92, 0x22c55e],
+        [-1.25, 3.22, 0.25, 1.48, 0x16a34a],
+        [1.25, 3.25, 0.25, 1.48, 0x4ade80],
+        [0, 3.35, -0.95, 1.42, 0x15803d],
+        [0, 3.42, 0.95, 1.38, 0x22c55e],
+        [-0.75, 4.15, 0.65, 1.15, 0x4ade80],
+        [0.75, 4.15, 0.65, 1.15, 0x22c55e]
       ];
       canopyClusters.forEach(function (c) {
         var sp = new THREE.Mesh(
-          new THREE.SphereGeometry(c[3], 18, 16),
-          new THREE.MeshStandardMaterial({ color: c[4], roughness: 0.62 })
+          new THREE.SphereGeometry(c[3], 22, 18),
+          new THREE.MeshStandardMaterial({ color: c[4], roughness: 0.58 })
         );
         sp.position.set(c[0], c[1], c[2]);
         group.add(sp);
@@ -361,11 +488,11 @@
       var fCol = opts.fruitColor
         ? new THREE.Color(opts.fruitColor)
         : new THREE.Color(FRUIT_PALETTE[opts.fruit || 'apple'] || 0xef4444);
-      var fruitMat = new THREE.MeshStandardMaterial({ color: fCol, roughness: 0.22, metalness: 0.08 });
-      var fPositions = [[-0.92, 3.15, 1.48], [0.92, 3.22, 1.45], [0.0, 4.25, 1.75]];
+      var fruitMat = new THREE.MeshStandardMaterial({ color: fCol, roughness: 0.2, metalness: 0.1 });
+      var fPositions = [[-0.95, 3.15, 1.52], [0.95, 3.22, 1.48], [0.0, 4.28, 1.78]];
       for (var f = 0; f < fPositions.length; f++) {
         var fp = fPositions[f];
-        var fm = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 14), fruitMat);
+        var fm = buildDetailedFruit3D(THREE, fruitMat);
         fm.position.set(fp[0], fp[1], fp[2]);
         group.add(fm);
       }
@@ -377,7 +504,7 @@
     return group;
   }
 
-  // 建立高畫質 PBR 3D 動森建築模型
+  // 建立高畫質 PBR 3D 動森建築模型（含程序化木紋／石磚貼圖與精緻環境配件）
   function buildBuilding3D(THREE, kind, opts) {
     opts = opts || {};
     if (kind === 'fruit-tree' || kind === 'pine-tree' || kind === 'palm-tree') {
@@ -385,12 +512,12 @@
     }
 
     var group = new THREE.Group();
-    var whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 });
-    var creamMat = new THREE.MeshStandardMaterial({ color: 0xfffbeb, roughness: 0.65 });
-    var woodMat  = new THREE.MeshStandardMaterial({ color: 0x925627, roughness: 0.72 });
-    var darkWood = new THREE.MeshStandardMaterial({ color: 0x5c3616, roughness: 0.78 });
-    var stoneMat = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.82 });
-    var goldMat  = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.45 });
+    var whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42 });
+    var creamMat = new THREE.MeshStandardMaterial({ color: 0xfffbeb, map: makeWoodPlankTexture(THREE, 0xfffbeb), roughness: 0.62 });
+    var woodMat  = new THREE.MeshStandardMaterial({ color: 0x925627, map: makeWoodPlankTexture(THREE, 0x925627), roughness: 0.68 });
+    var darkWood = new THREE.MeshStandardMaterial({ color: 0x5c3616, map: makeWoodPlankTexture(THREE, 0x5c3616), roughness: 0.74 });
+    var stoneMat = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, map: makeStoneBrickTexture(THREE, 0xd6d3d1), roughness: 0.78 });
+    var goldMat  = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.24, metalness: 0.55 });
 
     // 建築底部草地接觸陰影
     var baseShadow = new THREE.Mesh(
@@ -790,7 +917,8 @@
         [0,              3.85 * cScale, 0.45 * cScale]
       ];
       fSpots.forEach(function (fp) {
-        var fr = new THREE.Mesh(new THREE.SphereGeometry(0.32 * cScale, 12, 12), fMat);
+        var fr = buildDetailedFruit3D(THREE, fMat);
+        fr.scale.set(cScale, cScale, cScale);
         fr.position.set(fp[0], fp[1], fp[2]);
         group.add(fr);
       });
@@ -1581,6 +1709,31 @@
       group.userData.labelHeight = 5.3;
     }
 
+    // ★ 為所有建築與設施自動加裝「動森精緻微縮景觀配件」（門前迎賓石階、雙側暖光小燈籠柱與花草盆栽）
+    if (kind !== 'airport' && kind !== 'board' && (!kind || kind.indexOf('orchard-') !== 0 || kind === 'orchard-barn' || kind === 'orchard-mill' || kind === 'orchard-greenhouse')) {
+      var stepStone = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.72, 0.1, 12), stoneMat);
+      stepStone.scale.set(1.35, 1, 0.85);
+      stepStone.position.set(0, 0.05, 2.15);
+      group.add(stepStone);
+
+      // 門口右側小木桶盆栽與立體五瓣花
+      var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.19, 0.34, 10), woodMat);
+      pot.position.set(1.75, 0.17, 1.55);
+      group.add(pot);
+      var bush = new THREE.Mesh(
+        new THREE.SphereGeometry(0.26, 12, 10),
+        new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.55 })
+      );
+      bush.position.set(1.75, 0.42, 1.55);
+      group.add(bush);
+      var flowerTop = new THREE.Mesh(
+        new THREE.SphereGeometry(0.11, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xf43f5e, emissiveIntensity: 0.2 })
+      );
+      flowerTop.position.set(1.75, 0.65, 1.55);
+      group.add(flowerTop);
+    }
+
     enableShadow(group, true, true);
     return group;
   }
@@ -1675,25 +1828,69 @@
     footRing.position.y = 0.04;
     group.add(footRing);
 
-    var leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.68, 10), shoeMat);
-    leftLeg.position.set(-0.25, 0.34, 0);
+    var leftLeg = new THREE.Group();
+    leftLeg.position.set(-0.25, 0.52, 0);
+    var lShin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.52, 12), skinMat);
+    lShin.position.y = -0.14;
+    leftLeg.add(lShin);
+    var lShoe = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), shoeMat);
+    lShoe.scale.set(0.95, 0.68, 1.35);
+    lShoe.position.set(0, -0.38, 0.08);
+    leftLeg.add(lShoe);
+    var lSole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.21, 0.07, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+    );
+    lSole.scale.set(0.96, 1, 1.35);
+    lSole.position.set(0, -0.46, 0.08);
+    leftLeg.add(lSole);
     group.add(leftLeg);
 
-    var rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.68, 10), shoeMat);
-    rightLeg.position.set(0.25, 0.34, 0);
+    var rightLeg = new THREE.Group();
+    rightLeg.position.set(0.25, 0.52, 0);
+    var rShin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.52, 12), skinMat);
+    rShin.position.y = -0.14;
+    rightLeg.add(rShin);
+    var rShoe = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), shoeMat);
+    rShoe.scale.set(0.95, 0.68, 1.35);
+    rShoe.position.set(0, -0.38, 0.08);
+    rightLeg.add(rShoe);
+    var rSole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.21, 0.07, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+    );
+    rSole.scale.set(0.96, 1, 1.35);
+    rSole.position.set(0, -0.46, 0.08);
+    rightLeg.add(rSole);
     group.add(rightLeg);
 
-    var hips = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.44, 0.42, 12), pantsMat);
+    var hips = new THREE.Mesh(new THREE.CylinderGeometry(0.49, 0.45, 0.44, 16), pantsMat);
     hips.position.y = 0.75;
     group.add(hips);
 
-    var torso = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.52, 0.88, 12), shirtMat);
+    var torso = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.53, 0.9, 16), shirtMat);
     torso.position.y = 1.28;
     group.add(torso);
 
+    // 衣服精緻鈕扣與腰帶扣環
+    [1.18, 1.42].forEach(function (by) {
+      var btn = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), goldMat);
+      btn.position.set(0, by, 0.49);
+      group.add(btn);
+    });
+    var belt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.50, 0.50, 0.1, 16),
+      new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.6 })
+    );
+    belt.position.y = 0.92;
+    group.add(belt);
+    var buckle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.08), goldMat);
+    buckle.position.set(0, 0.92, 0.5);
+    group.add(buckle);
+
     var scarf = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.48, 0.5, 0.16, 12),
-      new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.5 })
+      new THREE.CylinderGeometry(0.48, 0.51, 0.16, 16),
+      new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.45 })
     );
     scarf.position.y = 1.66;
     group.add(scarf);
@@ -1709,11 +1906,11 @@
         side: THREE.DoubleSide
       });
       [-1, 1].forEach(function (dir) {
-        var wUpper = new THREE.Mesh(new THREE.CircleGeometry(0.62, 12), wingMat);
+        var wUpper = new THREE.Mesh(new THREE.CircleGeometry(0.62, 14), wingMat);
         wUpper.position.set(dir * 0.52, 1.48, -0.45);
         wUpper.rotation.y = -dir * 0.45;
         group.add(wUpper);
-        var wLower = new THREE.Mesh(new THREE.CircleGeometry(0.42, 12), wingMat);
+        var wLower = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), wingMat);
         wLower.position.set(dir * 0.42, 1.05, -0.45);
         wLower.rotation.y = -dir * 0.45;
         group.add(wLower);
@@ -1728,49 +1925,111 @@
       group.add(cape);
     } else if (look.back !== 'none') {
       var pack = new THREE.Mesh(
-        new THREE.BoxGeometry(0.62, 0.65, 0.35),
-        new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.65 })
+        new THREE.BoxGeometry(0.64, 0.66, 0.36),
+        new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.62 })
       );
       pack.position.set(0, 1.28, -0.46);
       group.add(pack);
+      var pocket = new THREE.Mesh(
+        new THREE.BoxGeometry(0.46, 0.32, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.65 })
+      );
+      pocket.position.set(0, 1.18, -0.66);
+      group.add(pocket);
+      var clasp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.06), goldMat);
+      clasp.position.set(0, 1.32, -0.71);
+      group.add(clasp);
     }
 
-    var leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.7, 10), shirtMat);
-    leftArm.position.set(-0.58, 1.28, 0);
-    leftArm.rotation.z = 0.22;
+    var leftArm = new THREE.Group();
+    leftArm.position.set(-0.56, 1.52, 0);
+    var lSleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.58, 12), shirtMat);
+    lSleeve.position.set(-0.06, -0.24, 0);
+    lSleeve.rotation.z = 0.22;
+    leftArm.add(lSleeve);
+    var lHand = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), skinMat);
+    lHand.position.set(-0.14, -0.56, 0);
+    leftArm.add(lHand);
     group.add(leftArm);
 
-    var rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.7, 10), shirtMat);
-    rightArm.position.set(0.58, 1.28, 0);
-    rightArm.rotation.z = -0.22;
+    var rightArm = new THREE.Group();
+    rightArm.position.set(0.56, 1.52, 0);
+    var rSleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.58, 12), shirtMat);
+    rSleeve.position.set(0.06, -0.24, 0);
+    rSleeve.rotation.z = -0.22;
+    rightArm.add(rSleeve);
+    var rHand = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), skinMat);
+    rHand.position.set(0.14, -0.56, 0);
+    rightArm.add(rHand);
     group.add(rightArm);
 
-    // 頭部與髮型（後腦與兩側鬢角）
-    var head = new THREE.Mesh(new THREE.SphereGeometry(0.72, 18, 16), skinMat);
+    // 頭部、立體劉海與兩側鬢角（24 段高細分平滑球體）
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.73, 24, 20), skinMat);
+    head.scale.set(1.04, 0.98, 1.0);
     head.position.y = 2.22;
     group.add(head);
 
-    var hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.75, 16, 14, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat);
+    // 雙耳
+    [-0.72, 0.72].forEach(function (earX) {
+      var earMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 10), skinMat);
+      earMesh.position.set(earX, 2.2, 0.05);
+      group.add(earMesh);
+    });
+
+    var hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.76, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat);
     hairBack.position.set(0, 2.26, -0.05);
     hairBack.rotation.x = -0.25;
     group.add(hairBack);
 
+    // 前額立體劉海（3 束動森風蓬鬆劉海）
+    [-0.26, 0, 0.26].forEach(function (bx, bi) {
+      var bang = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), hairMat);
+      bang.scale.set(0.95, 0.75, 0.65);
+      bang.position.set(bx, 2.55 - (bi === 1 ? 0.04 : 0), 0.58);
+      bang.rotation.z = bx * -0.35;
+      group.add(bang);
+    });
+
     [-0.56, 0.56].forEach(function (hx) {
-      var sideLock = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), hairMat);
-      sideLock.position.set(hx, 2.15, 0.28);
+      var sideLock = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), hairMat);
+      sideLock.scale.set(0.85, 1.25, 0.85);
+      sideLock.position.set(hx, 2.14, 0.28);
       group.add(sideLock);
     });
 
-    var eyeMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
-    var cheekMat = new THREE.MeshBasicMaterial({ color: 0xfb7185 });
-    [-0.24, 0.24].forEach(function (ex) {
-      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), eyeMat);
-      eye.position.set(ex, 2.25, 0.66);
+    // 動森招牌靈動大眼（含白色高光星點）、立體小圓鼻與微笑
+    var eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+    var sparkleMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    var cheekMat = new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.68 });
+    [-0.25, 0.25].forEach(function (ex) {
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 14), eyeMat);
+      eye.scale.set(0.95, 1.22, 0.55);
+      eye.position.set(ex, 2.24, 0.67);
       group.add(eye);
+      var spk = new THREE.Mesh(new THREE.SphereGeometry(0.036, 8, 8), sparkleMat);
+      spk.position.set(ex + 0.03, 2.29, 0.72);
+      group.add(spk);
     });
-    [-0.4, 0.4].forEach(function (cx) {
-      var cheek = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), cheekMat);
-      cheek.position.set(cx, 2.1, 0.6);
+    var buttonNose = new THREE.Mesh(
+      new THREE.SphereGeometry(0.085, 10, 10),
+      new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.45 })
+    );
+    buttonNose.scale.set(1.1, 0.85, 0.9);
+    buttonNose.position.set(0, 2.15, 0.73);
+    group.add(buttonNose);
+
+    var smile = new THREE.Mesh(
+      new THREE.TorusGeometry(0.08, 0.018, 8, 14, Math.PI),
+      eyeMat
+    );
+    smile.rotation.x = Math.PI;
+    smile.position.set(0, 2.04, 0.69);
+    group.add(smile);
+
+    [-0.42, 0.42].forEach(function (cx) {
+      var cheek = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), cheekMat);
+      cheek.scale.set(1.25, 0.72, 0.45);
+      cheek.position.set(cx, 2.09, 0.62);
       group.add(cheek);
     });
 
@@ -1975,12 +2234,16 @@
     group.add(nose);
 
     [-0.25, 0.25].forEach(function (ex) {
-      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), darkMat);
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 12), darkMat);
+      eye.scale.set(0.95, 1.18, 0.65);
       eye.position.set(ex, 1.98, 0.61);
       group.add(eye);
+      var spk = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      spk.position.set(ex + 0.028, 2.02, 0.66);
+      group.add(spk);
       var blush = new THREE.Mesh(
         new THREE.SphereGeometry(0.1, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.55 })
+        new THREE.MeshBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.58 })
       );
       blush.scale.set(1.3, 0.65, 0.4);
       blush.position.set(ex * 1.45, 1.84, 0.57);

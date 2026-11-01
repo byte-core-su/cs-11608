@@ -2683,7 +2683,7 @@
       +         '<button type="button" id="ac-time-toggle" class="ac-cam-btn" style="background:#eff6ff;border-color:#60a5fa;color:#1e3a8a">' + timeBtnLabelMap[state.timeMode] + '</button>'
       +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn">🎥 視角：動森跟隨（點擊切換全島鳥瞰）</button>'
       +       '</div>'
-      +       '<div class="ac-controls-hint hidden md:block">🎮 WASD / 方向鍵走動 · 點擊 3D 建築或地面移動 · 滑鼠拖曳旋轉視角 / 滾輪縮放</div>'
+      +       '<div class="ac-controls-hint hidden md:block">🎮 請用 WASD / 方向鍵走到建築門口進入關卡 · 滑鼠拖曳旋轉視角 / 滾輪縮放</div>'
       +     '</div>'
       +     '<div id="ac-wardrobe-panel" class="ac-wardrobe-panel hidden"></div>'
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
@@ -2913,9 +2913,6 @@
       if (!candidate && nodes.length > 0) candidate = nodes[0];
       if (!candidate) return;
       state.selectedId = candidate.id;
-      state.nearId = candidate.id;
-      state.tx = candidate.x;
-      state.ty = Math.min(86, candidate.y + 4.0);
       renderDialog();
     }
 
@@ -2944,15 +2941,18 @@
         return;
       }
 
-      var activeNode = findNode(state.nearId || state.selectedId) || nodes[0];
+      var activeNode = findNode(state.nearId) || findNode(state.selectedId) || nodes[0];
       if (!activeNode) {
         dialogEl.classList.add('hidden');
         return;
       }
       dialogEl.classList.remove('hidden');
 
+      var isStandingAtNode = state.nearId && String(state.nearId) === String(activeNode.id);
       var btnsHtml = '';
-      if (activeNode.locked) {
+      if (!isStandingAtNode) {
+        btnsHtml = '<span class="text-xs font-extrabold text-amber-900 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-full">🚶 請用 WASD / 方向鍵走到建築門口進入</span>';
+      } else if (activeNode.locked) {
         btnsHtml = '<span class="text-xs font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-full">🔒 '
           + esc(activeNode.lockReason || '尚未解鎖') + '</span>';
       } else {
@@ -3596,9 +3596,6 @@
       function triggerMascotGreeting(advanceTip) {
         if (advanceTip) npcTipIndex++;
         state.selectedId = '__npc__';
-        state.nearId = '__npc__';
-        state.tx = mascotPctX;
-        state.ty = Math.min(86, mascotPctY + 3.8);
         if (triggerMascotJumpFn) triggerMascotJumpFn();
         renderDialog();
       }
@@ -3924,8 +3921,6 @@
             var pe = propEntries[hitObj.userData.propIndex];
             if (pe) {
               shake3DEntry(pe, true);
-              state.tx = pe.data.x;
-              state.ty = Math.min(86, pe.data.y + 4);
               var list = pe.data.drops || ['🍎 果實 +1'];
               var pick = list[Math.floor(Math.random() * list.length)];
               var sp = projectToScreen(pe.wx, pe.wy + 4.5, pe.wz);
@@ -3934,20 +3929,9 @@
             return;
           }
           if (hitObj && hitObj.userData.nodeId != null) {
-            handleNodeSelectAndOpen(hitObj.userData.nodeId);
+            handleNodePreviewOnly(hitObj.userData.nodeId);
             return;
           }
-        }
-
-        var groundHits = raycaster.intersectObjects([islandMesh, sandMesh, cliffTop, plazaMesh, pierDeck], false);
-        if (groundHits.length > 0) {
-          var pt = worldGroup.worldToLocal(groundHits[0].point.clone());
-          var safePt = pushOutsideObstacles(pt.x, pt.z, 0.28);
-          state.tx = Math.max(12, Math.min(88, worldToPctX(safePt.wx)));
-          state.ty = Math.max(15, Math.min(88, worldToPctY(safePt.wz)));
-          var surfY = getExactSurfaceY(safePt.wx, safePt.wz);
-          clickRingMesh.position.set(safePt.wx, surfY + 0.08, safePt.wz);
-          clickRingTimer = performance.now();
         }
       }
 
@@ -3956,7 +3940,8 @@
         state.zoomDist = Math.max(0.7, Math.min(1.45, state.zoomDist + (e.deltaY > 0 ? 0.08 : -0.08)));
       }
 
-      function handleNodeSelectAndOpen(nodeId) {
+      // 滑鼠點擊建築或木牌時僅預覽資訊，不直接進入關卡（需用 WASD / 方向鍵走到建築門口才能進入）
+      function handleNodePreviewOnly(nodeId) {
         var entry = null;
         for (var i = 0; i < nodeEntries.length; i++) {
           if (String(nodeEntries[i].node.id) === String(nodeId)) {
@@ -3967,24 +3952,14 @@
         if (!entry) return;
         var node = entry.node;
         shake3DEntry(entry, false);
-
         state.selectedId = node.id;
-        state.nearId = node.id;
-        var doorSafe = pushOutsideObstacles(entry.wx, entry.wz + 3.15, 0.25);
-        state.tx = Math.max(12, Math.min(88, worldToPctX(doorSafe.wx)));
-        state.ty = Math.max(15, Math.min(88, worldToPctY(doorSafe.wz)));
-        state.focusUntil = performance.now() + 1400; // 啟動電影級推進運鏡
         renderDialog();
 
         var scr = projectToScreen(entry.wx, entry.wy + 4.5, entry.wz);
         if (node.locked) {
           spawnFloatScreen(scr.x, scr.y, '🔒 ' + (node.lockReason || '尚未開放'));
-        } else if (node.instantOpen !== false) {
-          setTimeout(function () {
-            triggerNodeAction(node, 0);
-          }, 220);
-        } else if (typeof cfg.onSelectNode === 'function') {
-          cfg.onSelectNode(node);
+        } else if (String(state.nearId) !== String(node.id)) {
+          spawnFloatScreen(scr.x, scr.y, '🚶 請用 WASD / 方向鍵走到建築門口進入');
         }
       }
 
@@ -4005,6 +3980,7 @@
           e.stopPropagation();
           var nId = actBtn.getAttribute('data-ac-node');
           var aIdx = Number(actBtn.getAttribute('data-ac-act')) || 0;
+          if (String(state.nearId) !== String(nId)) return;
           state.focusUntil = performance.now() + 1400;
           triggerNodeAction(findNode(nId), aIdx);
           return;
@@ -4012,7 +3988,7 @@
         var nodePin = e.target.closest('.ac-node');
         if (nodePin) {
           e.stopPropagation();
-          handleNodeSelectAndOpen(nodePin.getAttribute('data-node'));
+          handleNodePreviewOnly(nodePin.getAttribute('data-node'));
         }
       }
 
@@ -4043,10 +4019,11 @@
             triggerMascotGreeting(true);
             return;
           }
-          var targetNode = findNode(state.nearId || state.selectedId);
-          if (targetNode && state.nearId) {
+          var targetNode = findNode(state.nearId);
+          if (targetNode && !targetNode.locked) {
             e.preventDefault();
-            handleNodeSelectAndOpen(targetNode.id);
+            state.focusUntil = performance.now() + 1400;
+            triggerNodeAction(targetNode, 0);
           }
         }
       }

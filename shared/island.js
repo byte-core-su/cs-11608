@@ -2689,7 +2689,6 @@
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
       +       nodesOverlayHtml
       +       '<div id="ac-npc-tag" class="ac-npc-tag" title="點擊與島長對話">🦝 島長</div>'
-      +       '<div id="ac-robot-tag" class="ac-npc-tag" style="background:linear-gradient(135deg,#0284c7,#1d4ed8);border-color:#bae6fd;color:#fff" title="點擊切換 3D 機器人骨骼動畫">🤖 3D 創客機（點我熱舞）</div>'
       +       '<div id="ac-player-tag" class="ac-player-tag">🧑‍🌾 ' + esc(cfg.playerName || '島民') + '</div>'
       +     '</div>'
       +     '<div id="ac-dialog" class="ac-dialog-bar"></div>'
@@ -2701,7 +2700,7 @@
     var overlayEl = container.querySelector('#ac-overlay');
     var playerTag = container.querySelector('#ac-player-tag');
     var npcTag    = container.querySelector('#ac-npc-tag');
-    var robotTag  = container.querySelector('#ac-robot-tag');
+    var robotTag  = null;
     var dialogEl  = container.querySelector('#ac-dialog');
     var camBtn    = container.querySelector('#ac-cam-toggle');
     var timeBtn   = container.querySelector('#ac-time-toggle');
@@ -3413,33 +3412,31 @@
         worldGroup.add(circuitRing);
       }
 
-      // ── 4C. 四大主題 3D 飄浮環境粒子系統（花粉落葉／嘉年華泡泡／蒸氣火星／科技光點／星夜螢火蟲） ──
+      // ── 4C. 四大主題輕量環境微粒（減量降噪，避免干擾閱讀專注） ──
       var ambientParticles = [];
       var pColorsByVariant = {
         hub:       [0xfef08a, 0x86efac, 0xfda4af],
-        ethics:    [0xfde047, 0xfca5a5, 0x86efac], // 金色花粉與花瓣
-        thinking:  [0xf472b6, 0x38bdf8, 0xfacc15, 0xc084fc], // 奇幻彩球與泡泡
-        code:      [0xf59e0b, 0xfef3c7, 0xfb923c], // 蒸氣火星與暖光
-        flowchart: [0xf59e0b, 0xfef3c7, 0xfb923c],
-        arduino:   [0x38bdf8, 0x2dd4bf, 0x818cf8]  // 科技青色數位能量塊
+        ethics:    [0xfde047, 0xfca5a5, 0x86efac],
+        thinking:  [0xf472b6, 0x38bdf8, 0xfacc15],
+        code:      [0xf59e0b, 0xfef3c7],
+        flowchart: [0xf59e0b, 0xfef3c7],
+        arduino:   [0x38bdf8, 0x2dd4bf]
       };
       var pCols = pColorsByVariant[variantKey] || pColorsByVariant.hub;
-      var pGeo = (variantKey === 'arduino' || variantKey === 'code' || variantKey === 'flowchart')
-        ? new THREE.BoxGeometry(0.22, 0.22, 0.22)
-        : new THREE.SphereGeometry(0.16, 8, 8);
+      var pGeo = new THREE.SphereGeometry(0.12, 6, 6);
 
-      for (var pIdx = 0; pIdx < 32; pIdx++) {
+      for (var pIdx = 0; pIdx < 8; pIdx++) {
         var pm = new THREE.Mesh(
           pGeo,
           new THREE.MeshBasicMaterial({
             color: pCols[pIdx % pCols.length],
             transparent: true,
-            opacity: 0.78
+            opacity: 0.35
           })
         );
         var px0 = (Math.random() - 0.5) * 58;
         var pz0 = (Math.random() - 0.5) * 38;
-        var py0 = 1.2 + Math.random() * 9.5;
+        var py0 = 1.5 + Math.random() * 8.0;
         pm.position.set(px0, py0, pz0);
         worldGroup.add(pm);
         ambientParticles.push({
@@ -3447,21 +3444,21 @@
           baseX: px0,
           baseZ: pz0,
           y: py0,
-          vy: (variantKey === 'ethics' || variantKey === 'hub') ? -(0.015 + Math.random() * 0.018) : (0.016 + Math.random() * 0.02),
+          vy: -0.008,
           phase: Math.random() * Math.PI * 2
         });
       }
 
-      // 3D 飛舞蝴蝶
+      // 遠景樹叢旁 2 隻安靜蝴蝶（移至外圍，不飛越中央視野）
       var butterflies = [];
-      var bfCols = [0xfde047, 0xf472b6, 0x38bdf8, 0xa855f7];
-      [[-12, 8], [12, 6], [-5, -5], [14, -7], [-15, -3]].forEach(function (bp, bi) {
+      var bfCols = [0xfde047, 0x38bdf8];
+      [[-18, -6], [17, -7]].forEach(function (bp, bi) {
         var bfg = new THREE.Group();
         var wMat = new THREE.MeshBasicMaterial({ color: bfCols[bi % bfCols.length], side: THREE.DoubleSide });
-        var lw = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.24), wMat);
-        lw.position.x = -0.15;
-        var rw = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.24), wMat);
-        rw.position.x = 0.15;
+        var lw = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.20), wMat);
+        lw.position.x = -0.12;
+        var rw = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.20), wMat);
+        rw.position.x = 0.12;
         bfg.add(lw);
         bfg.add(rw);
         bfg.position.set(bp[0], 1.8, bp[1]);
@@ -3612,55 +3609,56 @@
         });
       }
 
-      // ── 6B. 載入開源 .glb 骨骼動畫與雕塑模型群（飛鳥、小鴨、小狐狸、表情機器人、駿馬、卡車、花叢） ──
+      // ── 6B. 依島嶼主題極簡配置專屬 3D 物件（一島一主題、移至邊緣角落、不遮擋中央視野、不干擾閱讀） ──
       var skyBirds = [];
-      [
-        { file: 'Parrot.glb',   r: 11.5, y: 6.2, speed: 0.48, phase: 0.0, size: 2.35 },
-        { file: 'Flamingo.glb', r: 14.2, y: 7.0, speed: 0.39, phase: 2.1, size: 2.55 },
-        { file: 'Stork.glb',    r: 12.8, y: 6.6, speed: 0.43, phase: 4.2, size: 2.45 }
-      ].forEach(function (bCfg) {
-        spawnGLBInstance(THREE, bCfg.file, { targetSize: bCfg.size, timeScale: 1.25 }, function (res) {
-          res.group.position.set(Math.cos(bCfg.phase) * bCfg.r, bCfg.y, 2.5 + Math.sin(bCfg.phase) * (bCfg.r * 0.65));
-          worldGroup.add(res.group);
-          skyBirds.push({ group: res.group, cfg: bCfg });
-        });
-      });
-
       var pondDucks = [];
-      [
-        { cx: 19.3, cz: -15.3, r: 1.15, baseY: CLIFF_HEIGHT + 0.08, speed: 0.65, phase: 0.5 },
-        { cx: 20.0, cz: 7.2,   r: 0.95, baseY: 0.06,                speed: 0.58, phase: 2.6 }
-      ].forEach(function (dCfg) {
-        spawnGLBInstance(THREE, 'Duck.glb', { targetSize: 1.45 }, function (res) {
+      var foxWx = -6.4, foxWz = 3.6;
+      var robWx = 6.2,  robWz = 4.2, robWy = getExactSurfaceY(6.2, 4.2);
+      var horseWx = -14.2, horseWz = 7.4;
+      var truckWx = 13.5,  truckWz = 7.8;
+
+      if (variantKey === 'hub') {
+        // 🏝️ 主島大廳：僅在島長旁配置 1 隻安靜的小狐狸夥伴與河道 1 隻小鴨
+        var foxWy = getExactSurfaceY(foxWx, foxWz);
+        spawnGLBInstance(THREE, 'Fox.glb', { targetSize: 2.15, clipName: 'Survey' }, function (res) {
+          res.group.position.set(foxWx, foxWy, foxWz);
+          res.group.rotation.y = 0.48;
+          res.group.userData.isNPC = true;
+          worldGroup.add(res.group);
+          interactiveMeshes.push(res.group);
+          foxCompanion = res;
+        });
+        spawnGLBInstance(THREE, 'Duck.glb', { targetSize: 1.3 }, function (res) {
+          var dCfg = { cx: 20.0, cz: 7.2, r: 0.75, baseY: 0.06, speed: 0.35, phase: 1.2 };
           res.group.position.set(dCfg.cx, dCfg.baseY, dCfg.cz);
           worldGroup.add(res.group);
           pondDucks.push({ group: res.group, cfg: dCfg });
         });
-      });
-
-      // 中央廣場旁：開源 Fox.glb 骨骼動畫小狐狸夥伴（點擊可與島長一起互動跳躍）
-      var foxWx = -6.4, foxWz = 3.6;
-      var foxWy = getExactSurfaceY(foxWx, foxWz);
-      spawnGLBInstance(THREE, 'Fox.glb', { targetSize: 2.35, clipName: 'Survey' }, function (res) {
-        res.group.position.set(foxWx, foxWy, foxWz);
-        res.group.rotation.y = 0.48;
-        res.group.userData.isNPC = true;
-        worldGroup.add(res.group);
-        interactiveMeshes.push(res.group);
-        foxCompanion = res;
-      });
-
-      // 中央廣場東側：開源 RobotExpressive.glb 骨骼動畫表情機器人（點擊可切換揮手／跳舞／跳躍／比讚動畫）
-      var robWx = 4.6, robWz = 3.8;
-      var robWy = getExactSurfaceY(robWx, robWz);
-      spawnGLBInstance(THREE, 'RobotExpressive.glb', { targetSize: 3.15, clipName: 'Wave' }, function (res) {
-        res.group.position.set(robWx, robWy, robWz);
-        res.group.rotation.y = -0.35;
-        res.group.userData.isRobot = true;
-        worldGroup.add(res.group);
-        interactiveMeshes.push(res.group);
-        plazaRobot = res;
-      });
+      } else if (variantKey === 'ethics') {
+        // 🍎 資訊倫理果園島：僅在東側農莊外圍停放 1 台靜態補給小貨車
+        spawnGLBInstance(THREE, 'Truck.glb', { targetSize: 2.85 }, function (res) {
+          res.group.position.set(truckWx, getExactSurfaceY(truckWx, truckWz), truckWz);
+          res.group.rotation.y = -0.52;
+          worldGroup.add(res.group);
+        });
+      } else if (variantKey === 'thinking') {
+        // 🎪 運算思維遊樂園島：僅在西側草地外圍放置 1 匹溫和小木馬
+        spawnGLBInstance(THREE, 'Horse.glb', { targetSize: 2.45, timeScale: 0.42 }, function (res) {
+          res.group.position.set(horseWx, getExactSurfaceY(horseWx, horseWz), horseWz);
+          res.group.rotation.y = 0.55;
+          worldGroup.add(res.group);
+        });
+      } else if (variantKey === 'arduino') {
+        // 🤖 5016B 智慧家居創客島：僅在此創客專題島配置 3D 創客機器人（預設 Idle 安靜待命，點擊才互動）
+        spawnGLBInstance(THREE, 'RobotExpressive.glb', { targetSize: 2.85, clipName: 'Idle' }, function (res) {
+          res.group.position.set(robWx, robWy, robWz);
+          res.group.rotation.y = -0.35;
+          res.group.userData.isRobot = true;
+          worldGroup.add(res.group);
+          interactiveMeshes.push(res.group);
+          plazaRobot = res;
+        });
+      }
 
       function triggerRobotPerform() {
         if (!plazaRobot) return;
@@ -3675,38 +3673,18 @@
         }
         var sp = projectToScreen(robWx, robWy + 3.6, robWz);
         var msgMap = {
-          Wave: '🤖 創客機器人：嗨！歡迎來到 3D 動森島！（揮手）',
+          Wave: '🤖 創客機器人：嗨！歡迎來到未來創客島！（揮手）',
           Dance: '🤖 創客機器人：啟動歡樂熱舞模式！💃',
           Jump: '🤖 創客機器人：超級跳躍推進！🚀',
           ThumbsUp: '🤖 創客機器人：你今天表現超讚喔！👍',
-          Idle: '🤖 創客機器人：待命巡邏中，隨時點我表演！✨'
+          Idle: '🤖 創客機器人：待命巡邏中！✨'
         };
         spawnFloatScreen(sp.x, sp.y, msgMap[nextClip] || '🤖 創客機器人：嗶嗶！');
       }
-      if (robotTag) {
-        robotTag.addEventListener('click', function (e) {
-          e.stopPropagation();
-          triggerRobotPerform();
-        });
-      }
 
-      // 前景草原奔馳駿馬 (Horse.glb)、果園補給卡車 (Truck.glb) 與中央廣場立體雕塑花叢 (Flower.glb)
-      var horseWx = -9.6, horseWz = 6.2;
-      spawnGLBInstance(THREE, 'Horse.glb', { targetSize: 2.75, timeScale: 0.85 }, function (res) {
-        res.group.position.set(horseWx, getExactSurfaceY(horseWx, horseWz), horseWz);
-        res.group.rotation.y = 0.55;
-        worldGroup.add(res.group);
-      });
-
-      var truckWx = 9.6, truckWz = 6.4;
-      spawnGLBInstance(THREE, 'Truck.glb', { targetSize: 3.05 }, function (res) {
-        res.group.position.set(truckWx, getExactSurfaceY(truckWx, truckWz), truckWz);
-        res.group.rotation.y = -0.52;
-        worldGroup.add(res.group);
-      });
-
-      [[-3.5, 4.3], [3.5, 4.3], [-3.7, -3.1], [3.7, -3.1]].forEach(function (fp, fi) {
-        spawnGLBInstance(THREE, 'Flower.glb', { targetSize: 1.35 }, function (res) {
+      // 廣場兩側角落靜態小花叢點綴
+      [[-3.7, -3.1], [3.7, -3.1]].forEach(function (fp, fi) {
+        spawnGLBInstance(THREE, 'Flower.glb', { targetSize: 1.2 }, function (res) {
           res.group.position.set(fp[0], getExactSurfaceY(fp[0], fp[1]), fp[1]);
           res.group.rotation.y = fi * 1.2;
           worldGroup.add(res.group);
@@ -3767,14 +3745,14 @@
         });
       });
 
-      // ── 6C. 建立全島實體物理碰撞體清單（建築物、果樹、島長、機器人、小狐狸、駿馬、卡車皆不可穿透） ──
+      // ── 6C. 建立全島實體物理碰撞體清單（僅針對該島實際存在的物件與建築建立碰撞體） ──
       var solidObstacles = [
-        { x: mascotWx, z: mascotWz, r: 1.05 },
-        { x: foxWx,    z: foxWz,    r: 1.05 },
-        { x: robWx,    z: robWz,    r: 1.15 },
-        { x: horseWx,  z: horseWz,  r: 1.35 },
-        { x: truckWx,  z: truckWz,  r: 1.65 }
+        { x: mascotWx, z: mascotWz, r: 1.05 }
       ];
+      if (variantKey === 'hub')      solidObstacles.push({ x: foxWx,   z: foxWz,   r: 1.05 });
+      if (variantKey === 'arduino')  solidObstacles.push({ x: robWx,   z: robWz,   r: 1.15 });
+      if (variantKey === 'thinking') solidObstacles.push({ x: horseWx, z: horseWz, r: 1.25 });
+      if (variantKey === 'ethics')   solidObstacles.push({ x: truckWx, z: truckWz, r: 1.55 });
       for (var pi0 = 0; pi0 < propEntries.length; pi0++) {
         solidObstacles.push({
           x: propEntries[pi0].wx,
@@ -4107,9 +4085,12 @@
         var dt = Math.min(0.05, Math.max(0.001, (now - lastAnimNow) * 0.001));
         lastAnimNow = now;
         var tSec = now * 0.001;
+        var isModalOpen = !!document.querySelector('.ac-float-backdrop:not(.hidden)');
 
-        for (var mi = 0; mi < activeGlbMixers.length; mi++) {
-          activeGlbMixers[mi].update(dt);
+        if (!isModalOpen) {
+          for (var mi = 0; mi < activeGlbMixers.length; mi++) {
+            activeGlbMixers[mi].update(dt);
+          }
         }
 
         var vx = 0, vy = 0;
@@ -4245,8 +4226,7 @@
           limbs.rightArm.rotation.x = swing * 0.85;
         }
 
-        // ★ 檢測是否有主題浮動視窗正在開啟，或剛點擊了建築：啟動「電影級建築特寫運鏡 (Cinematic Building Focus)」
-        var isModalOpen = !!document.querySelector('.ac-float-backdrop:not(.hidden)');
+        // ★ 檢測是否有主題浮動視窗正在開啟，或剛點擊了建築：啟動靜態特寫，開啟閱讀視窗時不晃動鏡頭
         var focusEntry = null;
         if ((isModalOpen || now < state.focusUntil) && state.selectedId) {
           for (var fIdx = 0; fIdx < nodeEntries.length; fIdx++) {
@@ -4260,7 +4240,7 @@
         // 更新鏡頭平滑跟隨或建築特寫
         var targetCamX, targetCamY, targetCamZ, targetLookX, targetLookY, targetLookZ;
         if (focusEntry) {
-          var orbitShift = Math.sin(tSec * 0.45) * 2.2;
+          var orbitShift = isModalOpen ? 0 : Math.sin(tSec * 0.45) * 1.2;
           targetCamX = focusEntry.wx + orbitShift;
           targetCamY = focusEntry.wy + 9.5;
           targetCamZ = focusEntry.wz + 14.5;
@@ -4290,15 +4270,17 @@
         camera.position.copy(camPos);
         camera.lookAt(camLook);
 
-        // 環境動態效果：海岸浪花、水上飛機、3D 島長 NPC 揮手與跳躍
-        foamMesh.scale.x = 1.06 + Math.sin(tSec * 2.1) * 0.015;
-        foamMesh.scale.z = 0.72 + Math.cos(tSec * 2.1) * 0.012;
-        planeGroup.position.y = -0.35 + Math.sin(tSec * 2.6) * 0.14;
-        planeGroup.rotation.z = Math.sin(tSec * 1.9) * 0.05;
-        propBlade.rotation.z = tSec * 14;
+        // 環境動態效果：當開啟關卡閱讀視窗 (isModalOpen) 時自動暫停背景動態，確保閱讀 100% 專注不干擾
+        if (!isModalOpen) {
+          foamMesh.scale.x = 1.06 + Math.sin(tSec * 2.1) * 0.015;
+          foamMesh.scale.z = 0.72 + Math.cos(tSec * 2.1) * 0.012;
+          planeGroup.position.y = -0.35 + Math.sin(tSec * 2.6) * 0.14;
+          planeGroup.rotation.z = Math.sin(tSec * 1.9) * 0.05;
+          propBlade.rotation.z = tSec * 14;
+        }
 
         if (mascotMesh) {
-          if (mascotMesh.userData.rightArmPivot) {
+          if (!isModalOpen && mascotMesh.userData.rightArmPivot) {
             mascotMesh.userData.rightArmPivot.rotation.z = Math.sin(tSec * 5.2) * 0.32;
           }
           var npcJump = 0;
@@ -4310,73 +4292,57 @@
               mascotMesh.userData.jumpTime = 0;
             }
           }
-          mascotMesh.position.y = mascotWy + Math.abs(Math.sin(tSec * 2.4)) * 0.08 + npcJump;
+          mascotMesh.position.y = mascotWy + (isModalOpen ? 0 : Math.abs(Math.sin(tSec * 2.4)) * 0.08) + npcJump;
           if (npcTag) {
             var npcScr = projectToScreen(mascotWx, mascotMesh.position.y + 3.25, mascotWz);
             npcTag.style.left = Math.round(npcScr.x) + 'px';
             npcTag.style.top  = Math.round(npcScr.y) + 'px';
           }
-          if (robotTag) {
-            var robScr = projectToScreen(robWx, robWy + 3.25, robWz);
-            robotTag.style.left = Math.round(robScr.x) + 'px';
-            robotTag.style.top  = Math.round(robScr.y) + 'px';
+        }
+
+        if (!isModalOpen) {
+          // 主題環境飄浮粒子動畫
+          for (var api = 0; api < ambientParticles.length; api++) {
+            var ap = ambientParticles[api];
+            ap.y += ap.vy;
+            if (ap.vy < 0 && ap.y < 0.4) ap.y = 10.5;
+            if (ap.vy > 0 && ap.y > 10.5) ap.y = 0.6;
+            ap.mesh.position.x = ap.baseX + Math.sin(tSec * 1.5 + ap.phase) * 0.9;
+            ap.mesh.position.y = ap.y;
+            ap.mesh.position.z = ap.baseZ + Math.cos(tSec * 1.3 + ap.phase) * 0.9;
+            ap.mesh.rotation.y = tSec * 2.0 + ap.phase;
           }
-        }
 
-        // 主題環境飄浮粒子動畫
-        for (var api = 0; api < ambientParticles.length; api++) {
-          var ap = ambientParticles[api];
-          ap.y += ap.vy;
-          if (ap.vy < 0 && ap.y < 0.4) ap.y = 10.5;
-          if (ap.vy > 0 && ap.y > 10.5) ap.y = 0.6;
-          ap.mesh.position.x = ap.baseX + Math.sin(tSec * 1.5 + ap.phase) * 0.9;
-          ap.mesh.position.y = ap.y;
-          ap.mesh.position.z = ap.baseZ + Math.cos(tSec * 1.3 + ap.phase) * 0.9;
-          ap.mesh.rotation.y = tSec * 2.0 + ap.phase;
-        }
+          // 蝴蝶飛舞動畫
+          for (var bi = 0; bi < butterflies.length; bi++) {
+            var bf = butterflies[bi];
+            var ph = tSec * 2.2 + bf.userData.phase;
+            bf.position.x = bf.userData.cx + Math.cos(ph) * 2.2;
+            bf.position.z = bf.userData.cz + Math.sin(ph * 1.3) * 1.8;
+            bf.position.y = 1.6 + Math.sin(tSec * 5 + bi) * 0.35;
+            bf.rotation.y = -ph;
+            var flapAng = Math.sin(tSec * 18 + bi) * 0.65;
+            bf.userData.lw.rotation.y = flapAng;
+            bf.userData.rw.rotation.y = -flapAng;
+          }
 
-        // 蝴蝶飛舞動畫
-        for (var bi = 0; bi < butterflies.length; bi++) {
-          var bf = butterflies[bi];
-          var ph = tSec * 2.2 + bf.userData.phase;
-          bf.position.x = bf.userData.cx + Math.cos(ph) * 2.2;
-          bf.position.z = bf.userData.cz + Math.sin(ph * 1.3) * 1.8;
-          bf.position.y = 1.6 + Math.sin(tSec * 5 + bi) * 0.35;
-          bf.rotation.y = -ph;
-          var flapAng = Math.sin(tSec * 18 + bi) * 0.65;
-          bf.userData.lw.rotation.y = flapAng;
-          bf.userData.rw.rotation.y = -flapAng;
-        }
+          // 開源 .glb 池塘與河道小鴨游水動畫
+          for (var pdi = 0; pdi < pondDucks.length; pdi++) {
+            var pd = pondDucks[pdi];
+            var dAng = tSec * pd.cfg.speed + pd.cfg.phase;
+            var dxPos = pd.cfg.cx + Math.cos(dAng) * pd.cfg.r;
+            var dzPos = pd.cfg.cz + Math.sin(dAng) * (pd.cfg.r * 0.75);
+            var ndAng = dAng + 0.05;
+            var ndx = pd.cfg.cx + Math.cos(ndAng) * pd.cfg.r;
+            var ndz = pd.cfg.cz + Math.sin(ndAng) * (pd.cfg.r * 0.75);
+            pd.group.position.set(dxPos, pd.cfg.baseY + Math.sin(tSec * 3.8 + pdi) * 0.04, dzPos);
+            pd.group.rotation.y = Math.atan2(ndx - dxPos, ndz - dzPos) - Math.PI / 2;
+          }
 
-        // 開源 .glb 天空飛鳥群環島翱翔動畫
-        for (var sbi = 0; sbi < skyBirds.length; sbi++) {
-          var sb = skyBirds[sbi];
-          var bAng = tSec * sb.cfg.speed + sb.cfg.phase;
-          var bx = Math.cos(bAng) * sb.cfg.r;
-          var bz = 2.5 + Math.sin(bAng) * (sb.cfg.r * 0.65);
-          var nextAng = bAng + 0.05;
-          var nbx = Math.cos(nextAng) * sb.cfg.r;
-          var nbz = 2.5 + Math.sin(nextAng) * (sb.cfg.r * 0.65);
-          sb.group.position.set(bx, sb.cfg.y + Math.sin(tSec * 2.1 + sbi) * 0.45, bz);
-          sb.group.rotation.y = Math.atan2(nbx - bx, nbz - bz);
-        }
-
-        // 開源 .glb 池塘與河道小鴨游水動畫
-        for (var pdi = 0; pdi < pondDucks.length; pdi++) {
-          var pd = pondDucks[pdi];
-          var dAng = tSec * pd.cfg.speed + pd.cfg.phase;
-          var dxPos = pd.cfg.cx + Math.cos(dAng) * pd.cfg.r;
-          var dzPos = pd.cfg.cz + Math.sin(dAng) * (pd.cfg.r * 0.75);
-          var ndAng = dAng + 0.05;
-          var ndx = pd.cfg.cx + Math.cos(ndAng) * pd.cfg.r;
-          var ndz = pd.cfg.cz + Math.sin(ndAng) * (pd.cfg.r * 0.75);
-          pd.group.position.set(dxPos, pd.cfg.baseY + Math.sin(tSec * 3.8 + pdi) * 0.04, dzPos);
-          pd.group.rotation.y = Math.atan2(ndx - dxPos, ndz - dzPos) - Math.PI / 2;
-        }
-
-        for (var cl = 0; cl < clouds.length; cl++) {
-          clouds[cl].position.x += 0.018;
-          if (clouds[cl].position.x > 46) clouds[cl].position.x = -46;
+          for (var cl = 0; cl < clouds.length; cl++) {
+            clouds[cl].position.x += 0.018;
+            if (clouds[cl].position.x > 46) clouds[cl].position.x = -46;
+          }
         }
 
         if (clickRingTimer > 0) {
@@ -4443,20 +4409,22 @@
             bestId = n.id;
           }
 
-          if (ne.crownGroup && ne.crownGroup.userData.starGroup) {
-            ne.crownGroup.userData.starGroup.rotation.y = tSec * 2.2 + ni;
-            ne.crownGroup.userData.starGroup.position.y = (ne.mesh.userData.labelHeight || 5.2) + 0.65 + Math.sin(tSec * 3.2 + ni) * 0.18;
-          }
+          if (!isModalOpen) {
+            if (ne.crownGroup && ne.crownGroup.userData.starGroup) {
+              ne.crownGroup.userData.starGroup.rotation.y = tSec * 2.2 + ni;
+              ne.crownGroup.userData.starGroup.position.y = (ne.mesh.userData.labelHeight || 5.2) + 0.65 + Math.sin(tSec * 3.2 + ni) * 0.18;
+            }
 
-          if (ne.mesh.userData.spinPart) {
-            ne.mesh.userData.spinPart.rotation.z = tSec * 1.8;
-          }
-          if (ne.mesh.userData.spinPartY) {
-            ne.mesh.userData.spinPartY.rotation.y = tSec * 1.25;
-          }
-          if (ne.mesh.userData.pulsePart) {
-            var sc = 0.9 + Math.sin(tSec * 9) * 0.14;
-            ne.mesh.userData.pulsePart.scale.set(sc, sc + 0.1, sc);
+            if (ne.mesh.userData.spinPart) {
+              ne.mesh.userData.spinPart.rotation.z = tSec * 1.8;
+            }
+            if (ne.mesh.userData.spinPartY) {
+              ne.mesh.userData.spinPartY.rotation.y = tSec * 1.25;
+            }
+            if (ne.mesh.userData.pulsePart) {
+              var sc = 0.9 + Math.sin(tSec * 9) * 0.14;
+              ne.mesh.userData.pulsePart.scale.set(sc, sc + 0.1, sc);
+            }
           }
           if (ne.shakeTime > 0) {
             var nAge = (now - ne.shakeTime) / 460;

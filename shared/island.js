@@ -2660,8 +2660,122 @@
       setTimeout(function () { el.remove(); }, 950);
     }
 
+    var npcInfoMap = {
+      hub: {
+        name: '🦝 狸克島務長',
+        role: '群島總導覽員',
+        tips: [
+          '歡迎來到「科技探險群島」！我是島務長狸克，點選島上的每座主題館就能搭機前往各系列島嶼喔！',
+          '看到左上角的「☀️ 時段」按鈕了嗎？點一下可以切換「晴朗白天、魔幻夕陽、璀璨星夜」三種光影！',
+          '想換穿不同帽子、衣服或背上精靈翅膀？點左上角「🪞 更換造型」隨時都能打扮自己！',
+          '走近島上的蘋果樹、橘子樹或椰子樹並點一下，樹上的果實就會掉下來喔！',
+          '不知道先去哪一座島嗎？點右邊的「🧭 帶我去推薦關卡」，我直接幫你帶路！'
+        ]
+      },
+      ethics: {
+        name: '🐿️ 蘋蘋松鼠園長',
+        role: '豐收果園守護者',
+        tips: [
+          '歡迎來到「豐收果園與陽光溫室島」！這裡的每一棵果樹都代表一個資訊倫理與資安章節喔！',
+          '點擊果樹會先開啟「重點整理」浮動視窗，讀完再按「開始挑戰」，連續答對就能摘下黃金果實！',
+          '只要通過一個章節，那棵果樹或穀倉的屋頂就會升起「3D 旋轉黃金榮譽星」與慶祝花叢！',
+          '走上北邊的石階斜坡，高台上還有「金蘋果傳說神木」與「陽光玻璃大溫室」總複習等你挑戰！',
+          '把 10 個章節全部通關後，就能解鎖主島上的「🏆 排行賽露營地」跟全校高手過招喔！'
+        ]
+      },
+      thinking: {
+        name: '🐰 奇奇魔術兔',
+        role: '森林遊樂園園長',
+        tips: [
+          '歡迎光臨「森林奇幻遊樂園」！島上的 10 座遊樂設施分別對應 10 道國際運算思維謎題！',
+          '不管是滑梯公園、電流急急棒還是小籠包攤位，順序完全自由，想玩哪一座就直接點進去！',
+          '在挑戰視窗過關後，記得按 Windows + Alt + PrintScreen 擷取視窗畫面！',
+          '截好圖之後，走去廣場西側的「🎠 旋轉木馬通關回報亭」上傳截圖，就能領取通關證書囉！',
+          '試試切換成「🌙 璀璨星夜」模式，夜晚的摩天輪與遊樂園超浪漫喔！'
+        ]
+      },
+      code: {
+        name: '🦫 齒輪海狸師傅',
+        role: '蒸氣木工村總工程師',
+        tips: [
+          '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
+          '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
+          '點擊任一工坊後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
+          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以點工坊再傳一次 Scratch 作品！',
+          '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
+        ]
+      },
+      flowchart: {
+        name: '🦫 齒輪海狸師傅',
+        role: '蒸氣木工村總工程師',
+        tips: [
+          '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
+          '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
+          '點擊任一工坊後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
+          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以點工坊再傳一次 Scratch 作品！',
+          '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
+        ]
+      },
+      arduino: {
+        name: '🤖 諾克號創客機',
+        role: '未來創客島 AI 領航員',
+        tips: [
+          '嗶嗶！歡迎登陸「未來科技創客實驗島」！我是你的 AI 領航員諾克號！',
+          '島上的 5 座科技實驗艙分別展示智慧門閘、人體感應燈廊、風力能源塔、光控圓頂與研發總部！',
+          '點擊任一實驗艙，就能在科技浮動視窗裡親手操作「3D 互動硬體模擬器」與檢視積木程式邏輯！',
+          '在浮動視窗開啟時，背景的 3D 攝影機會自動推進特寫該座科技建築喔！',
+          '切換到「🌙 璀璨星夜」模式，整座科技島的光電迴路與霓虹圓頂都會閃閃發光！'
+        ]
+      }
+    };
+    var currentNpcInfo = npcInfoMap[cfg.variant || 'hub'] || npcInfoMap.hub;
+    var npcTipIndex = 0;
+    var triggerMascotJumpFn = null;
+
+    function guideToRecommendedNode() {
+      var candidate = null;
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.id === 'dodo-airport' || n.locked) continue;
+        if (!n.done && !n.pass) {
+          candidate = n;
+          break;
+        }
+      }
+      if (!candidate && nodes.length > 0) candidate = nodes[0];
+      if (!candidate) return;
+      state.selectedId = candidate.id;
+      state.nearId = candidate.id;
+      state.tx = candidate.x;
+      state.ty = Math.min(86, candidate.y + 4.0);
+      renderDialog();
+    }
+
     function renderDialog() {
       if (!dialogEl) return;
+      if (state.selectedId === '__npc__' || state.nearId === '__npc__') {
+        dialogEl.classList.remove('hidden');
+        var tips = currentNpcInfo.tips;
+        var msg = tips[npcTipIndex % tips.length];
+        var idxLabel = '秘訣 ' + ((npcTipIndex % tips.length) + 1) + ' / ' + tips.length;
+        dialogEl.innerHTML = ''
+          + '<div class="ac-dialog-speaker" style="background:linear-gradient(90deg,#d97706,#b45309)">' + esc(currentNpcInfo.name + ' · ' + currentNpcInfo.role) + '</div>'
+          + '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">'
+          +   '<div class="min-w-0 flex-1">'
+          +     '<div class="flex items-center gap-2 flex-wrap">'
+          +       '<h3 class="text-base sm:text-lg font-black text-amber-950 truncate">💬 島長導覽對話</h3>'
+          +       '<span class="text-xs font-black text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">' + idxLabel + '</span>'
+          +     '</div>'
+          +     '<p class="text-xs sm:text-sm text-stone-700 font-bold mt-0.5 leading-relaxed">' + esc(msg) + '</p>'
+          +   '</div>'
+          +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
+          +     '<button type="button" id="ac-npc-next-tip" class="ac-btn-primary">💬 繼續聊天（下一句）</button>'
+          +     '<button type="button" id="ac-npc-guide-me" class="ac-btn-secondary">🧭 帶我去推薦關卡</button>'
+          +   '</div>'
+          + '</div>';
+        return;
+      }
+
       var activeNode = findNode(state.nearId || state.selectedId) || nodes[0];
       if (!activeNode) {
         dialogEl.classList.add('hidden');
@@ -3277,6 +3391,8 @@
 
       // 建立站在中央廣場旁的 3D 動物島長 NPC
       var mascotWx = -4.5, mascotWz = 3.6;
+      var mascotPctX = worldToPctX(mascotWx);
+      var mascotPctY = worldToPctY(mascotWz);
       var mascotWy = getExactSurfaceY(mascotWx, mascotWz);
       var mascotMesh = buildMascotNPC3D(THREE, variantKey);
       mascotMesh.position.set(mascotWx, mascotWy, mascotWz);
@@ -3284,21 +3400,28 @@
       worldGroup.add(mascotMesh);
       interactiveMeshes.push(mascotMesh);
       if (npcTag) {
-        npcTag.textContent = mascotMesh.userData.name + ' 💬';
+        npcTag.textContent = currentNpcInfo.name + ' 💬（點我對話）';
       }
 
-      function triggerMascotGreeting() {
+      triggerMascotJumpFn = function () {
         mascotMesh.userData.jumpTime = performance.now();
-        var tips = mascotMesh.userData.tips || ['歡迎來到動森探險島！'];
-        var msg = tips[mascotMesh.userData.tipIdx % tips.length];
-        mascotMesh.userData.tipIdx++;
         var sp = projectToScreen(mascotWx, mascotWy + 3.6, mascotWz);
-        spawnFloatScreen(sp.x, sp.y, '💬 ' + msg);
+        spawnFloatScreen(sp.x, sp.y, '💬 ' + currentNpcInfo.name + '：歡迎聊聊！');
+      };
+
+      function triggerMascotGreeting(advanceTip) {
+        if (advanceTip) npcTipIndex++;
+        state.selectedId = '__npc__';
+        state.nearId = '__npc__';
+        state.tx = mascotPctX;
+        state.ty = Math.min(86, mascotPctY + 3.8);
+        if (triggerMascotJumpFn) triggerMascotJumpFn();
+        renderDialog();
       }
       if (npcTag) {
         npcTag.addEventListener('click', function (e) {
           e.stopPropagation();
-          triggerMascotGreeting();
+          triggerMascotGreeting(state.selectedId === '__npc__');
         });
       }
 
@@ -3472,7 +3595,7 @@
             hitObj = hitObj.parent;
           }
           if (hitObj && hitObj.userData.isNPC) {
-            triggerMascotGreeting();
+            triggerMascotGreeting(state.selectedId === '__npc__');
             return;
           }
           if (hitObj && hitObj.userData.propIndex != null) {
@@ -3542,6 +3665,17 @@
       }
 
       function onStageDomClick(e) {
+        if (e.target.closest('#ac-npc-next-tip')) {
+          e.stopPropagation();
+          triggerMascotGreeting(true);
+          return;
+        }
+        if (e.target.closest('#ac-npc-guide-me')) {
+          e.stopPropagation();
+          if (triggerMascotJumpFn) triggerMascotJumpFn();
+          guideToRecommendedNode();
+          return;
+        }
         var actBtn = e.target.closest('[data-ac-act]');
         if (actBtn) {
           e.stopPropagation();
@@ -3580,6 +3714,11 @@
             e.preventDefault();
           }
         } else if (e.code === 'Space' || e.code === 'Enter') {
+          if (state.nearId === '__npc__' || state.selectedId === '__npc__') {
+            e.preventDefault();
+            triggerMascotGreeting(true);
+            return;
+          }
           var targetNode = findNode(state.nearId || state.selectedId);
           if (targetNode && state.nearId) {
             e.preventDefault();
@@ -3836,9 +3975,16 @@
           }
         }
 
-        // 檢測角色最靠近的關卡建築，並將所有 3D 建築頭頂座標投影至 HTML 木牌
+        // 檢測角色最靠近的關卡建築或島長 NPC，並將所有 3D 建築頭頂座標投影至 HTML 木牌
         var bestId = null;
         var bestDist = 13.5;
+        var npcDx = mascotPctX - state.px;
+        var npcDy = (mascotPctY + 2.5) - state.py;
+        var npcDist = Math.sqrt(npcDx * npcDx + npcDy * npcDy);
+        if (npcDist < 9.5) {
+          bestDist = npcDist;
+          bestId = '__npc__';
+        }
         for (var ni = 0; ni < nodeEntries.length; ni++) {
           var ne = nodeEntries[ni];
           var n = ne.node;

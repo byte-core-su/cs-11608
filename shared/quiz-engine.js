@@ -182,7 +182,7 @@
   function render() {
     var s = document.createElement('style'); s.textContent = STYLE; document.head.appendChild(s);
     if (C.siteTitle) document.title = C.siteTitle;
-    document.body.className = 'p-2 sm:p-4 text-slate-800';
+    document.body.className = 'p-2 sm:p-4 text-slate-800 ac-theme-bg';
 
     var hubHref = (C.hubPage || 'hub.html');
     var html = ''

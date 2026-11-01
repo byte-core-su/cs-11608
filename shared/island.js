@@ -352,6 +352,140 @@
     return { wx: newWx, wz: newWz };
   }
 
+  /* ── 3B. 地形合理擺放校正器（建築／果樹不可壓在石階、河道、瀑布池、拱橋、碼頭、崖邊或島外） ── */
+  // 各島固定裝飾物（路燈、島長、花叢、主題道具）的世界座標與佔地半徑，需與 3D 場景建構處一致
+  var LAMP_POSITIONS = [[-8.5, 5.2], [8.5, 5.2], [-11.8, -4.5], [8.5, -4.5], [-3.2, 16.5], [3.2, 16.5]];
+  var VARIANT_DECOS = {
+    hub:       [[-6.4, 3.6, 1.05]],
+    ethics:    [[16.5, 6.5, 1.55], [-16, 12, 1.1], [-12, 12, 1.1], [12, 12, 1.1], [16, 12, 1.1], [-22, -6, 1.1], [26, -3, 1.1]],
+    thinking:  [[-14.2, 7.4, 1.25], [-11.5, 6.2, 0.6], [11.5, 6.2, 0.6], [-11.5, -5.8, 0.6], [11.5, -5.8, 0.6], [-19.5, 2.0, 0.6], [16.5, 9.0, 0.6]],
+    code:      [],
+    flowchart: [],
+    arduino:   [[6.2, 4.2, 1.15], [-14.5, 9.5, 1.3], [14.5, 9.5, 1.3], [-16.5, -5.5, 1.3], [15.5, -5.5, 1.3]]
+  };
+
+  function getStaticDecos(variantKey) {
+    var list = [[-4.5, 3.6, 1.05], [-3.7, -3.1, 0.6], [3.7, -3.1, 0.6]];
+    LAMP_POSITIONS.forEach(function (lp) { list.push([lp[0], lp[1], 0.45]); });
+    (VARIANT_DECOS[variantKey] || []).forEach(function (d) { list.push(d); });
+    return list.map(function (d) { return { wx: d[0], wz: d[1], r: d[2] }; });
+  }
+
+  function riverCenterX(wz) {
+    return 20.8 - 0.0998 * (wz - 1.2);
+  }
+
+  // 回傳該點（半徑 r）是否落在不合理地形上
+  function isTerrainBlocked(wx, wz, r, variantKey, wantCliff) {
+    var pad = 0.3;
+    // 石階斜坡本體、南側入口走道與北側出口平台
+    if (wx + r > RAMP_X_MIN - 0.6 && wx - r < RAMP_X_MAX + 0.6 && wz + r > CLIFF_Z_EDGE - 2.0 && wz - r < -4.0) return true;
+    // 河道（含兩岸緩衝）與紅木拱橋
+    if (wz > -12.8 && wz < 15.2 && Math.abs(wx - riverCenterX(wz)) < 1.7 + r + pad) return true;
+    if (wx + r > 17.0 && wx - r < 24.0 && wz + r > -3.4 && wz - r < 0.4) return true;
+    // 高台池塘與瀑布
+    if (Math.sqrt((wx - 19.5) * (wx - 19.5) + (wz + 15.2) * (wz + 15.2)) < 3.8 + r + pad) return true;
+    // 南方木棧碼頭與入口步道
+    if (Math.abs(wx) < 2.6 + r && wz + r > 16.0) return true;
+    // 蒸氣木工村地面鐵軌
+    if ((variantKey === 'code' || variantKey === 'flowchart') && wx + r > -16.2 && wx - r < 14.6 && wz + r > -0.4 && wz - r < 1.4) return true;
+
+    if (wantCliff) {
+      // 必須完整站在北側高台上（不可跨崖邊、不可懸空超出高台）
+      if (wz + r > CLIFF_Z_EDGE - pad) return true;
+      if (Math.abs(wx) + r > 26.5) return true;
+      if (wz - r < -24.2) return true;
+    } else {
+      // 必須完整站在一樓草地上（不可貼住崖壁、不可落到沙灘或海上）
+      if (wz - r < CLIFF_Z_EDGE + pad) return true;
+      var ax = 40.8 - r - 1.2, az = 26.7 - r - 1.2;
+      if ((wx / ax) * (wx / ax) + (wz / az) * (wz / az) > 1) return true;
+    }
+    return false;
+  }
+
+  function relocateIslandLayout(nodes, props, variantKey) {
+    var placed = getStaticDecos(variantKey);
+    var moved = [];
+
+    function overlaps(wx, wz, r, gap) {
+      for (var i = 0; i < placed.length; i++) {
+        var o = placed[i];
+        var dx = wx - o.wx, dz = wz - o.wz;
+        if (Math.sqrt(dx * dx + dz * dz) < o.r + r + gap) return true;
+      }
+      return false;
+    }
+
+    function isValid(wx, wz, r, wantCliff, needDoor) {
+      if (isTerrainBlocked(wx, wz, r, variantKey, wantCliff)) return false;
+      if (overlaps(wx, wz, r, 0.4)) return false;
+      if (needDoor) {
+        var dz = wz + 3.15;
+        if (isTerrainBlocked(wx, dz, 0.45, variantKey, wantCliff)) return false;
+        if (overlaps(wx, dz, 0.45, 0.1)) return false;
+      }
+      return true;
+    }
+
+    function place(item, r, needDoor, label) {
+      var wx0 = pctToWorldX(item.x);
+      var wz0 = pctToWorldZ(item.y);
+      var levels = [];
+      if (Math.abs(wz0 - CLIFF_Z_EDGE) < r + 0.3 && Math.abs(wx0) <= 27.5) {
+        levels = wz0 <= CLIFF_Z_EDGE ? [true, false] : [false, true];
+      } else {
+        levels = [wz0 <= CLIFF_Z_EDGE && Math.abs(wx0) <= 27.5];
+      }
+
+      var best = null;
+      if (isValid(wx0, wz0, r, levels[0], needDoor)) {
+        best = { wx: wx0, wz: wz0 };
+      } else {
+        for (var dist = 0.5; dist <= 16 && !best; dist += 0.5) {
+          var steps = Math.max(12, Math.round(dist * 6));
+          for (var li = 0; li < levels.length && !best; li++) {
+            for (var s = 0; s < steps; s++) {
+              var ang = (s / steps) * Math.PI * 2;
+              var cx = wx0 + Math.cos(ang) * dist;
+              var cz = wz0 + Math.sin(ang) * dist;
+              if (isValid(cx, cz, r, levels[li], needDoor)) {
+                best = { wx: cx, wz: cz };
+                break;
+              }
+            }
+          }
+        }
+      }
+      if (!best) best = { wx: wx0, wz: wz0 };
+      if (best.wx !== wx0 || best.wz !== wz0) {
+        item.x = Math.round(worldToPctX(best.wx) * 10) / 10;
+        item.y = Math.round(worldToPctY(best.wz) * 10) / 10;
+        moved.push(label + ': (' + Math.round(worldToPctX(wx0)) + ',' + Math.round(worldToPctY(wz0)) + ') → (' + item.x + ',' + item.y + ')');
+      }
+      placed.push({ wx: best.wx, wz: best.wz, r: r });
+      if (needDoor) placed.push({ wx: best.wx, wz: best.wz + 3.15, r: 0.55 });
+    }
+
+    // 1. 先安置關卡建築（Dodo 機場固定在碼頭不移動）
+    nodes.forEach(function (n) {
+      if (n.id === 'dodo-airport' || n.kind === 'airport') {
+        placed.push({ wx: pctToWorldX(n.x) - 1.6, wz: pctToWorldZ(n.y), r: 0.85 });
+        return;
+      }
+      var k = String(n.kind || '');
+      var r = k === 'board' ? 1.3
+        : (k.indexOf('orchard-') === 0 && k !== 'orchard-barn' && k !== 'orchard-mill' && k !== 'orchard-greenhouse') ? 2.05
+        : 2.55;
+      place(n, r, true, '關卡 ' + n.id);
+    });
+    // 2. 再安置裝飾果樹（避開建築與其門口）
+    props.forEach(function (p, i) {
+      place(p, 1.15, false, '樹木 #' + (i + 1));
+    });
+    return moved;
+  }
+
   /* ── 4. 高畫質 PBR 3D 建築、果樹与角色模型工廠 ────────────────── */
   var ROOF_PALETTE = {
     'cottage-blue':   0x2563eb,
@@ -2618,6 +2752,11 @@
     var props = rawProps.map(function (p) {
       return Object.assign({ drops: ['🍎 果實 +1', '💰 100鈴錢'] }, p);
     });
+    // ★ 自動校正不合理擺放：建築與果樹不會出現在石階、河道、瀑布池、拱橋、碼頭、崖邊或島外
+    var layoutFixes = relocateIslandLayout(nodes, props, cfg.variant || 'hub');
+    if (layoutFixes.length && global.console) {
+      console.info('[AC_ISLAND] 已自動校正 ' + layoutFixes.length + ' 處不合理擺放：\n' + layoutFixes.join('\n'));
+    }
 
     var savedTimeMode = 'day';
     try { savedTimeMode = localStorage.getItem('ac_time_mode') || 'day'; } catch (e) {}
@@ -3273,7 +3412,7 @@
       var bulbMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfde047, emissiveIntensity: 0.85 });
       var lampHaloMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.14 });
       var groundLightMat = new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.0 });
-      [[-8.5, 5.2], [8.5, 5.2], [-8.5, -4.5], [8.5, -4.5], [-3.2, 16.5], [3.2, 16.5]].forEach(function (lp) {
+      LAMP_POSITIONS.forEach(function (lp) {
         var lg = new THREE.Group();
         var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 2.8, 10), lampMat);
         pole.position.y = 1.4;
@@ -3322,7 +3461,7 @@
       if (variantKey === 'ethics') {
         // 🍎 資訊倫理與安全（豐收果園）：原木農莊圍欄 ＋ 廣場野餐墊與豐收水果籃
         var fenceMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.78 });
-        [[-16, 12], [-12, 12], [12, 12], [16, 12], [-22, -6], [22, -6]].forEach(function (fp) {
+        [[-16, 12], [-12, 12], [12, 12], [16, 12], [-22, -6], [26, -3]].forEach(function (fp) {
           var fg = new THREE.Group();
           [-0.9, 0.9].forEach(function (px) {
             var post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.35, 8), fenceMat);
@@ -3612,7 +3751,7 @@
       var foxWx = -6.4, foxWz = 3.6;
       var robWx = 6.2,  robWz = 4.2, robWy = getExactSurfaceY(6.2, 4.2);
       var horseWx = -14.2, horseWz = 7.4;
-      var truckWx = 13.5,  truckWz = 7.8;
+      var truckWx = 16.5,  truckWz = 6.5;
 
       if (variantKey === 'hub') {
         // 🏝️ 主島大廳：僅在島長旁配置 1 隻安靜的小狐狸夥伴與河道 1 隻小鴨
@@ -4478,6 +4617,7 @@
   }
 
   global.AC_ISLAND = {
-    mount: mount
+    mount: mount,
+    _relocateLayout: relocateIslandLayout
   };
 })(window);

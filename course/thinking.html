@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['"Noto Sans TC"','system-ui','sans-serif'] } } } };</script>
-    <script src="config.js?v=20261101v6"></script>
+    <script src="config.js?v=20261101v7"></script>
     <!-- 登入（學生在闖關基地登入過，這裡沿用同一個身分） -->
     <script src="../shared/auth.js"></script>
     <!-- 計分規則（和闖關基地、教師端共用同一份） -->
@@ -48,14 +48,13 @@
     </style>
 <style>
 /* === 全站紙膠帶手作風套件（以 hub 為準，勿重複注入） === */
-body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba(120,113,108,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(120,113,108,.06) 1px,transparent 1px) !important; background-size:26px 26px !important; }
 .tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08);background:rgba(250,204,21,.3);z-index:5}
 .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
 </style>
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
-  <link rel="stylesheet" href="../shared/island.css?v=20261101v6">
+  <link rel="stylesheet" href="../shared/island.css?v=20261101v7">
   <script src="../shared/guard.js"></script>
-  <script src="../shared/island.js?v=20261101v6"></script>
+  <script src="../shared/island.js?v=20261101v7"></script>
 </head>
 <body class="ac-theme-bg min-h-screen">
     <div id="root" class="min-h-screen"></div>
@@ -967,10 +966,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 
             if (!user && loading) {
                 return (
-                    <div className="min-h-full bg-gradient-to-br from-blue-100 to-indigo-200 flex items-center justify-center p-4 font-sans">
-                        <div className="bg-white rounded-2xl shadow-xl p-10 text-center">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-indigo-600 mx-auto mb-4"></div>
-                            <p className="text-indigo-600 font-bold">登入中…</p>
+                    <div className="min-h-screen flex items-center justify-center p-4 font-sans">
+                        <div className="bg-[#fffdf5] rounded-3xl border-4 border-[#d6c7ae] shadow-xl p-10 text-center">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-amber-600 mx-auto mb-4"></div>
+                            <p className="text-amber-900 font-black">登入中…</p>
                         </div>
                     </div>
                 );
@@ -978,11 +977,11 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
 
             if (!user) {
                 return (
-                    <div className="min-h-full bg-gradient-to-br from-blue-100 to-indigo-200 flex items-center justify-center p-4 font-sans">
-                        <div className="bg-white rounded-2xl shadow-xl p-10 text-center max-w-sm">
-                            <Icons.Monitor className="w-12 h-12 text-indigo-600 mx-auto mb-3" />
-                            <p className="font-bold text-slate-700 mb-4">請先從闖關基地登入</p>
-                            <a href={(window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html'} className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold">前往闖關基地</a>
+                    <div className="min-h-screen flex items-center justify-center p-4 font-sans">
+                        <div className="bg-[#fffdf5] rounded-3xl border-4 border-[#d6c7ae] shadow-xl p-10 text-center max-w-sm">
+                            <Icons.Monitor className="w-12 h-12 text-amber-600 mx-auto mb-3" />
+                            <p className="font-black text-amber-950 mb-4">請先從闖關基地登入</p>
+                            <a href={(window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html'} className="inline-block px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full font-black shadow-md">🏝️ 前往闖關基地</a>
                         </div>
                     </div>
                 );
@@ -998,9 +997,10 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
                     {showQueryModal && <QueryModal onClose={() => setShowQueryModal(false)} userClass={user.classRoom} />}
 
                     {/* 動森 NookPhone 頂部導覽列 */}
-                    <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 pt-14 sm:pt-3">
+                    <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 pt-3">
                         <div className="ac-hud">
                             <div className="flex items-center gap-2.5">
+                                <a href={(window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html'} className="ac-pill ac-pill-btn">🏝️ 回探險島入口</a>
                                 <span className="text-2xl">🌲</span>
                                 <div>
                                     <div className="text-[11px] font-black text-emerald-700 tracking-wider">BEBRAS FOREST · 謎題神木林</div>
@@ -1212,9 +1212,5 @@ body{ background-color:#e7e5e4 !important; background-image:linear-gradient(rgba
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
-
-<!-- 返回基地按鈕（自動加入） -->
-<a id="back-to-hub" href="hub.html" title="返回闖關基地"
-   style="position:fixed;top:14px;left:14px;z-index:99999;display:inline-flex;align-items:center;gap:6px;background:#1e293b;color:#fff;font-family:'Noto Sans TC',system-ui,sans-serif;font-weight:700;font-size:14px;padding:8px 14px;border-radius:9999px;text-decoration:none;box-shadow:0 4px 12px rgba(0,0,0,.25);transition:transform .15s;" onmouseover="this.style.transform='translateX(-2px)'" onmouseout="this.style.transform=''">← 返回基地</a>
 </body>
 </html>

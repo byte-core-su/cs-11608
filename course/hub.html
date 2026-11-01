@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資訊科技 闖關基地</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="../shared/island.css">
+  <link rel="stylesheet" href="../shared/island.css?v=20261101v3">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body{
@@ -27,14 +27,14 @@
   <div id="app"></div>
 
   <!-- 全站共用計分規則（單一來源，與各關卡頁、教師端同一份） -->
-  <script src="config.js"></script>
+  <script src="config.js?v=20261101v3"></script>
 <!-- 登入：學號＋六位數驗證碼（單一來源，見 shared/auth.js）-->
 <script src="../shared/auth.js"></script>
   <script src="../shared/grading.js"></script>
   <!-- 課表與「這週有沒有上課日」的判定（教師端同一支）-->
   <script src="../shared/schedule.js"></script>
   <!-- 🏝️ 動物森友會島嶼探險引擎 -->
-  <script src="../shared/island.js"></script>
+  <script src="../shared/island.js?v=20261101v3"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut,

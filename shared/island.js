@@ -69,9 +69,21 @@
   // 快取 .glb 二進位 ArrayBuffer，支援多個獨立骨骼動畫實例 (SkinnedMesh) 零網路重抓
   var glbBufferCache = {};
   var activeGlbMixers = [];
+  var GLB_PRESETS = {
+    'RobotExpressive.glb': { refSize: 4.0,   offsetY: 0 },
+    'Fox.glb':             { refSize: 110.0, offsetY: 0 },
+    'Horse.glb':           { refSize: 185.0, offsetY: 0 },
+    'Parrot.glb':          { refSize: 80.0,  offsetY: 0 },
+    'Flamingo.glb':        { refSize: 145.0, offsetY: 0 },
+    'Stork.glb':           { refSize: 170.0, offsetY: 0 },
+    'Duck.glb':            { refSize: 1.65,  offsetY: 0 },
+    'Truck.glb':           { refSize: 4.4,   offsetY: 0 },
+    'Flower.glb':          { refSize: 0.21,  offsetY: 0 }
+  };
+
   function fetchGLBBuffer(fileName) {
     if (glbBufferCache[fileName]) return glbBufferCache[fileName];
-    var url = getSharedBaseUrl() + 'models/' + fileName;
+    var url = getSharedBaseUrl() + 'models/' + fileName + '?v=20261101v3';
     glbBufferCache[fileName] = fetch(url).then(function (res) {
       if (!res.ok) throw new Error('GLB HTTP ' + res.status);
       return res.arrayBuffer();
@@ -83,7 +95,6 @@
     if (!THREE || !THREE.GLTFLoader) return;
     opts = opts || {};
     var targetSize = opts.targetSize || 2.4;
-    var alignBottom = opts.alignBottom !== false;
     fetchGLBBuffer(fileName).then(function (buf) {
       var loader = new THREE.GLTFLoader();
       loader.parse(buf.slice(0), getSharedBaseUrl() + 'models/', function (gltf) {
@@ -91,34 +102,16 @@
         if (!model) return;
 
         var wrap = new THREE.Group();
-        model.updateMatrixWorld(true);
-        var box = new THREE.Box3().setFromObject(model);
-        var size = new THREE.Vector3();
-        var center = new THREE.Vector3();
-        box.getSize(size);
-        box.getCenter(center);
-
-        var maxDim = Math.max(size.x, size.y, size.z);
-        if (maxDim > 0.0001) {
-          var scale = targetSize / maxDim;
-          model.scale.multiplyScalar(scale);
-          model.updateMatrixWorld(true);
-          box.setFromObject(model);
-          box.getCenter(center);
-        }
-
-        model.position.x -= center.x;
-        model.position.z -= center.z;
-        if (alignBottom) {
-          model.position.y -= box.min.y;
-        } else {
-          model.position.y -= center.y;
-        }
+        var preset = GLB_PRESETS[fileName] || { refSize: 2.0, offsetY: 0 };
+        var scale = targetSize / preset.refSize;
+        model.scale.set(scale, scale, scale);
+        model.position.set(0, preset.offsetY * scale, 0);
 
         model.traverse(function (child) {
           if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
+            child.frustumCulled = false;
           }
         });
 
@@ -2668,6 +2661,7 @@
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
       +       nodesOverlayHtml
       +       '<div id="ac-npc-tag" class="ac-npc-tag" title="點擊與島長對話">🦝 島長</div>'
+      +       '<div id="ac-robot-tag" class="ac-npc-tag" style="background:linear-gradient(135deg,#0284c7,#1d4ed8);border-color:#bae6fd;color:#fff" title="點擊切換 3D 機器人骨骼動畫">🤖 3D 創客機（點我熱舞）</div>'
       +       '<div id="ac-player-tag" class="ac-player-tag">🧑‍🌾 ' + esc(cfg.playerName || '島民') + '</div>'
       +     '</div>'
       +     '<div id="ac-dialog" class="ac-dialog-bar"></div>'
@@ -2679,6 +2673,7 @@
     var overlayEl = container.querySelector('#ac-overlay');
     var playerTag = container.querySelector('#ac-player-tag');
     var npcTag    = container.querySelector('#ac-npc-tag');
+    var robotTag  = container.querySelector('#ac-robot-tag');
     var dialogEl  = container.querySelector('#ac-dialog');
     var camBtn    = container.querySelector('#ac-cam-toggle');
     var timeBtn   = container.querySelector('#ac-time-toggle');
@@ -3592,12 +3587,12 @@
       // ── 6B. 載入開源 .glb 骨骼動畫與雕塑模型群（飛鳥、小鴨、小狐狸、表情機器人、駿馬、卡車、花叢） ──
       var skyBirds = [];
       [
-        { file: 'Parrot.glb',   r: 18.5, y: 12.8, speed: 0.46, phase: 0.0, size: 2.35 },
-        { file: 'Flamingo.glb', r: 21.5, y: 14.2, speed: 0.38, phase: 2.1, size: 2.55 },
-        { file: 'Stork.glb',    r: 16.0, y: 13.5, speed: 0.42, phase: 4.2, size: 2.45 }
+        { file: 'Parrot.glb',   r: 11.5, y: 6.2, speed: 0.48, phase: 0.0, size: 2.35 },
+        { file: 'Flamingo.glb', r: 14.2, y: 7.0, speed: 0.39, phase: 2.1, size: 2.55 },
+        { file: 'Stork.glb',    r: 12.8, y: 6.6, speed: 0.43, phase: 4.2, size: 2.45 }
       ].forEach(function (bCfg) {
-        spawnGLBInstance(THREE, bCfg.file, { targetSize: bCfg.size, alignBottom: false, timeScale: 1.25 }, function (res) {
-          res.group.position.set(Math.cos(bCfg.phase) * bCfg.r, bCfg.y, Math.sin(bCfg.phase) * bCfg.r);
+        spawnGLBInstance(THREE, bCfg.file, { targetSize: bCfg.size, timeScale: 1.25 }, function (res) {
+          res.group.position.set(Math.cos(bCfg.phase) * bCfg.r, bCfg.y, 2.5 + Math.sin(bCfg.phase) * (bCfg.r * 0.65));
           worldGroup.add(res.group);
           skyBirds.push({ group: res.group, cfg: bCfg });
         });
@@ -3606,9 +3601,9 @@
       var pondDucks = [];
       [
         { cx: 19.3, cz: -15.3, r: 1.15, baseY: CLIFF_HEIGHT + 0.08, speed: 0.65, phase: 0.5 },
-        { cx: 20.6, cz: 5.2,   r: 0.95, baseY: 0.04,                speed: 0.55, phase: 2.6 }
+        { cx: 20.0, cz: 7.2,   r: 0.95, baseY: 0.06,                speed: 0.58, phase: 2.6 }
       ].forEach(function (dCfg) {
-        spawnGLBInstance(THREE, 'Duck.glb', { targetSize: 1.15 }, function (res) {
+        spawnGLBInstance(THREE, 'Duck.glb', { targetSize: 1.45 }, function (res) {
           res.group.position.set(dCfg.cx, dCfg.baseY, dCfg.cz);
           worldGroup.add(res.group);
           pondDucks.push({ group: res.group, cfg: dCfg });
@@ -3616,9 +3611,9 @@
       });
 
       // 中央廣場旁：開源 Fox.glb 骨骼動畫小狐狸夥伴（點擊可與島長一起互動跳躍）
-      var foxWx = -6.35, foxWz = 3.25;
+      var foxWx = -6.4, foxWz = 3.6;
       var foxWy = getExactSurfaceY(foxWx, foxWz);
-      spawnGLBInstance(THREE, 'Fox.glb', { targetSize: 1.95, clipName: 'Survey' }, function (res) {
+      spawnGLBInstance(THREE, 'Fox.glb', { targetSize: 2.35, clipName: 'Survey' }, function (res) {
         res.group.position.set(foxWx, foxWy, foxWz);
         res.group.rotation.y = 0.48;
         res.group.userData.isNPC = true;
@@ -3628,11 +3623,11 @@
       });
 
       // 中央廣場東側：開源 RobotExpressive.glb 骨骼動畫表情機器人（點擊可切換揮手／跳舞／跳躍／比讚動畫）
-      var robWx = 5.35, robWz = 3.45;
+      var robWx = 4.6, robWz = 3.8;
       var robWy = getExactSurfaceY(robWx, robWz);
-      spawnGLBInstance(THREE, 'RobotExpressive.glb', { targetSize: 2.65, clipName: 'Wave' }, function (res) {
+      spawnGLBInstance(THREE, 'RobotExpressive.glb', { targetSize: 3.15, clipName: 'Wave' }, function (res) {
         res.group.position.set(robWx, robWy, robWz);
-        res.group.rotation.y = -0.42;
+        res.group.rotation.y = -0.35;
         res.group.userData.isRobot = true;
         worldGroup.add(res.group);
         interactiveMeshes.push(res.group);
@@ -3650,7 +3645,7 @@
           var act = plazaRobot.actions[nextClip] || plazaRobot.actions.Wave || plazaRobot.actions.Idle;
           if (act) act.reset().play();
         }
-        var sp = projectToScreen(robWx, robWy + 3.4, robWz);
+        var sp = projectToScreen(robWx, robWy + 3.6, robWz);
         var msgMap = {
           Wave: '🤖 創客機器人：嗨！歡迎來到 3D 動森島！（揮手）',
           Dance: '🤖 創客機器人：啟動歡樂熱舞模式！💃',
@@ -3660,24 +3655,30 @@
         };
         spawnFloatScreen(sp.x, sp.y, msgMap[nextClip] || '🤖 創客機器人：嗶嗶！');
       }
+      if (robotTag) {
+        robotTag.addEventListener('click', function (e) {
+          e.stopPropagation();
+          triggerRobotPerform();
+        });
+      }
 
-      // 草原奔馳駿馬 (Horse.glb)、果園補給卡車 (Truck.glb) 與中央廣場立體雕塑花叢 (Flower.glb)
-      var horseWx = -14.6, horseWz = 3.8;
-      spawnGLBInstance(THREE, 'Horse.glb', { targetSize: 2.25, timeScale: 0.82 }, function (res) {
+      // 前景草原奔馳駿馬 (Horse.glb)、果園補給卡車 (Truck.glb) 與中央廣場立體雕塑花叢 (Flower.glb)
+      var horseWx = -9.6, horseWz = 6.2;
+      spawnGLBInstance(THREE, 'Horse.glb', { targetSize: 2.75, timeScale: 0.85 }, function (res) {
         res.group.position.set(horseWx, getExactSurfaceY(horseWx, horseWz), horseWz);
-        res.group.rotation.y = 0.65;
+        res.group.rotation.y = 0.55;
         worldGroup.add(res.group);
       });
 
-      var truckWx = -21.8, truckWz = 6.2;
-      spawnGLBInstance(THREE, 'Truck.glb', { targetSize: 2.65 }, function (res) {
+      var truckWx = 9.6, truckWz = 6.4;
+      spawnGLBInstance(THREE, 'Truck.glb', { targetSize: 3.05 }, function (res) {
         res.group.position.set(truckWx, getExactSurfaceY(truckWx, truckWz), truckWz);
-        res.group.rotation.y = 0.42;
+        res.group.rotation.y = -0.52;
         worldGroup.add(res.group);
       });
 
-      [[-3.6, 4.3], [3.6, 4.3], [-3.8, -3.2], [3.8, -3.2]].forEach(function (fp, fi) {
-        spawnGLBInstance(THREE, 'Flower.glb', { targetSize: 1.05 }, function (res) {
+      [[-3.5, 4.3], [3.5, 4.3], [-3.7, -3.1], [3.7, -3.1]].forEach(function (fp, fi) {
+        spawnGLBInstance(THREE, 'Flower.glb', { targetSize: 1.35 }, function (res) {
           res.group.position.set(fp[0], getExactSurfaceY(fp[0], fp[1]), fp[1]);
           res.group.rotation.y = fi * 1.2;
           worldGroup.add(res.group);
@@ -3818,7 +3819,7 @@
       var dragState = { active: false, moved: false, startX: 0, startY: 0, startYaw: 0 };
 
       function onPointerDown(e) {
-        if (e.target.closest('#ac-dialog') || e.target.closest('.ac-cam-btn') || e.target.closest('.ac-node') || e.target.closest('#ac-wardrobe-panel') || e.target.closest('#ac-npc-tag')) return;
+        if (e.target.closest('#ac-dialog') || e.target.closest('.ac-cam-btn') || e.target.closest('.ac-node') || e.target.closest('#ac-wardrobe-panel') || e.target.closest('#ac-npc-tag') || e.target.closest('#ac-robot-tag')) return;
         dragState.active = true;
         dragState.moved = false;
         dragState.startX = e.clientX;
@@ -4170,6 +4171,11 @@
             npcTag.style.left = Math.round(npcScr.x) + 'px';
             npcTag.style.top  = Math.round(npcScr.y) + 'px';
           }
+          if (robotTag) {
+            var robScr = projectToScreen(robWx, robWy + 3.25, robWz);
+            robotTag.style.left = Math.round(robScr.x) + 'px';
+            robotTag.style.top  = Math.round(robScr.y) + 'px';
+          }
         }
 
         // 主題環境飄浮粒子動畫
@@ -4202,10 +4208,10 @@
           var sb = skyBirds[sbi];
           var bAng = tSec * sb.cfg.speed + sb.cfg.phase;
           var bx = Math.cos(bAng) * sb.cfg.r;
-          var bz = Math.sin(bAng) * (sb.cfg.r * 0.72);
+          var bz = 2.5 + Math.sin(bAng) * (sb.cfg.r * 0.65);
           var nextAng = bAng + 0.05;
           var nbx = Math.cos(nextAng) * sb.cfg.r;
-          var nbz = Math.sin(nextAng) * (sb.cfg.r * 0.72);
+          var nbz = 2.5 + Math.sin(nextAng) * (sb.cfg.r * 0.65);
           sb.group.position.set(bx, sb.cfg.y + Math.sin(tSec * 2.1 + sbi) * 0.45, bz);
           sb.group.rotation.y = Math.atan2(nbx - bx, nbz - bz);
         }

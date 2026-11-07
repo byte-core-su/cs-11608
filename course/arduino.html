@@ -87,7 +87,7 @@
     <!-- 動森 NookPhone 頂部導覽橫幅 -->
     <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 pt-3 pb-2">
         <div class="ac-hud flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3 pl-24 sm:pl-28">
+            <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl bg-indigo-500 text-white flex items-center justify-center shadow-sm">
                     <i data-lucide="lightbulb" class="w-6 h-6"></i>
                 </div>
@@ -1052,9 +1052,20 @@
                         speaker: '🏆 第五節課：發表（做出專屬於你的作品）',
                         dialog: '前四節的決定會自動組成一張作品卡。再補上一段「我為什麼這樣設計」，完成專屬於你們這組的智慧專題！',
                         actionLabel: '🛠️ 進入第五節作品卡生成器'
+                    },
+                    {
+                        id: 'ar-board', x: 50, y: 69, kind: 'board', num: '📋',
+                        label: '專題指南看板', sub: '五節課學習地圖',
+                        speaker: '📋 未來科技島 · 專題指南看板',
+                        dialog: '💡 島上共有 5 座科技實驗艙（找問題 → 感測判斷驅動 → 選元件 → 調門檻 → 專題發表），點擊建築即可開啟 3D 模擬器與教材；也可找廣場上的「🤖 諾克號創客機」對話聽取導覽！',
+                        actionLabel: '📋 展開完整課綱卡片檢視'
                     }
                 ],
                 onOpen: function (node) {
+                    if (node.id === 'ar-board') {
+                        toggleArduinoViewMode();
+                        return;
+                    }
                     openCourseDetail(Number(node.id));
                 }
             });

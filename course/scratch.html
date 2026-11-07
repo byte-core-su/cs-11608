@@ -33,7 +33,7 @@
 <script>if (CONFIG.BLOCKS) TERMSEL.include(CONFIG.BLOCKS.CONTENT);</script>
 <link rel="stylesheet" href="../shared/theme.css">
 <link rel="stylesheet" href="../shared/island.css?v=20261107">
-<script src="../shared/island.js?v=20261107v6"></script>
+<script src="../shared/island.js?v=20261107v8"></script>
 </head>
 
 <body class="ac-theme-bg text-slate-800 min-h-screen pb-24">
@@ -48,58 +48,77 @@
      ★ 第一次進來先跑新手訓練（warmup.html）：教「怎麼把卡住的地方講出來」。
      ===================================================================== -->
 
-<main class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-4 pt-8">
+<main class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 pt-2 pb-6">
 
-  <div class="max-w-4xl mx-auto">
-    <header class="text-center mb-8 pop">
-      <span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full border
-                   border-orange-300 bg-orange-50 text-orange-700 mb-3">🐱 程式設計</span>
-      <h1 class="text-3xl sm:text-4xl font-black">
-        <span class="underline-doodle">Scratch 程式設計闖關</span>
-      </h1>
-      <p class="mt-3 text-slate-500 text-sm sm:text-base">
-        <span class="hl-b">10</span> 關全部開放，順序自己決定。一關一個作品。
-      </p>
-    </header>
+  <!-- 頂部精簡導覽列：進入島嶼直接以 3D 地圖為主畫面 -->
+  <div class="ac-hud mb-2 pop">
+    <div class="flex flex-wrap items-center justify-between gap-2.5">
+      <div class="flex items-center gap-2.5">
+        <span class="text-2xl">🐱</span>
+        <div>
+          <div class="text-[11px] font-black text-amber-800 tracking-wider">SCRATCH ALGORITHM ISLAND · 演算法與積木工坊島</div>
+          <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">Scratch 程式設計闖關（10 關全開放）</h1>
+        </div>
+      </div>
 
-    <!-- 進度摘要：兩組星星分開顯示（加起來就看不出「我到底是哪一種還沒做」） -->
-    <section class="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-8 pop">
-      <div class="tape"></div>
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-lg sm:text-xl font-black leading-relaxed text-center flex-1">
-          <span class="text-orange-600">🐱 完成 <span id="done-count">0</span> / <span id="unit-count">10</span> 關</span>
-          <span class="block sm:inline mt-1 sm:mt-0 sm:ml-3">
-            <span id="work-wrap">🧩 作品 <span id="total-star" class="text-amber-500 text-2xl font-black">0</span>⭐
-            <span class="text-slate-300 mx-1">·</span></span>
-            🧠 概念 <span id="quiz-star" class="text-indigo-500 text-2xl font-black">0</span>⭐
-          </span>
-        </h2>
-        <div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200 mx-auto sm:mx-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="ac-pill text-xs">
+          🐱 完成 <span id="done-count" class="text-orange-600 font-black">0</span>/<span id="unit-count">10</span> 關
+        </span>
+        <span class="ac-pill text-xs">
+          <span id="work-wrap">🧩 作品 <span id="total-star" class="text-amber-500 font-black">0</span>⭐ · </span>🧠 概念 <span id="quiz-star" class="text-indigo-600 font-black">0</span>⭐
+        </span>
+        <button type="button" id="open-sc-board" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900 text-xs cursor-pointer">
+          📋 學習目標＆計分看板
+        </button>
+        <div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">
           <button type="button" data-sc-view="island" class="sc-view-btn px-3 py-1 rounded-full text-xs font-black transition bg-emerald-500 text-white shadow">🏝️ 島嶼探險</button>
           <button type="button" data-sc-view="list" class="sc-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 卡片清單</button>
         </div>
       </div>
-      <p id="rules" class="text-slate-500 text-xs sm:text-sm mt-2 text-center leading-relaxed"></p>
-    </section>
+    </div>
+  </div>
 
-    <!-- 學習目標 -->
-    <section class="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-8 pop">
+  <!-- 3D 島嶼探險容器（主畫面置頂） -->
+  <div id="sc-island-mount" class="mb-6"></div>
+
+  <!-- 島上看板＆NPC 解說浮動視窗（點擊島上「📋 學習目標看板」或頂部按鈕開啟，按 Esc 可關閉） -->
+  <div id="sc-board-modal" class="ac-float-backdrop hidden">
+    <div class="ac-float-window theme-craft p-6 sm:p-8 max-w-2xl w-full mx-auto pop relative">
+      <div class="ac-window-badge">📋 演算法積木島 · 島民學習目標＆計分看板</div>
+      <div class="flex items-center justify-between border-b-2 border-amber-200 pb-3 mb-4">
+        <h2 class="font-black text-xl text-amber-950">🎯 這個模組你會學到</h2>
+        <button type="button" data-close="1" id="close-sc-board" class="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-black cursor-pointer transition">✕ 關閉 (Esc)</button>
+      </div>
+      <div class="bg-white rounded-2xl border border-amber-200 p-5 mb-4 shadow-sm">
+        <ul class="space-y-2 text-slate-700 text-sm sm:text-base">
+          <li>• 用<span class="hl">自訂積木</span>把一段會重複用到的程式包起來，像食譜裡的「基本高湯」</li>
+          <li>• 用<span class="hl">參數</span>讓同一個積木做出不一樣的結果</li>
+          <li>• 用<span class="hl">如果…那麼</span>和<span class="hl">變數</span>做出會判斷的遊戲</li>
+          <li>• 兩種<span class="hl">排序法</span>、兩種<span class="hl">搜尋法</span>，最後比一比哪一種比較快</li>
+        </ul>
+      </div>
+      <div class="bg-amber-50/90 rounded-2xl border-2 border-amber-300 p-4 text-slate-700 text-xs sm:text-sm leading-relaxed">
+        <div class="font-black text-amber-900 mb-1.5">🦫 齒輪海狸師傅的計分提醒：</div>
+        <p id="rules"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 闖關地圖（卡片清單模式） -->
+  <div id="sc-list-wrap" class="max-w-4xl mx-auto hidden pt-2">
+    <section class="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
       <div class="tape"></div>
       <h2 class="font-black text-lg mb-3">🎯 這個模組你會學到</h2>
-      <ul class="space-y-2 text-slate-700 text-sm sm:text-base">
+      <ul class="space-y-2 text-slate-700 text-sm sm:text-base mb-4">
         <li>• 用<span class="hl">自訂積木</span>把一段會重複用到的程式包起來，像食譜裡的「基本高湯」</li>
         <li>• 用<span class="hl">參數</span>讓同一個積木做出不一樣的結果</li>
         <li>• 用<span class="hl">如果…那麼</span>和<span class="hl">變數</span>做出會判斷的遊戲</li>
         <li>• 兩種<span class="hl">排序法</span>、兩種<span class="hl">搜尋法</span>，最後比一比哪一種比較快</li>
       </ul>
+      <p id="rules-list" class="text-slate-500 text-xs sm:text-sm pt-3 border-t border-slate-100 leading-relaxed"></p>
     </section>
-  </div>
 
-  <!-- 3D 島嶼探險容器 -->
-  <div id="sc-island-mount" class="mb-8"></div>
-
-  <!-- 闖關地圖（卡片清單模式） -->
-  <div id="sc-list-wrap" class="max-w-4xl mx-auto hidden">
     <section class="mb-8">
       <div class="flex items-baseline justify-between mb-4">
         <h2 class="font-black text-xl">🗺️ 闖關地圖</h2>
@@ -279,6 +298,27 @@ function mountScratchIsland(){
     actions: [{ label: '進入新手訓練 🔰', href: 'warmup.html', primary: true }]
   });
 
+  islandNodes.push({
+    id: 'sc-board-node',
+    x: 52,
+    y: 58,
+    kind: 'board',
+    icon: '📋',
+    tag: '島民佈告欄',
+    title: '📋 Scratch 學習目標＆計分規則看板',
+    shortTitle: '學習目標看板',
+    speaker: '🦫 齒輪海狸師傅 · 島民佈告欄',
+    desc: '10 關全部開放，順序自己決定！用自訂積木、參數、條件與變數做出遊戲，並比較兩種排序法與兩種搜尋法。點擊查看完整學習目標與計分規則！',
+    pass: false,
+    starsText: '闖關指南',
+    statusLabel: '看板提示',
+    locked: false,
+    actions: [{ label: '📖 查看學習目標＆計分規則', primary: true, onClick: () => {
+      const m = document.getElementById('sc-board-modal');
+      if (m) m.classList.remove('hidden');
+    }}]
+  });
+
   window.AC_ISLAND.mount(mountEl, {
     pageId: 'scratch_' + (window.CONFIG.TERM || '11502'),
     variant: 'code',
@@ -295,12 +335,15 @@ function mountScratchIsland(){
   const up = UNITS.length - NO_UP.length;
   const noUp = NO_UP.map(u => '第 ' + u.no + ' 關（' + u.name + '）').join('、');
   document.getElementById('work-wrap').style.display = WORK ? '' : 'none';
-  document.getElementById('rules').innerHTML =
+  const rulesHtml =
     (WORK ? `<b class="text-amber-600">🧩 作品星</b>：在 Scratch 做出來、上傳 .sb3，和範例比對，每關最多 3⭐（2⭐ 算過關）；` : '') +
     `<b class="text-indigo-600">🧠 概念星</b>：概念檢測五題講到幾題，每關最多 3⭐（十關滿 30）。` +
     (NO_UP.length ? `<span class="block mt-1">⚠️ <b>${noUp}沒有程式作品要交</b>，做完最後的<b>實作體驗</b>就算完成，卡片上給一枚 <b class="text-amber-600">🏅 體驗完成</b>（不是星星）。` +
       (WORK ? `所以作品星的滿分是 <b>${up} 關</b>（${up * 3}⭐）。` : '') + `</span>` : '') +
     (WORK ? `<span class="block mt-1 text-slate-400">兩組<b>分開算、不相加</b>：作品星是「做出來了沒」，概念星是「懂了沒」。</span>` : '');
+  document.getElementById('rules').innerHTML = rulesHtml;
+  const rl = document.getElementById('rules-list');
+  if (rl) rl.innerHTML = rulesHtml;
   document.getElementById('map-note').textContent = WORK ? '🧩 作品星 2⭐ 過關，最多 3⭐ ｜ 🧠 概念星最多 3⭐' : '🧠 概念星每關最多 3⭐';
   document.getElementById('upload-note').innerHTML = WORK
     ? '最後一步把作品<b>上傳評分</b>，拿作品星。'
@@ -310,6 +353,16 @@ function mountScratchIsland(){
 function repaint(){ renderStages(); renderTotal(); mountScratchIsland(); }
 
 document.addEventListener('click', function (e) {
+  if (e.target.closest('#open-sc-board')) {
+    const m = document.getElementById('sc-board-modal');
+    if (m) m.classList.remove('hidden');
+    return;
+  }
+  if (e.target.closest('#close-sc-board') || e.target.id === 'sc-board-modal') {
+    const m = document.getElementById('sc-board-modal');
+    if (m) m.classList.add('hidden');
+    return;
+  }
   const vb = e.target.closest('.sc-view-btn');
   if (vb) {
     scViewMode = vb.getAttribute('data-sc-view') || 'island';

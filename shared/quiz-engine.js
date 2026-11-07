@@ -196,12 +196,12 @@
 
     // 2. 章節選擇（動森島嶼探險 ＋ 清單雙模式）
     +   '<div id="chapter-screen" class="hidden animate-pop">'
-    +     '<div class="ac-hud mb-5">'
-    +       '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">'
-    +         '<div>'
-    +           '<h2 id="welcome-info" class="text-xs font-extrabold text-amber-800 mb-0.5"></h2>'
-    +           '<h2 class="text-xl sm:text-2xl font-black text-amber-950">⚖️ 資訊倫理 · 法治森林村落</h2>'
-    +           '<p id="chapter-progress" class="mt-1 text-xs sm:text-sm font-bold text-stone-600">讀取進度中…</p>'
+    +     '<div class="ac-hud mb-2 py-2.5 px-4">'
+    +       '<div class="flex flex-wrap items-center justify-between gap-2">'
+    +         '<div class="flex items-center gap-2.5 flex-wrap">'
+    +           '<h2 class="text-base sm:text-lg font-black text-amber-950">' + (C.headline || '⚖️ 資訊倫理 · 法治森林村落') + '</h2>'
+    +           '<span id="welcome-info" class="text-xs font-extrabold text-amber-800"></span>'
+    +           '<span id="chapter-progress" class="ac-pill text-xs font-bold text-stone-700">讀取進度中…</span>'
     +         '</div>'
     +         '<div class="flex items-center gap-2 flex-wrap">'
     +           C.chapters.map(function (ch) {
@@ -214,7 +214,7 @@
     +         '</div>'
     +       '</div>'
     +     '</div>'
-    +     '<div id="qz-island-mount" class="mb-6"></div>'
+    +     '<div id="qz-island-mount" class="mb-4"></div>'
     +     '<div id="qz-list-wrap" class="glass-card p-8 max-w-2xl mx-auto hidden">'
     +       '<p class="mb-4 text-xs text-slate-400 text-center leading-relaxed">💡 小提示：<span class="hl">章節大標題也是測驗</span>，點下去可一次挑戰整章；下方小方塊則是單一小節的測驗。</p>'
     +       '<div class="space-y-6">' + C.chapters.map(chapterCard).join('') + '</div>'
@@ -508,6 +508,38 @@
       });
     }
 
+    var boardActions = C.chapters.filter(function (ch) { return !!ch.pdf; }).map(function (ch, idx) {
+      return {
+        label: '📄 開啟 ' + ch.title.split('：')[0] + ' 教材 PDF',
+        primary: idx === 0,
+        onClick: function () { window.open(ch.pdf, '_blank'); }
+      };
+    });
+    boardActions.push({
+      label: '📋 切換章節清單檢視',
+      primary: boardActions.length === 0,
+      onClick: function () {
+        var listBtn = document.querySelector('[data-qz-view="list"]');
+        if (listBtn) listBtn.click();
+      }
+    });
+    islandNodes.push({
+      id: 'qz-board-node',
+      x: 42,
+      y: 62,
+      kind: 'board',
+      icon: '📋',
+      tag: '果園說明看板',
+      title: '📋 果園闖關規則＆教材看板',
+      shortTitle: '闖關規則看板',
+      desc: '💡 點擊島上「果樹」可先讀小節重點整理，再進行連對 10 題挑戰；點擊「大穀倉／風車果坊」則可一次挑戰整章綜合測驗！也可與廣場上的「🐿️ 蘋蘋松鼠園長」對話聽取攻略。',
+      pass: true,
+      starsText: '果園指南',
+      statusLabel: '點擊查看',
+      locked: false,
+      actions: boardActions
+    });
+
     var startId  = firstUnpassed || ORDER[0];
     var startLay = layout[startId] || { x: 22, y: 66 };
     var sig = qzViewMode + '|' + (user.name || '') + '|' + ORDER.map(function (id) {
@@ -526,6 +558,7 @@
       onOpen: function (node) {
         if (!node) return;
         if (node.id === 'qz-practice-node') startPractice();
+        else if (node.id === 'qz-board-node') { if (boardActions[0]) boardActions[0].onClick(); }
         else openChapter(node.id);
       },
       nodes: islandNodes

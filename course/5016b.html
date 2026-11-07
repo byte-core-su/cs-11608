@@ -1963,9 +1963,20 @@
                         speaker: '🏆 第五節課：自己的專案（從想法到成果）',
                         dialog: '換你出題當島嶼工程師！挑一個家裡會遇到的情境，自由組合超音波、旋鈕、馬達與燈條，完成專屬設計單與成果卡！',
                         actionLabel: '🛠️ 進入第五節專題工坊'
+                    },
+                    {
+                        id: 'ar-board', x: 50, y: 69, kind: 'board', num: '📋',
+                        label: '專題指南看板', sub: '五節課學習地圖',
+                        speaker: '📋 未來科技島 · 專題指南看板',
+                        dialog: '💡 島上共有 5 座科技實驗艙（自動閘門 → 接近亮燈 → 無段風扇 → 三原色光球 → 創客研發總部），點擊建築即可開啟 3D 硬體模擬器；也可找廣場上的「🤖 諾克號創客機」對話聽取導覽！',
+                        actionLabel: '📋 展開完整課綱卡片檢視'
                     }
                 ],
                 onOpen: function (node) {
+                    if (node.id === 'ar-board') {
+                        toggleArduinoViewMode();
+                        return;
+                    }
                     openCourseDetail(Number(node.id));
                 }
             });

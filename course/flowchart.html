@@ -1102,22 +1102,25 @@
             </button>`;
         }).join('');
         el.innerHTML = `
-          <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 py-3">
-            <header class="ac-hud mb-5 relative pop">
-              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <div class="text-xs font-extrabold text-amber-800 mb-0.5">🏡 創客木工島 · 流程圖與程式設計${state.studentName?`　｜　島民 ${state.studentName}`:''}</div>
-                  <h1 class="text-lg sm:text-2xl font-black text-amber-950 leading-relaxed">
-                    <span class="inline-block text-emerald-700">🧩 流程圖 ${doneCount}/${UNITS.length} 關 (${doneCount*STARS_PER_UNIT}⭐)</span>
-                    <span class="text-stone-300 mx-1.5">|</span>
-                    <span class="inline-block text-orange-700">🐱 程式 ${progDoneCount}/${UNITS.length} 關 (${progStarTotal}⭐)</span>
-                    <span class="text-stone-300 mx-1.5">|</span>
-                    <span class="inline-block text-amber-600">🎁 加分 ${bonusAll}⭐ ＝ 合計 ${grand}⭐</span>
-                  </h1>
-                  <p class="text-stone-600 text-xs sm:text-sm font-medium mt-0.5"><b class="text-emerald-700">十關全部開放</b>，順序自己決定：排流程圖(+${STARS_PER_UNIT}⭐) → ${WORK ? '寫 Scratch 上傳評分（最多 3⭐）' : '寫 Scratch，作品交給老師'}。看不懂先讀 <a href="reference.html" class="text-amber-800 underline font-black">📖 參考說明</a>。</p>
+          <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 pt-2 pb-4">
+            <header class="ac-hud mb-2 relative pop">
+              <div class="flex flex-wrap items-center justify-between gap-2.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-2xl">⚙️</span>
+                  <div>
+                    <div class="text-[11px] font-extrabold text-amber-800 tracking-wider">🏡 創客木工島 · 流程圖與程式設計${state.studentName?`　｜　島民 ${state.studentName}`:''}</div>
+                    <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">
+                      <span class="inline-block text-emerald-700">🧩 流程圖 ${doneCount}/${UNITS.length} 關 (${doneCount*STARS_PER_UNIT}⭐)</span>
+                      <span class="text-stone-300 mx-1">|</span>
+                      <span class="inline-block text-orange-700">🐱 程式 ${progDoneCount}/${UNITS.length} 關 (${progStarTotal}⭐)</span>
+                      <span class="text-stone-300 mx-1">|</span>
+                      <span class="inline-block text-amber-600">🎁 加分 ${bonusAll}⭐ ＝ 合計 ${grand}⭐</span>
+                    </h1>
+                  </div>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap shrink-0">
-                  <button id="toggle-lead" class="ac-pill ac-pill-btn ${state.leadDone?'bg-emerald-50 border-emerald-300 text-emerald-800':'bg-teal-100 border-teal-400 text-teal-900'}">
+                  <a href="reference.html" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900 text-xs">📖 參考說明</a>
+                  <button id="toggle-lead" class="ac-pill ac-pill-btn text-xs ${state.leadDone?'bg-emerald-50 border-emerald-300 text-emerald-800':'bg-teal-100 border-teal-400 text-teal-900'}">
                     <span>${state.leadDone?'✅':'🔰'} 前導：${LEAD.title}</span>
                     <span class="text-xs font-black">${state.leadOpen?'▾ 收合':'▸ 展開'}</span>
                   </button>
@@ -1130,12 +1133,12 @@
             </header>
             ${(()=>{ /* 有退件就在最上面講，不要讓他一關一關翻才發現 */
               const n = UNITS.filter(u => !(state.imgUnits||{})[u.id] && (state.imgReview||{})[u.id]).length;
-              return n ? `<div class="bg-rose-50 border-2 border-rose-300 rounded-2xl px-4 py-3 mb-4 flex items-start gap-3">
-                <span class="text-2xl flex-shrink-0">↩️</span>
-                <div class="flex-1 text-sm text-rose-800 leading-relaxed"><b>老師已經看過你交的作業，有 ${n} 關需要補件。</b>
+              return n ? `<div class="bg-rose-50 border-2 border-rose-300 rounded-2xl px-4 py-2.5 mb-2 flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">↩️</span>
+                <div class="flex-1 text-xs sm:text-sm text-rose-800 leading-relaxed"><b>老師已經看過你交的作業，有 ${n} 關需要補件。</b>
                   標了「↩️ 補件」的關卡寫著原因，改好之後到 Google Classroom 重新繳交就可以拿到加分⭐。</div>
               </div>` : ''; })()}
-            ${state.leadMsg?`<div class="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3 mb-4 text-sm text-amber-800 leading-relaxed pop">⚠️ ${state.leadMsg}</div>`:''}
+            ${state.leadMsg?`<div class="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-2 mb-2 text-xs sm:text-sm text-amber-800 leading-relaxed pop">⚠️ ${state.leadMsg}</div>`:''}
             ${state.leadOpen?`
               <div class="ac-float-backdrop">
                 <div class="ac-float-window theme-craft p-5 sm:p-7 max-w-5xl mx-auto pop">
@@ -1154,6 +1157,9 @@
               <div id="fc-island-mount" class="mb-6"></div>
             ` : `
               <div class="max-w-4xl mx-auto">
+                <div class="bg-white/90 border-2 border-amber-200 rounded-2xl px-4 py-3 mb-4 text-stone-600 text-xs sm:text-sm font-medium">
+                  <b class="text-emerald-700">十關全部開放</b>，順序自己決定：排流程圖(+${STARS_PER_UNIT}⭐) → ${WORK ? '寫 Scratch 上傳評分（最多 3⭐）' : '寫 Scratch，作品交給老師'}。看不懂先讀 <a href="reference.html" class="text-amber-800 underline font-black">📖 參考說明</a>。
+                </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${cards}</div>
                 ${morningstarCard()}
               </div>
@@ -1257,6 +1263,28 @@
             flagKind: 'next',
             locked: false,
             actions: [{ label: state.leadOpen ? '收合前導教材' : '打開清單學習機 🔰', primary: true, onClick: () => { state.leadOpen = !state.leadOpen; render(); } }]
+          });
+
+          // 📋 島民闖關規則＆參考說明看板
+          islandNodes.push({
+            id: 'fc-board-node',
+            x: 52,
+            y: 58,
+            kind: 'board',
+            icon: '📋',
+            tag: '島民佈告欄',
+            title: '📋 流程圖＆程式設計闖關看板',
+            shortTitle: '闖關規則看板',
+            speaker: '🦫 齒輪海狸師傅 · 島民佈告欄',
+            desc: `十關全部開放，順序自己決定：排流程圖(+${STARS_PER_UNIT}⭐) → ${WORK ? '寫 Scratch 上傳評分（最多 3⭐）' : '寫 Scratch，作品交給老師'}。看不懂先讀參考說明！`,
+            pass: false,
+            starsText: '闖關指南',
+            statusLabel: '看板提示',
+            locked: false,
+            actions: [
+              { label: '📖 打開參考說明書 →', href: 'reference.html', primary: true },
+              { label: '🔰 開啟前導教材', primary: false, onClick: () => { state.leadOpen = true; render(); } }
+            ]
           });
 
           // 🌟 晨星勇者黃金齒輪神殿

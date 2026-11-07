@@ -1044,8 +1044,8 @@
                         </div>
                     </div>
 
-                    {/* 當前選擇關卡的即時狀態與本班通關人數提示條 */}
-                    {selectedChallenge && (
+                    {/* 當前選擇關卡的即時狀態與本班通關人數提示條（僅清單模式顯示，避免擠壓 3D 島嶼地圖） */}
+                    {selectedChallenge && viewMode !== 'island' && (
                         <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 mb-2">
                             <div className="bg-amber-50/95 border-2 border-amber-400 rounded-2xl px-4 py-2.5 shadow-md flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 text-sm font-bold text-amber-950">

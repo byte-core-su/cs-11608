@@ -3103,9 +3103,21 @@
           '在浮動視窗開啟時，背景的 3D 攝影機會自動推進特寫該座科技建築喔！',
           '切換到「🌙 璀璨星夜」模式，整座科技島的光電迴路與霓虹圓頂都會閃閃發光！'
         ]
+      },
+      scratch: {
+        name: '🦫 齒輪海狸師傅',
+        role: '下學期 Scratch 演算法工坊總導師',
+        tips: [
+          '歡迎來到下學期的「Scratch 演算法蒸氣工坊」！先去廣場旁的「🤖 暖身訓練塔」完成積木暖身，或點「📋 學習目標＆計分看板」查看規則吧！',
+          '這個模組你會學到：📦 函式與模組化（把重複動作包成自訂積木）、🔧 參數傳遞（加輸入孔控制方向與次數）、🔍 排序與搜尋演算法！',
+          '島上 10 座工坊全部開放、不限順序！點擊任一工坊可下載範本並查看提示，做好後把 .sb3 檔上傳批改。',
+          '每一關有兩顆星：⭐ 作品星（上傳 .sb3 並通過結構檢查）＋ 💡 觀念星（回答作品裡的一道延伸問題，答錯不扣作品星）！',
+          '十關全部完成後，別忘了前往北邊高台的「🏛️ 黃金齒輪神殿」挑戰隱藏魔王關喔！'
+        ]
       }
     };
-    var currentNpcInfo = npcInfoMap[cfg.variant || 'hub'] || npcInfoMap.hub;
+    var isScratchPage = String(cfg.pageId || '').indexOf('scratch') === 0;
+    var currentNpcInfo = (isScratchPage && npcInfoMap.scratch) ? npcInfoMap.scratch : (npcInfoMap[cfg.variant || 'hub'] || npcInfoMap.hub);
     var npcTipIndex = 0;
     var triggerMascotJumpFn = null;
 

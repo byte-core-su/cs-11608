@@ -709,7 +709,7 @@
       +       pinsHtml
       +       '<div id="dal-player-tag" class="ac-player-tag">🧑‍🌾 島民旅客</div>'
       +     '</div>'
-      +     '<div id="dal-3d-dialog" class="ac-dialog-bar"></div>'
+      +     '<div id="dal-3d-dialog" class="ac-dialog-bar hidden"></div>'
       +   '</div>'
       + '</div>';
 
@@ -722,10 +722,12 @@
 
     var state = {
       selectedTerm: activeTermId,
+      dialogOpen: false,
+      dismissedTerm: null,
       px: 0,
       pz: 5.8,
-      tx: (FLIGHT_ROUTES[activeTermId] || FLIGHT_ROUTES['11501']).standWx,
-      tz: (FLIGHT_ROUTES[activeTermId] || FLIGHT_ROUTES['11501']).standWz,
+      tx: null,
+      tz: null,
       heading: Math.PI,
       walking: false,
       keys: {},
@@ -740,13 +742,17 @@
 
     var counterGroups = {};
 
-    function selectCounter(termId, walkThere) {
+    function selectCounter(termId, walkThere, showDialogNow) {
       if (!FLIGHT_ROUTES[termId] || state.boarding) return;
       state.selectedTerm = termId;
       var route = FLIGHT_ROUTES[termId];
       if (walkThere) {
         state.tx = route.standWx;
         state.tz = route.standWz;
+        state.dismissedTerm = null;
+      }
+      if (showDialogNow !== undefined) {
+        state.dialogOpen = !!showDialogNow;
       }
       if (teacherLink) {
         teacherLink.href = ROOT + 'course/teacher.html?term=' + encodeURIComponent(termId);
@@ -757,7 +763,7 @@
       }
       var pins = hostEl.querySelectorAll('[data-counter-pin]');
       for (var i = 0; i < pins.length; i++) {
-        pins[i].classList.toggle('is-near', pins[i].getAttribute('data-counter-pin') === termId);
+        pins[i].classList.toggle('is-near', state.dialogOpen && pins[i].getAttribute('data-counter-pin') === termId);
       }
       renderBottomDialog();
     }
@@ -769,6 +775,7 @@
       var destHref = ROOT + targetPath + (String(targetPath).indexOf('?') >= 0 ? '&' : '?') + 'term=' + encodeURIComponent(termId);
 
       state.boarding = true;
+      state.dialogOpen = true;
       state.selectedTerm = termId;
       state.takeoffStart = performance.now();
       if (valid(termId)) write(termId);
@@ -782,7 +789,7 @@
 
       var stamp = document.createElement('div');
       stamp.className = 'dal-stamp-seal';
-      stamp.style.top = '18px';
+      stamp.style.top = '10px';
       stamp.style.right = '24px';
       stamp.innerHTML = '🦤 DODO AIRLINES · ' + escHtml(route.gate) + '<br>准予登機 APPROVED';
       dialogEl.appendChild(stamp);
@@ -794,6 +801,12 @@
 
     function renderBottomDialog() {
       if (!dialogEl) return;
+      if (!state.dialogOpen && !state.boarding) {
+        dialogEl.classList.add('hidden');
+        return;
+      }
+      dialogEl.classList.remove('hidden');
+
       var termId = state.selectedTerm || '11501';
       var termObj = info(termId) || { id: termId, name: termId, short: termId };
       var route = FLIGHT_ROUTES[termId] || FLIGHT_ROUTES['11501'];
@@ -801,15 +814,11 @@
       var otherRoute = FLIGHT_ROUTES[otherTermId];
 
       var islandsBadges = route.islands.map(function (isl) {
-        return '<span class="inline-flex items-center gap-1 bg-amber-50 border border-amber-300 text-amber-950 text-xs font-black px-2.5 py-1 rounded-xl shadow-sm" title="' + escHtml(isl.sub) + '">'
+        return '<span class="inline-flex items-center gap-1 bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-black px-2 py-0.5 rounded-lg" title="' + escHtml(isl.sub) + '">'
           + '<span>' + isl.icon + '</span>'
           + '<span>' + escHtml(isl.name) + '</span>'
           + '</span>';
       }).join('');
-
-      var speechText = state.boarding
-        ? ('叮咚！已為您蓋上「' + route.flightNo + '」登機章！窗外的水上飛機螺旋槳已全速運轉，正在起飛前往【' + route.archipelago + '】——祝您探險愉快！')
-        : route.orvillePitch;
 
       var speakerBg = termId === '11501'
         ? 'background:linear-gradient(90deg,#0284c7,#0369a1)'
@@ -819,23 +828,23 @@
         + '<div class="ac-dialog-speaker" style="' + speakerBg + '">'
         +   escHtml(route.counterNo + ' · ' + route.gate + ' (' + route.flightNo + ') · ' + route.staffName)
         + '</div>'
-        + '<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">'
+        + '<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-0.5">'
         +   '<div class="min-w-0 flex-1 text-left">'
         +     '<div class="flex items-center gap-2 flex-wrap">'
-        +       '<h3 class="text-base sm:text-lg font-black text-amber-950">🏝️ ' + escHtml(termObj.name + '（' + (termObj.short || termObj.id) + '）· ' + route.archipelago) + '</h3>'
-        +       '<span class="text-xs font-extrabold text-sky-800 bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-full">' + escHtml(route.weather) + '</span>'
+        +       '<h3 class="text-sm sm:text-base font-black text-amber-950">🏝️ ' + escHtml(termObj.name + '（' + (termObj.short || termObj.id) + '）· ' + route.archipelago) + '</h3>'
+        +       (state.boarding ? '<span class="text-xs font-black text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">✈️ 螺旋槳全速起飛中…</span>' : '')
         +     '</div>'
-        +     '<p class="text-xs sm:text-sm text-stone-700 font-bold mt-1 leading-relaxed">' + escHtml(speechText) + '</p>'
-        +     '<div class="flex items-center gap-1.5 flex-wrap mt-2">'
-        +       '<span class="text-[11px] font-black text-stone-500 mr-1">🗺️ 停靠 4 座小島：</span>'
+        +     '<div class="flex items-center gap-1.5 flex-wrap mt-1.5">'
+        +       '<span class="text-[11px] font-black text-stone-500">🗺️ 航線停靠：</span>'
         +       islandsBadges
         +     '</div>'
         +   '</div>'
         +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
-        +     '<button type="button" data-switch-other="' + escHtml(otherTermId) + '" class="ac-btn-secondary text-xs sm:text-sm cursor-pointer">'
-        +       '🚶 走向' + escHtml(otherRoute.counterNo) + ' (' + escHtml(otherTermId === '11501' ? '上學期' : '下學期') + ')'
+        +     '<button type="button" data-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起櫃台資訊，欣賞 3D 登機室">✕ 收起</button>'
+        +     '<button type="button" data-switch-other="' + escHtml(otherTermId) + '" class="ac-btn-secondary text-xs cursor-pointer">'
+        +       '🚶 走向' + escHtml(otherRoute.counterNo)
         +     '</button>'
-        +     '<button type="button" data-board-now="' + escHtml(termId) + '" class="px-5 py-2.5 rounded-2xl font-black text-xs sm:text-sm cursor-pointer transition transform active:scale-95 ' + route.btnClass + '">'
+        +     '<button type="button" data-board-now="' + escHtml(termId) + '" class="px-4 py-2 rounded-2xl font-black text-xs sm:text-sm cursor-pointer transition transform active:scale-95 ' + route.btnClass + '">'
         +       (state.boarding ? '✈️ 水上飛機起飛中…' : ('✈️ 辦理登機・飛往 ' + escHtml(termObj.short || termObj.id) + ' 群島 →'))
         +     '</button>'
         +   '</div>'
@@ -853,19 +862,25 @@
     }
 
     hostEl.addEventListener('click', function (e) {
+      if (e.target.closest('[data-close-dialog]')) {
+        state.dialogOpen = false;
+        state.dismissedTerm = state.selectedTerm;
+        renderBottomDialog();
+        return;
+      }
       var gotoBtn = e.target.closest('[data-goto-counter]');
       if (gotoBtn) {
-        selectCounter(gotoBtn.getAttribute('data-goto-counter'), true);
+        selectCounter(gotoBtn.getAttribute('data-goto-counter'), true, true);
         return;
       }
       var pinEl = e.target.closest('[data-counter-pin]');
       if (pinEl) {
-        selectCounter(pinEl.getAttribute('data-counter-pin'), true);
+        selectCounter(pinEl.getAttribute('data-counter-pin'), true, true);
         return;
       }
       var swBtn = e.target.closest('[data-switch-other]');
       if (swBtn) {
-        selectCounter(swBtn.getAttribute('data-switch-other'), true);
+        selectCounter(swBtn.getAttribute('data-switch-other'), true, true);
         return;
       }
       var boardBtn = e.target.closest('[data-board-now]');
@@ -1186,27 +1201,37 @@
             obj = obj.parent;
           }
           if (obj && obj.userData.termId) {
-            selectCounter(obj.userData.termId, true);
+            selectCounter(obj.userData.termId, true, true);
             return;
           }
         }
 
-        // 點擊地板時走向該位置
+        // 點擊地板時走向該位置並自動收起櫃台解說框，避免擋住主畫面
         var floorHits = raycaster.intersectObject(floorMesh, false);
         if (floorHits.length > 0) {
           var pt = floorHits[0].point;
           state.tx = Math.max(-11.5, Math.min(11.5, pt.x));
           state.tz = Math.max(0.2, Math.min(8.2, pt.z));
+          if (state.dialogOpen) {
+            state.dialogOpen = false;
+            renderBottomDialog();
+          }
         }
       }
 
       function onKeyDown(e) {
         var tag = (e.target && e.target.tagName) || '';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (e.code === 'Escape' && state.dialogOpen) {
+          state.dialogOpen = false;
+          state.dismissedTerm = state.selectedTerm;
+          renderBottomDialog();
+          return;
+        }
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
           state.keys[e.code] = true;
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
-        } else if (e.code === 'Enter' || e.code === 'Space') {
+        } else if ((e.code === 'Enter' || e.code === 'Space') && state.dialogOpen) {
           e.preventDefault();
           triggerBoarding(state.selectedTerm);
         }
@@ -1292,14 +1317,24 @@
         state.px = Math.max(-11.8, Math.min(11.8, state.px));
         state.pz = Math.max(0.25, Math.min(8.4, state.pz));
 
-        // 依角色位置自動切換最靠近的櫃台
+        // 只有當角色真正走近左、右櫃台時才顯示底部解說框；離開櫃台範圍即自動收起，不遮擋主畫面！
         if (!state.boarding) {
           var d1 = Math.hypot(state.px - FLIGHT_ROUTES['11501'].standWx, state.pz - FLIGHT_ROUTES['11501'].standWz);
           var d2 = Math.hypot(state.px - FLIGHT_ROUTES['11502'].standWx, state.pz - FLIGHT_ROUTES['11502'].standWz);
-          if (d1 < 3.4 && state.selectedTerm !== '11501') {
-            selectCounter('11501', false);
-          } else if (d2 < 3.4 && state.selectedTerm !== '11502') {
-            selectCounter('11502', false);
+          if (d1 < 2.4) {
+            if (state.dismissedTerm !== '11501' && (!state.dialogOpen || state.selectedTerm !== '11501')) {
+              selectCounter('11501', false, true);
+            }
+          } else if (d2 < 2.4) {
+            if (state.dismissedTerm !== '11502' && (!state.dialogOpen || state.selectedTerm !== '11502')) {
+              selectCounter('11502', false, true);
+            }
+          } else if (d1 > 2.8 && d2 > 2.8) {
+            state.dismissedTerm = null;
+            if (state.dialogOpen && state.tx === null) {
+              state.dialogOpen = false;
+              renderBottomDialog();
+            }
           }
         }
 
@@ -1403,7 +1438,7 @@
         state.rafId = requestAnimationFrame(animate);
       }
 
-      selectCounter(state.selectedTerm, false);
+      selectCounter(state.selectedTerm, false, false);
       state.rafId = requestAnimationFrame(animate);
 
       cleanupThree = function () {

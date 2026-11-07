@@ -24,6 +24,9 @@
   'use strict';
 
   var SITE = global.SITE || {};
+  if (SITE.SCHOOL && (!SITE.SCHOOL.NAME || SITE.SCHOOL.NAME === '○○國中')) {
+    SITE.SCHOOL.NAME = '高雄市立前峰國中';
+  }
   var LIST = (SITE.TERMS || []).filter(function (t) { return t && /^[\w-]{1,20}$/.test(String(t.id || '')); });
   var KEY = 'cs-term';
 

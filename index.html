@@ -3,43 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>資訊科技闖關系統</title>
+  <title>Dodo Airlines 水上機場搭機櫃台 · 資訊科技闖關系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="config.js"></script>
-  <script src="shared/term.js"></script>
-  <link rel="stylesheet" href="shared/island.css">
+  <script src="shared/term.js?v=20261107v2"></script>
+  <link rel="stylesheet" href="shared/island.css?v=20261107v2">
   <style>
     body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
   </style>
 </head>
-<body class="ac-theme-bg min-h-screen text-slate-800 p-5">
-  <main class="max-w-xl mx-auto mt-10 sm:mt-16 text-center">
-    <p id="school" class="text-sm font-bold tracking-widest text-slate-500"></p>
-    <h1 class="text-3xl font-black mt-2">資訊科技闖關系統</h1>
-    <p class="text-slate-500 text-sm mt-2">選一個學期開始 🚀</p>
-    <div id="terms" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8"></div>
-    <p class="mt-10 text-xs text-slate-400">老師：<a id="teacher" href="course/teacher.html" class="underline hover:text-slate-600">教師管理後台</a></p>
-  </main>
+<body class="ac-theme-bg min-h-screen text-slate-800 p-3 sm:p-6 flex items-center justify-center">
+  <main id="airport-terminal-mount" class="w-full max-w-5xl mx-auto my-4"></main>
   <script>
     (function () {
-      var S = window.SITE || {}, T = window.TERMSEL;
-      var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-      document.getElementById('school').textContent = [(S.SCHOOL || {}).NAME, (S.SCHOOL || {}).GRADE].filter(Boolean).join(' ');
-      var now = T.byDate(), ICON = ['📘', '📗', '📙', '📕'];
-      document.getElementById('terms').innerHTML = T.list.map(function (t, i) {
-        var cur = t.id === now;
-        return '<a href="' + esc(T.url('course/hub.html', t.id)) + '" data-term="' + esc(t.id) + '" class="relative block bg-white rounded-2xl border-2 ' +
-          (cur ? 'border-indigo-400 shadow-lg' : 'border-slate-200 shadow-sm') + ' p-6 hover:shadow-xl hover:-translate-y-0.5 transition">' +
-          (cur ? '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">目前學期</span>' : '') +
-          '<div class="text-4xl mb-2">' + ICON[i % ICON.length] + '</div>' +
-          '<div class="text-xl font-black">' + esc(t.name) + '</div>' +
-          '<div class="text-xs text-slate-400 font-bold mt-1">' + esc(t.short || t.id) + '</div></a>';
-      }).join('');
-      document.getElementById('terms').addEventListener('click', function (e) {
-        var a = e.target.closest('[data-term]'); if (a) T.choose(a.dataset.term);
-      });
-      document.getElementById('teacher').href = T.url('course/teacher.html', now);
+      var mountEl = document.getElementById('airport-terminal-mount');
+      if (window.TERMSEL && window.TERMSEL.renderAirportCounter) {
+        window.TERMSEL.renderAirportCounter(mountEl, {
+          targetPath: 'course/hub.html',
+          isModal: false,
+          showTeacherLink: true
+        });
+      }
     })();
   </script>
 </body>

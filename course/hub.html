@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資訊科技 闖關基地</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="../shared/island.css?v=20261101v7">
+  <link rel="stylesheet" href="../shared/island.css?v=20261107v2">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body{
@@ -28,14 +28,14 @@
 
   <!-- 全站共用計分規則（單一來源，與各關卡頁、教師端同一份） -->
   <script src="../config.js"></script>
-  <script src="../shared/term.js"></script>
+  <script src="../shared/term.js?v=20261107v2"></script>
 <!-- 登入：學號＋六位數驗證碼（單一來源，見 shared/auth.js）-->
 <script src="../shared/auth.js"></script>
   <script src="../shared/grading.js"></script>
   <!-- 課表與「這週有沒有上課日」的判定（教師端同一支）-->
   <script src="../shared/schedule.js"></script>
   <!-- 🏝️ 動物森友會島嶼探險引擎 -->
-  <script src="../shared/island.js?v=20261107"></script>
+  <script src="../shared/island.js?v=20261107v2"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut,
@@ -108,7 +108,7 @@
       const others = ((window.TERMSEL && window.TERMSEL.list) || []).length > 1;
       return `<span class="inline-flex items-center gap-1.5 text-xs font-bold bg-white/80 text-slate-600 border border-slate-200 rounded-full px-3 py-1">
         ${window.CONFIG.TERM === (((window.TERMSEL && window.TERMSEL.list)||[])[0]||{}).id ? '📘' : '📗'} ${esc(window.CONFIG.TERM_NAME || '')}（${esc(window.CONFIG.TERM_SHORT || window.CONFIG.TERM)}）
-        ${others ? `<a href="../index.html?pick=1" class="text-indigo-600 underline">切換學期</a>` : ''}</span>`;
+        ${others ? `<button type="button" data-open-airport="1" class="ml-1 inline-flex items-center gap-1 bg-sky-600 hover:bg-sky-700 text-white font-black px-2.5 py-0.5 rounded-full shadow-sm transition cursor-pointer">✈️ 機場櫃台・切換學期</button>` : ''}</span>`;
     }
 
     // ===== 關卡定義：每一學期的卡片寫在 {學期}/config.js 的 MODULES =====
@@ -761,6 +761,37 @@
           });
         }
 
+        // 南方 Dodo Airlines 水上機場碼頭：開啟「機場搭機櫃台場景」切換上下學期島嶼
+        const otherTerm = ((window.TERMSEL && window.TERMSEL.list) || []).find(t => t.id !== window.CONFIG.TERM);
+        islandNodes.push({
+          id: 'dodo-airport',
+          x: 50,
+          y: 84,
+          kind: 'airport',
+          icon: '✈️',
+          badge: '機場櫃台',
+          tag: '跨學期水上航線',
+          title: 'Dodo Airlines 水上機場搭機櫃台（切換上下學期之島）',
+          shortTitle: '機場櫃台 · 切換學期',
+          speaker: '🦤 莫里（Dodo Airlines 機場櫃檯）',
+          desc: `目前位於「${window.CONFIG.TERM_NAME || window.CONFIG.TERM}」探險群島！想搭乘水上飛機前往「${otherTerm ? otherTerm.name : '另一學期'}」的島嶼嗎？隨時來機場櫃台辦理登機喔！`,
+          pass: false,
+          starsText: otherTerm ? `可飛往 ${otherTerm.short || otherTerm.id}` : '跨學期航線',
+          statusLabel: '準點登機中',
+          locked: false,
+          actions: [{
+            label: '✈️ 進入機場搭機櫃台（切換學期）→',
+            primary: true,
+            onClick: () => {
+              if (window.TERMSEL && window.TERMSEL.openAirportModal) {
+                window.TERMSEL.openAirportModal({ targetPath: 'course/hub.html' });
+              } else {
+                location.href = '../index.html?pick=1';
+              }
+            }
+          }]
+        });
+
         window.AC_ISLAND.mount(islandEl, {
           pageId: 'hub_' + (window.CONFIG.TERM || '11501'),
           variant: 'hub',
@@ -778,6 +809,14 @@
     document.addEventListener('click', e=>{
       const vb = e.target.closest('.ac-view-btn');
       if(vb){ state.viewMode = vb.dataset.view || 'island'; render(); return; }
+      if(e.target.closest('[data-open-airport]')){
+        if (window.TERMSEL && window.TERMSEL.openAirportModal) {
+          window.TERMSEL.openAirportModal({ targetPath: 'course/hub.html' });
+        } else {
+          location.href = '../index.html?pick=1';
+        }
+        return;
+      }
       if(e.target.closest('#setup-back')){ state.setup=null; state.loginError=''; render(); return; }
       if(e.target.closest('#demo')){ state.demo=true; state.status='main'; render(); return; }
       if(e.target.closest('#logout')){ logout(); return; }

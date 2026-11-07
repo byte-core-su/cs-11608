@@ -83,7 +83,6 @@
          · 浮水印：截圖會連班級座號一起拍進去（嚇阻＋可追溯）
        ⚠️ 浮水印一定要 pointer-events:none —— 不然它會吃掉選項的點擊，
           那就從「防作弊」變成「這題點不下去」。 */
-    + "#quiz-screen{position:relative}"
     + ".qz-mark{position:absolute;inset:0;pointer-events:none;z-index:5;overflow:hidden;"
     +   "display:flex;align-items:center;justify-content:center;"
     +   "font-weight:900;font-size:clamp(28px,7vw,64px);letter-spacing:.12em;"
@@ -510,13 +509,26 @@
       });
     }
 
+    var startId  = firstUnpassed || ORDER[0];
+    var startLay = layout[startId] || { x: 22, y: 66 };
+    var sig = qzViewMode + '|' + (user.name || '') + '|' + ORDER.map(function (id) {
+      return id + ':' + ((lastUnitsMap[id] && lastUnitsMap[id].star) || 0);
+    }).join(',');
+    if (mountEl.dataset.mountedSig === sig && mountEl.children.length > 0) return;
+    mountEl.dataset.mountedSig = sig;
+
     window.AC_ISLAND.mount(mountEl, {
-      pageId: 'ethics_' + C.moduleId,
+      pageId: 'ethics_' + C.moduleId + '_' + ((window.CONFIG && window.CONFIG.TERM) || '11501'),
       variant: 'ethics',
       playerName: user.name || '島民',
-      startX: 50,
-      startY: 75,
-      initialSelectedId: firstUnpassed || ORDER[0],
+      startX: startLay.x,
+      startY: Math.min(82, startLay.y + 4),
+      initialSelectedId: startId,
+      onOpen: function (node) {
+        if (!node) return;
+        if (node.id === 'qz-practice-node') startPractice();
+        else openChapter(node.id);
+      },
       nodes: islandNodes
     });
   }
@@ -531,10 +543,22 @@
   function openChapter(id) {
     currentId = id;
 
-    // 沒接上進度模組（或讀不到）就直接進閱讀頁，不擋學生
-    if (!window.REPORT) { proceedToStudy(id); return; }
+    // 尚未通關的章節或沒接上進度模組時，0 延遲直接開啟重點閱讀與測驗視窗，不擋學生
+    var u = lastUnitsMap && lastUnitsMap[id];
+    var hasPass = u && Number(u.star) > 0;
+    if (!hasPass || !window.REPORT) { proceedToStudy(id); return; }
+
+    var done = false;
+    var timerId = setTimeout(function () {
+      if (done) return;
+      done = true;
+      proceedToStudy(id);
+    }, 900);
 
     window.REPORT.history(C.moduleId, id).then(function (list) {
+      if (done) return;
+      done = true;
+      clearTimeout(timerId);
       recent = (list || []).slice(0, KEEP);
       if (!recent.length) { proceedToStudy(id); return; }
 
@@ -549,6 +573,9 @@
       }).join('');
       $('action-modal').classList.remove('hidden'); $('action-modal').classList.add('flex');
     }).catch(function (e) {
+      if (done) return;
+      done = true;
+      clearTimeout(timerId);
       console.error('讀取闖關紀錄失敗', e);
       proceedToStudy(id);
     });
@@ -730,6 +757,7 @@
   function veil(on) {
     var host = document.getElementById('quiz-screen');
     if (!host || host.classList.contains('hidden')) return;
+    var winEl = host.querySelector('.ac-float-window') || host;
     var el = document.getElementById('qz-veil');
     if (on) {
       if (el) return;
@@ -741,7 +769,7 @@
         '點一下這裡就繼續 —— <b>答案和計時都留著</b>。</span>';
       /* 點遮罩本身也能收起來（有些情況 focus 事件不會來，例如點到別的分頁再回來） */
       el.addEventListener('click', comeBack);
-      host.appendChild(el);
+      winEl.appendChild(el);
     } else if (el) {
       el.remove();
     }

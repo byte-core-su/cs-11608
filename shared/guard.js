@@ -16,7 +16,16 @@
     var term = (window.CONFIG && window.CONFIG.TERM) || '11501';
 
     var sid = null;
-    try { sid = sessionStorage.getItem('sid' + term); } catch (e) { sid = null; }
+    try {
+      sid = sessionStorage.getItem('sid' + term);
+      if (!sid) {
+        sid = '1410101';
+        sessionStorage.setItem('sid' + term, sid);
+        sessionStorage.setItem('me' + term, JSON.stringify({
+          sid: '1410101', cls: '801', no: '01', name: '測試島民', key: '801_01_測試島民', at: Date.now()
+        }));
+      }
+    } catch (e) { sid = null; }
     if (sid && (window.CONFIG && window.CONFIG.isSid ? window.CONFIG.isSid(sid) : /^\d+$/.test(sid))) return;        // 已從闖關基地登入過
 
     // hub 與關卡頁在同一個學期資料夾裡，用相對檔名即可

@@ -40,6 +40,25 @@
     return global.self !== global.top;   // 被嵌在 iframe 裡 → 由外層頁負責身分
   }
 
+  var DEMO_SID = '1410101';
+  var DEMO_ME  = {
+    sid:  DEMO_SID,
+    cls:  '801',
+    no:   '01',
+    name: '測試島民',
+    key:  '801_01_測試島民'
+  };
+
+  // 【測試模式】若分頁尚無登入學號，預設植入測試島民身分，確保上下學期所有關卡皆可直接進入測試
+  try {
+    if (!sessionStorage.getItem(SID_KEY)) {
+      sessionStorage.setItem(SID_KEY, DEMO_SID);
+    }
+    if (sessionStorage.getItem(SID_KEY) === DEMO_SID && !sessionStorage.getItem(CACHE_KEY)) {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(Object.assign({ at: Date.now() }, DEMO_ME)));
+    }
+  } catch (e) {}
+
   /** 取得已登入的學號；沒有或格式不對回傳 null */
   function sid() {
     try {
@@ -113,6 +132,11 @@
     }
 
     if (!data) {
+      if (id === DEMO_SID) {
+        var demoProfile = Object.assign({}, DEMO_ME);
+        writeCache(demoProfile);
+        return demoProfile;
+      }
       if (!opts.silent && !embedded()) toHub('名冊查無此學號：' + id);
       return null;
     }

@@ -3159,14 +3159,15 @@
 
       var isStandingAtNode = state.nearId && String(state.nearId) === String(activeNode.id);
       var btnsHtml = '';
-      if (!isStandingAtNode) {
-        btnsHtml = '<span class="text-xs font-extrabold text-amber-900 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-full">🚶 請用 WASD / 方向鍵走到建築門口進入</span>';
-      } else if (activeNode.locked) {
+      if (activeNode.locked) {
         btnsHtml = '<span class="text-xs font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-full">🔒 '
           + esc(activeNode.lockReason || '尚未解鎖') + '</span>';
       } else {
+        var walkHint = !isStandingAtNode
+          ? '<span class="hidden lg:inline-block text-xs font-extrabold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-full">🚶 可走近按 Enter 或點右側按鈕</span>'
+          : '';
         var actions = activeNode.actions || [];
-        btnsHtml = actions.map(function (a, i) {
+        btnsHtml = walkHint + actions.map(function (a, i) {
           var cls = a.primary !== false && i === 0 ? 'ac-btn-primary' : 'ac-btn-secondary';
           var attrs = a.attrs || '';
           if (a.href) {
@@ -3483,7 +3484,7 @@
       );
       propBlade.position.set(0, 0.88, 1.9);
       planeGroup.add(propBlade);
-      if (isSubIsland) {
+      if (nodes.some(function (n) { return n.id === 'dodo-airport'; })) {
         planeGroup.userData.nodeId = 'dodo-airport';
       }
       pierGroup.add(planeGroup);
@@ -3877,7 +3878,7 @@
 
       // ── 6. 放置裝飾果樹、關卡 3D 建築（含通關金星王冠）與 3D 島長 NPC ──
       var interactiveMeshes = [];
-      if (isSubIsland) interactiveMeshes.push(planeGroup);
+      if (planeGroup.userData.nodeId) interactiveMeshes.push(planeGroup);
       var propEntries = [];
       var fallingFruits = [];
 
@@ -4283,8 +4284,8 @@
         var scr = projectToScreen(entry.wx, entry.wy + 4.5, entry.wz);
         if (node.locked) {
           spawnFloatScreen(scr.x, scr.y, '🔒 ' + (node.lockReason || '尚未開放'));
-        } else if (String(state.nearId) !== String(node.id)) {
-          spawnFloatScreen(scr.x, scr.y, '🚶 請用 WASD / 方向鍵走到建築門口進入');
+        } else {
+          spawnFloatScreen(scr.x, scr.y, '💬 已選取「' + node.shortTitle + '」，可走近或點下方按鈕進入');
         }
       }
 
@@ -4305,7 +4306,6 @@
           e.stopPropagation();
           var nId = actBtn.getAttribute('data-ac-node');
           var aIdx = Number(actBtn.getAttribute('data-ac-act')) || 0;
-          if (String(state.nearId) !== String(nId)) return;
           state.focusUntil = performance.now() + 1400;
           triggerNodeAction(findNode(nId), aIdx);
           return;

@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資訊科技學習系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="../shared/island.css?v=20261107">
+  <link rel="stylesheet" href="../shared/island.css?v=20261107v2">
 
   <!-- 全站共用設定（載入順序固定：config → term → guard） -->
   <script src="../config.js"></script>
-  <script src="../shared/term.js"></script>
-  <script src="../shared/guard.js"></script>
-  <script src="../shared/island.js?v=20261107"></script>
+  <script src="../shared/term.js?v=20261107v2"></script>
+  <script src="../shared/guard.js?v=20261107v2"></script>
+  <script src="../shared/island.js?v=20261107v2"></script>
 </head>
 <body class="ac-theme-bg">
 
@@ -19,7 +19,7 @@
   <script>TERMSEL.include(CONFIG.QUIZ.CONTENT); if (CONFIG.QUIZ.HINTS) TERMSEL.include(CONFIG.QUIZ.HINTS);</script>
 
   <!-- ② 共用模組：單一登入、計分規則、進度回報 -->
-  <script src="../shared/sso.js"></script>
+  <script src="../shared/sso.js?v=20261107v2"></script>
   <script src="../shared/grading.js"></script>
   <script src="../shared/qstat.js"></script>
   <!-- 選擇題的答案是雜湊，不是明碼 —— 見 shared/anskey.js 開頭的說明。
@@ -30,7 +30,7 @@
   <script src="../shared/readhold.js"></script>
 
   <!-- ③ 版型與流程引擎：畫面完全由這支產生 -->
-  <script src="../shared/quiz-engine.js?v=20261107"></script>
+  <script src="../shared/quiz-engine.js?v=20261107v2"></script>
   <script type="module" src="../shared/quiz-firebase.js"></script>
 
 </body>

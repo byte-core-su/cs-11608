@@ -257,22 +257,29 @@
     +   '<div id="quiz-screen" class="ac-float-backdrop hidden">'
     +     '<div class="ac-float-window theme-orchard p-8 max-w-2xl mx-auto animate-pop relative">'
     +       '<div class="ac-window-badge">🍎 豐收果園 · 採收挑戰</div>'
-    +       '<div class="flex justify-between items-center mb-8 border-b-2 border-amber-200 pb-6">'
-    +         '<div class="max-w-[70%]">'
+    +       '<div class="flex justify-between items-center mb-8 border-b-2 border-amber-200 pb-6 gap-2">'
+    +         '<div class="max-w-[68%]">'
     +           '<div id="current-chapter-title" class="' + MAIN.text + ' font-black text-xl leading-tight"></div>'
-    +           '<div class="flex items-center space-x-3 mt-2">'
+    +           '<div class="flex items-center flex-wrap gap-2 mt-2">'
     +             '<span id="score-counter" class="bg-orange-500 text-white text-xs px-3 py-1 rounded-full font-black shadow-sm">連對: 0 / ' + TARGET + '</span>'
     +             '<span id="target-counter" class="bg-amber-100 text-amber-800 text-xs px-3 py-1 rounded-full font-bold border border-amber-300">目標連對: ' + TARGET + '</span>'
     +             '<span id="wrong-counter" class="bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full font-bold shadow-sm">容錯: ' + MAX_WRONG + '</span>'
     +           '</div>'
     +         '</div>'
-    +         '<div id="timer" class="text-red-500 font-mono font-black text-2xl bg-red-50 px-4 py-1 rounded-xl border-2 border-red-200">00:00</div>'
+    +         '<div class="flex items-center gap-2 shrink-0">'
+    +           '<div id="timer" class="text-red-500 font-mono font-black text-2xl bg-red-50 px-4 py-1 rounded-xl border-2 border-red-200">00:00</div>'
+    +           '<button id="quiz-top-close-btn" type="button" title="中斷測驗並返回島嶼目錄" class="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border-2 border-amber-300 text-xs font-black transition cursor-pointer">✕ 離開</button>'
+    +         '</div>'
     +       '</div>'
     +       '<div id="question-container" class="min-h-[300px]"></div>'
     /* 浮水印與遮罩都掛在 quiz-screen 裡（它是 position:relative） */
     +       '<div id="qz-mark" class="qz-mark"></div>'
-    +       '<div class="mt-10 flex justify-end">'
-    +         '<button id="next-btn" class="px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-2xl shadow-xl ' + MAIN.bgHover + ' transition transform active:scale-95">送出答案</button>'
+    +       '<div class="mt-10 flex flex-wrap items-center justify-between gap-3">'
+    +         '<div class="flex items-center gap-2">'
+    +           '<button id="quiz-quit-btn" type="button" class="px-4 py-3.5 bg-amber-100 text-amber-900 border-2 border-amber-300 font-black text-sm rounded-2xl hover:bg-amber-200 transition cursor-pointer">🏝️ 返回島嶼目錄</button>'
+    +           '<button id="quiz-back-study-btn" type="button" class="px-4 py-3.5 bg-slate-100 text-slate-700 border-2 border-slate-300 font-bold text-sm rounded-2xl hover:bg-slate-200 transition cursor-pointer">📖 重讀重點</button>'
+    +         '</div>'
+    +         '<button id="next-btn" class="px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-2xl shadow-xl ' + MAIN.bgHover + ' transition transform active:scale-95 cursor-pointer">送出答案</button>'
     +       '</div>'
     +     '</div>'
     +   '</div>'
@@ -1033,10 +1040,28 @@
 
   /** 公布正解的時候按鈕外觀不一樣；正式挑戰要換回來 */
   function practiceChrome(on) {
-    ['target-counter', 'timer'].forEach(function (id) {
+    ['target-counter', 'timer', 'quiz-back-study-btn'].forEach(function (id) {
       var el = $(id); if (el) el.classList.toggle('hidden', !!on);
     });
     var b = $('next-btn'); if (b) b.textContent = '送出答案';
+  }
+
+  /** 中斷目前測驗，返回章節重點或返回 3D 島嶼章節選單 */
+  function quitQuiz(toStudy) {
+    clearInterval(timer);
+    endExplain();
+    veil(false);
+    swapPending = false;
+    if (mode === 'quiz') saveStat();
+    var wasQuiz = (mode === 'quiz');
+    practiceChrome(false);
+    hide('quiz-screen');
+    if (toStudy && wasQuiz) {
+      show('study-screen');
+    } else {
+      show('chapter-screen');
+      mountQuizIsland(lastUnitsMap);
+    }
   }
 
   function startPractice() {
@@ -1236,6 +1261,9 @@
     $('start-quiz-btn').addEventListener('click', startQuiz);
     $('next-btn').addEventListener('click', checkAnswer);
     $('back-chapters-btn').addEventListener('click', function () { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
+    if ($('quiz-quit-btn')) $('quiz-quit-btn').addEventListener('click', function () { quitQuiz(false); });
+    if ($('quiz-top-close-btn')) $('quiz-top-close-btn').addEventListener('click', function () { quitQuiz(false); });
+    if ($('quiz-back-study-btn')) $('quiz-back-study-btn').addEventListener('click', function () { quitQuiz(true); });
     $('warn-back-btn').addEventListener('click', function () { hide('warning-screen'); show('study-screen'); });
     $('cert-return-btn').addEventListener('click', function () { hide('result-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
     $('modal-ok').addEventListener('click', function () {

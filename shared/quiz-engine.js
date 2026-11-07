@@ -247,7 +247,7 @@
     +       '<h2 id="study-title" class="text-2xl font-black text-amber-950 mb-6 border-b-4 border-amber-500 pb-2 inline-block">章節重點</h2>'
     +       '<div id="study-content" class="study-note-box p-6 mb-8 text-slate-700 leading-relaxed space-y-4 text-lg max-h-[58vh] overflow-y-auto"></div>'
     +       '<div class="flex space-x-4">'
-    +         '<button id="back-chapters-btn" class="flex-1 py-4 bg-amber-100 text-amber-900 border-2 border-amber-300 font-bold rounded-2xl hover:bg-amber-200 transition">返回目錄</button>'
+    +         '<button id="back-chapters-btn" class="flex-1 py-4 bg-amber-100 text-amber-900 border-2 border-amber-300 font-bold rounded-2xl hover:bg-amber-200 transition">返回目錄 (Esc)</button>'
     +         '<button id="start-quiz-btn" class="flex-2 px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-2xl ' + MAIN.bgHover + ' shadow-lg ' + MAIN.shadow + ' transition transform active:scale-95">開始測驗挑戰</button>'
     +       '</div>'
     +     '</div>'
@@ -268,7 +268,7 @@
     +         '</div>'
     +         '<div class="flex items-center gap-2 shrink-0">'
     +           '<div id="timer" class="text-red-500 font-mono font-black text-2xl bg-red-50 px-4 py-1 rounded-xl border-2 border-red-200">00:00</div>'
-    +           '<button id="quiz-top-close-btn" type="button" title="中斷測驗並返回島嶼目錄" class="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border-2 border-amber-300 text-xs font-black transition cursor-pointer">✕ 離開</button>'
+    +           '<button id="quiz-top-close-btn" type="button" title="中斷測驗並返回島嶼目錄 (Esc)" class="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border-2 border-amber-300 text-xs font-black transition cursor-pointer">✕ 離開 (Esc)</button>'
     +         '</div>'
     +       '</div>'
     +       '<div id="question-container" class="min-h-[300px]"></div>'
@@ -1276,6 +1276,52 @@
       $('prac-again').addEventListener('click', startPractice);
       $('prac-back').addEventListener('click', function () { hide('practice-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
     }
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' && e.code !== 'Escape') return;
+      if ($('modal') && !$('modal').classList.contains('hidden')) {
+        e.preventDefault();
+        $('modal').classList.remove('flex');
+        $('modal').classList.add('hidden');
+        return;
+      }
+      if ($('action-modal') && !$('action-modal').classList.contains('hidden')) {
+        e.preventDefault();
+        closeActionModal();
+        return;
+      }
+      if ($('quiz-screen') && !$('quiz-screen').classList.contains('hidden')) {
+        e.preventDefault();
+        quitQuiz(false);
+        return;
+      }
+      if ($('study-screen') && !$('study-screen').classList.contains('hidden')) {
+        e.preventDefault();
+        hide('study-screen');
+        show('chapter-screen');
+        mountQuizIsland(lastUnitsMap);
+        return;
+      }
+      if ($('result-screen') && !$('result-screen').classList.contains('hidden')) {
+        e.preventDefault();
+        hide('result-screen');
+        show('chapter-screen');
+        mountQuizIsland(lastUnitsMap);
+        return;
+      }
+      if ($('practice-screen') && !$('practice-screen').classList.contains('hidden')) {
+        e.preventDefault();
+        hide('practice-screen');
+        show('chapter-screen');
+        mountQuizIsland(lastUnitsMap);
+        return;
+      }
+      if ($('warning-screen') && !$('warning-screen').classList.contains('hidden')) {
+        e.preventDefault();
+        hide('warning-screen');
+        show('study-screen');
+        return;
+      }
+    });
   }
 
   /* ===================================================================

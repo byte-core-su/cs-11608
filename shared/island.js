@@ -3119,14 +3119,19 @@
           break;
         }
       }
-      if (!candidate && nodes.length > 0) candidate = nodes[0];
+      if (! candidate && nodes.length > 0) candidate = nodes[0];
       if (!candidate) return;
+      state.dialogDismissed = false;
       state.selectedId = candidate.id;
       renderDialog();
     }
 
     function renderDialog() {
       if (!dialogEl) return;
+      if (state.dialogDismissed) {
+        dialogEl.classList.add('hidden');
+        return;
+      }
       if (state.selectedId === '__npc__' || state.nearId === '__npc__') {
         dialogEl.classList.remove('hidden');
         var tips = currentNpcInfo.tips;
@@ -3143,6 +3148,7 @@
           +     '<p class="text-xs sm:text-sm text-stone-700 font-bold mt-0.5 leading-relaxed">' + esc(msg) + '</p>'
           +   '</div>'
           +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
+          +     '<button type="button" data-ac-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起對話框 (Esc)">✕ 收起 (Esc)</button>'
           +     '<button type="button" id="ac-npc-next-tip" class="ac-btn-primary">💬 繼續聊天（下一句）</button>'
           +     '<button type="button" id="ac-npc-guide-me" class="ac-btn-secondary">🧭 帶我去推薦關卡</button>'
           +   '</div>'
@@ -3150,7 +3156,7 @@
         return;
       }
 
-      var activeNode = findNode(state.nearId) || findNode(state.selectedId) || nodes[0];
+      var activeNode = findNode(state.nearId) || findNode(state.selectedId);
       if (!activeNode) {
         dialogEl.classList.add('hidden');
         return;
@@ -3189,7 +3195,10 @@
         +     '</div>'
         +     '<p class="text-xs sm:text-sm text-stone-600 font-medium mt-0.5 line-clamp-2">' + activeNode.descHtml + '</p>'
         +   '</div>'
-        +   '<div class="flex items-center gap-2 flex-wrap shrink-0">' + btnsHtml + '</div>'
+        +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
+        +     '<button type="button" data-ac-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起介紹框 (Esc)">✕ 收起 (Esc)</button>'
+        +     btnsHtml
+        +   '</div>'
         + '</div>';
     }
 
@@ -3934,6 +3943,7 @@
 
       function triggerMascotGreeting(advanceTip) {
         if (advanceTip) npcTipIndex++;
+        state.dialogDismissed = false;
         state.selectedId = '__npc__';
         if (triggerMascotJumpFn) triggerMascotJumpFn();
         renderDialog();
@@ -4343,6 +4353,7 @@
         if (!entry) return;
         var node = entry.node;
         shake3DEntry(entry, false);
+        state.dialogDismissed = false;
         state.selectedId = node.id;
         renderDialog();
 
@@ -4355,6 +4366,13 @@
       }
 
       function onStageDomClick(e) {
+        if (e.target.closest('[data-ac-close-dialog]')) {
+          e.stopPropagation();
+          state.dialogDismissed = true;
+          state.selectedId = null;
+          if (dialogEl) dialogEl.classList.add('hidden');
+          return;
+        }
         if (e.target.closest('#ac-npc-next-tip')) {
           e.stopPropagation();
           triggerMascotGreeting(true);
@@ -4396,6 +4414,48 @@
       function onKeyDown(e) {
         var tag = (e.target && e.target.tagName) || '';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+        if (e.code === 'Escape' || e.key === 'Escape') {
+          if (document.getElementById('dal-airport-modal')) return;
+          if (document.querySelector('#modal.flex, #action-modal.flex, #quiz-screen:not(.hidden), #study-screen:not(.hidden), #result-screen:not(.hidden), #practice-screen:not(.hidden), #warning-screen:not(.hidden)')) return;
+          var weekClose = document.getElementById('close-week');
+          if (weekClose) { e.preventDefault(); weekClose.click(); return; }
+          var detailView = document.getElementById('detail-view');
+          if (detailView && !detailView.classList.contains('hidden') && typeof window.closeCourseDetail === 'function') {
+            e.preventDefault();
+            window.closeCourseDetail();
+            return;
+          }
+          var imgBox = document.getElementById('imgBox');
+          if (imgBox && imgBox.classList.contains('on')) return;
+          var fcModal = document.getElementById('fc-float-modal');
+          if (fcModal && !fcModal.classList.contains('hidden')) {
+            var fcBack = fcModal.querySelector('#back-menu, #back-refresh, #back-menu2, #back-refresh2');
+            if (fcBack) { e.preventDefault(); fcBack.click(); return; }
+          }
+          var leadClose = document.getElementById('toggle-lead-close');
+          if (leadClose) { e.preventDefault(); leadClose.click(); return; }
+          var floatBackdrop = document.querySelector('.ac-float-backdrop:not(.hidden)');
+          if (floatBackdrop) {
+            var xIcon = floatBackdrop.querySelector('.fa-xmark');
+            var xBtn = (xIcon && xIcon.closest('button')) || floatBackdrop.querySelector('button[data-close]');
+            if (xBtn) { e.preventDefault(); xBtn.click(); return; }
+          }
+          if (wardrobePanel && !wardrobePanel.classList.contains('hidden')) {
+            e.preventDefault();
+            wardrobePanel.classList.add('hidden');
+            return;
+          }
+          if (dialogEl && !dialogEl.classList.contains('hidden')) {
+            e.preventDefault();
+            state.dialogDismissed = true;
+            state.selectedId = null;
+            dialogEl.classList.add('hidden');
+            return;
+          }
+          return;
+        }
+
         if (document.querySelector('#week-mask, #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden)')) return;
 
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
@@ -4807,7 +4867,10 @@
 
         if (bestId !== state.nearId) {
           state.nearId = bestId;
-          if (bestId) state.selectedId = bestId;
+          if (bestId) {
+            state.dialogDismissed = false;
+            state.selectedId = bestId;
+          }
           for (var k = 0; k < nodeEntries.length; k++) {
             if (nodeEntries[k].domEl) {
               nodeEntries[k].domEl.classList.toggle('is-near', String(nodeEntries[k].node.id) === String(bestId));
@@ -4851,6 +4914,7 @@
         if (cleanupThree) cleanupThree();
       },
       selectNode: function (id) {
+        state.dialogDismissed = false;
         state.selectedId = id;
         renderDialog();
       }

@@ -663,7 +663,7 @@
     var activeTermId = current || byDateId || '11501';
 
     var closeBtnHtml = opts.isModal
-      ? '<button type="button" data-dal-close class="px-3.5 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white border border-rose-400 text-xs font-black cursor-pointer transition shadow">✕ 留在目前島嶼</button>'
+      ? '<button type="button" data-dal-close class="px-3.5 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white border border-rose-400 text-xs font-black cursor-pointer transition shadow">✕ 留在目前島嶼 (Esc)</button>'
       : '';
 
     var teacherBtnHtml = opts.showTeacherLink
@@ -844,7 +844,7 @@
         +     '</div>'
         +   '</div>'
         +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
-        +     '<button type="button" data-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起櫃台資訊，欣賞 3D 登機室">✕ 收起</button>'
+        +     '<button type="button" data-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起櫃台資訊，欣賞 3D 登機室 (Esc)">✕ 收起 (Esc)</button>'
         +     '<button type="button" data-switch-other="' + escHtml(otherTermId) + '" class="ac-btn-secondary text-xs cursor-pointer">'
         +       '🚶 走向' + escHtml(otherRoute.counterNo)
         +     '</button>'
@@ -1226,6 +1226,7 @@
       function onKeyDown(e) {
         var tag = (e.target && e.target.tagName) || '';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (e.code === 'Escape' || e.key === 'Escape') { e.preventDefault(); if (state.dialogOpen) { state.dialogOpen = false; state.dismissedTerm = state.selectedTerm; renderBottomDialog(); } else if (opts.isModal && typeof opts.onClose === 'function') { if (hostEl._dalCleanup) hostEl._dalCleanup(); opts.onClose(); } return; }
         if (e.code === 'Escape' && state.dialogOpen) {
           state.dialogOpen = false;
           state.dismissedTerm = state.selectedTerm;

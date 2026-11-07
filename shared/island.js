@@ -388,7 +388,7 @@
       return Math.max(0, Math.min(1, t)) * CLIFF_HEIGHT + 0.12;
     }
     // 2. 在北側二層高台上（wz <= CLIFF_Z_EDGE 且在島嶼北側範圍內）
-    if (wz <= CLIFF_Z_EDGE && Math.abs(wx) <= 27.5) {
+    if (wz <= CLIFF_Z_EDGE && Math.abs(wx) <= 27.5 * (prof.scaleX / 1.04)) {
       return CLIFF_HEIGHT + 0.12;
     }
     // 3. 在拱形橋上（依河道在東側或西側動態判斷）
@@ -3328,26 +3328,39 @@
       islandMesh.receiveShadow = true;
       worldGroup.add(islandMesh);
 
-      // 北側第二層懸崖高台（精確對應 wz ∈ [-24, -12.5]，頂面位於 y = CLIFF_HEIGHT = 2.8）
+      // 北側第二層懸崖高台（精確對應 wz ∈ [-27.0, -12.5]，頂面位於 y = CLIFF_HEIGHT = 2.8）
       var cliffGroup = new THREE.Group();
-      var cliffDepth = 12.2;
-      var cliffCenterZ = CLIFF_Z_EDGE - cliffDepth * 0.5; // -18.6
+      var cliffDepth = 14.5;
+      var cliffWidth = 55.0 * (prof.scaleX / 1.04);
+      var cliffCenterZ = CLIFF_Z_EDGE - cliffDepth * 0.5; // -19.75
       var cliffWall = new THREE.Mesh(
-        new THREE.BoxGeometry(55.0 * (prof.scaleX / 1.04), CLIFF_HEIGHT, cliffDepth),
+        new THREE.BoxGeometry(cliffWidth, CLIFF_HEIGHT + 1.2, cliffDepth),
         new THREE.MeshStandardMaterial({ color: prof.cliffWallColor, roughness: 0.88 })
       );
-      cliffWall.position.set(0, CLIFF_HEIGHT * 0.5, cliffCenterZ);
+      cliffWall.position.set(0, (CLIFF_HEIGHT - 1.2) * 0.5, cliffCenterZ);
       cliffWall.castShadow = true;
       cliffWall.receiveShadow = true;
       cliffGroup.add(cliffWall);
 
       var cliffTop = new THREE.Mesh(
-        new THREE.BoxGeometry(54.8 * (prof.scaleX / 1.04), 0.24, cliffDepth - 0.1),
+        new THREE.BoxGeometry(cliffWidth - 0.2, 0.24, cliffDepth - 0.1),
         new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.78 })
       );
       cliffTop.position.set(0, CLIFF_HEIGHT, cliffCenterZ);
       cliffTop.receiveShadow = true;
       cliffGroup.add(cliffTop);
+
+      // 北側崖頂觀景護欄（防止視覺與操作走出懸崖北端與左右兩側邊界）
+      var railMat = new THREE.MeshStandardMaterial({ color: prof.bridgeDeckColor || 0x92400e, roughness: 0.75 });
+      var northBackZ = CLIFF_Z_EDGE - cliffDepth + 0.55; // -26.45
+      for (var rpx = -25.5; rpx <= 25.5; rpx += 3.4) {
+        var rPost = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.15, 8), railMat);
+        rPost.position.set(rpx, CLIFF_HEIGHT + 0.62, northBackZ);
+        cliffGroup.add(rPost);
+      }
+      var northBeam = new THREE.Mesh(new THREE.BoxGeometry(51.4, 0.16, 0.16), railMat);
+      northBeam.position.set(0, CLIFF_HEIGHT + 0.92, northBackZ);
+      cliffGroup.add(northBeam);
       worldGroup.add(cliffGroup);
 
       // 懸崖石階斜坡（依各島專屬位置 prof.rampXMin ~ prof.rampXMax 與材質配色）
@@ -4117,9 +4130,61 @@
         return { wx: wx, wz: wz };
       }
 
+      // ── 6D. 精準島嶼海岸線與北側懸崖邊界約束（確保角色在任何方向都絕不會走出島外） ──
+      function clampToIslandBounds(fromWx, fromWz, wx, wz) {
+        var inRamp = (wx >= RAMP_X_MIN + 0.25 && wx <= RAMP_X_MAX - 0.25);
+
+        // 1. 若原本在一樓（fromWz > CLIFF_Z_EDGE），非石階斜坡走廊一律不可往北跨越 CLIFF_Z_EDGE（包含左右兩側！）
+        if (fromWz > CLIFF_Z_EDGE && !inRamp && wz <= CLIFF_Z_EDGE + 0.32) {
+          wz = CLIFF_Z_EDGE + 0.34;
+        }
+        // 2. 若原本在二樓高台（fromWz <= CLIFF_Z_EDGE），非石階斜坡走廊不可往南掉下懸崖
+        if (fromWz <= CLIFF_Z_EDGE && !inRamp && wz > CLIFF_Z_EDGE - 0.28) {
+          wz = CLIFF_Z_EDGE - 0.30;
+        }
+
+        // 3. 在北側二層懸崖高台範圍內（wz <= CLIFF_Z_EDGE）：嚴格限制於高台護欄內
+        if (wz <= CLIFF_Z_EDGE) {
+          var maxCliffX = 25.2 * (prof.scaleX / 1.04);
+          wx = Math.max(-maxCliffX, Math.min(maxCliffX, wx));
+          wz = Math.max(-25.2, wz);
+          return { wx: wx, wz: wz };
+        }
+
+        // 4. 在南方 Dodo 碼頭木棧道範圍內（允許沿碼頭走到水上飛機旁）
+        if (Math.abs(wx) <= 2.4 && wz >= 14.0) {
+          wz = Math.min(24.5, wz);
+          return { wx: wx, wz: wz };
+        }
+
+        // 5. 在豐收果園島（ethics）的東西雙側梯田半島範圍內
+        if (variantKey === 'ethics') {
+          var dWest = Math.sqrt((wx + 32) * (wx + 32) + (wz - 2.5) * (wz - 2.5));
+          var dEast = Math.sqrt((wx - 32) * (wx - 32) + (wz - 2.5) * (wz - 2.5));
+          if (dWest <= 9.5 || dEast <= 9.5) {
+            return { wx: wx, wz: wz };
+          }
+        }
+
+        // 6. 一般一樓草地與沙灘海岸線：依該島實際橢圓／多邊形內切半徑約束，絕不走出海面
+        var polyFactor = prof.sides <= 6 ? 0.87 : (prof.sides <= 8 ? 0.92 : 0.96);
+        var maxRx = 37.2 * prof.scaleX * polyFactor;
+        var maxRz = 37.2 * prof.scaleZ * polyFactor;
+        var normSq = (wx / maxRx) * (wx / maxRx) + (wz / maxRz) * (wz / maxRz);
+        if (normSq > 1.0) {
+          var inv = 1.0 / Math.sqrt(normSq);
+          wx *= inv;
+          wz *= inv;
+        }
+        return { wx: wx, wz: wz };
+      }
+
       // ── 7. 放置 3D 村民玩家角色與點擊地面波紋環 ──
       var playerMesh = buildVillager3D(THREE, cfg.genderCode, currentLook);
-      var initSafe = pushOutsideObstacles(pctToWorldX(state.px), pctToWorldZ(state.py), 0.15);
+      var rawInitWx = pctToWorldX(state.px), rawInitWz = pctToWorldZ(state.py);
+      var initClamped = clampToIslandBounds(rawInitWx, rawInitWz, rawInitWx, rawInitWz);
+      var initSafe = pushOutsideObstacles(initClamped.wx, initClamped.wz, 0.15);
+      initSafe = clampToIslandBounds(initClamped.wx, initClamped.wz, initSafe.wx, initSafe.wz);
       var initWx = initSafe.wx;
       var initWz = initSafe.wz;
       state.px = worldToPctX(initWx);
@@ -4489,24 +4554,15 @@
           state.walking = false;
         }
 
-        // ★ 實體物理碰撞約束：1. 北側垂直懸崖壁（非石階區不可直接穿牆） 2. 全島建築與樹木圓柱剛體排斥
-        var inRampCorridor = (nextWx >= RAMP_X_MIN && nextWx <= RAMP_X_MAX);
-        if (!inRampCorridor && Math.abs(nextWx) <= 27.5) {
-          if (oldWz > CLIFF_Z_EDGE && nextWz <= CLIFF_Z_EDGE + 0.22) {
-            nextWz = CLIFF_Z_EDGE + 0.24;
-          } else if (oldWz <= CLIFF_Z_EDGE && nextWz > CLIFF_Z_EDGE - 0.22) {
-            nextWz = CLIFF_Z_EDGE - 0.24;
-          }
-        }
+        // ★ 實體物理碰撞約束：1. 島嶼海岸線與北側懸崖邊界約束 → 2. 建築樹木剛體排斥 → 3. 再次確認邊界（防止被建築往外推落懸崖）
+        var preClamped = clampToIslandBounds(oldWx, oldWz, nextWx, nextWz);
+        var colResolved = pushOutsideObstacles(preClamped.wx, preClamped.wz, 0);
+        var postClamped = clampToIslandBounds(oldWx, oldWz, colResolved.wx, colResolved.wz);
+        var pWx = postClamped.wx;
+        var pWz = postClamped.wz;
 
-        var colResolved = pushOutsideObstacles(nextWx, nextWz, 0);
-        var pWx = colResolved.wx;
-        var pWz = colResolved.wz;
-
-        state.px = Math.max(12, Math.min(88, worldToPctX(pWx)));
-        state.py = Math.max(15, Math.min(88, worldToPctY(pWz)));
-        pWx = pctToWorldX(state.px);
-        pWz = pctToWorldZ(state.py);
+        state.px = worldToPctX(pWx);
+        state.py = worldToPctY(pWz);
 
         // 精準取得角色所在位置的地表高度，並平滑插值（上下石階或躍上高台時自然過渡，絕不陷入地下！）
         var targetSurfY = getExactSurfaceY(pWx, pWz);

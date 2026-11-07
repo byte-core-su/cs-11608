@@ -635,18 +635,9 @@ body.ac-sky-bg {
    🎨 全站美術風格統一（子頁返回鈕、登入卡片）
    ===================================================================== */
 
-/* 各子頁左上「← 返回基地」：由深黑膠囊統一改為動森奶油木框膠囊 */
+/* 隱藏舊版固定左上「← 返回基地」膠囊按鈕 */
 #back-to-hub {
-  background: #fffdf5 !important;
-  color: #5c4938 !important;
-  border: 3px solid #d6c7ae !important;
-  box-shadow: 0 4px 0 #c9b89c, 0 8px 18px rgba(74, 59, 44, 0.16) !important;
-  font-weight: 900 !important;
-  font-family: 'Noto Sans TC', system-ui, sans-serif !important;
-}
-#back-to-hub:hover {
-  background: #fef3c7 !important;
-  border-color: #f59e0b !important;
+  display: none !important;
 }
 
 /* 子單元登入／身分確認卡片：統一為 Dodo Airlines 登島護照風（暖奶油木框） */

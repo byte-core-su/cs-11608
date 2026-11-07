@@ -57,9 +57,9 @@
   document.head.appendChild(st);
   document.body.className = 'min-h-screen text-slate-800';
   document.body.insertAdjacentHTML('afterbegin', `
-<a id="back-to-hub" href="hub.html" title="返回闖關基地"
-   class="fixed top-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800 text-white
-          font-bold text-sm px-3.5 py-2 rounded-full shadow-lg hover:bg-slate-700 transition">← 返回基地</a>
+<a id="back-to-hub" href="hub.html" style="display:none"
+  class="hidden"
+  ></a>
 
 <main class="max-w-3xl mx-auto px-4 pt-20 pb-16">
 

@@ -183,11 +183,7 @@
     if (C.siteTitle) document.title = C.siteTitle;
     document.body.className = 'p-2 sm:p-4 text-slate-800 ac-theme-bg';
 
-    var hubHref = (C.hubPage || 'hub.html');
     var html = ''
-
-    // 返回基地：固定左上，每頁只放一顆
-    + '<a id="back-to-hub" href="' + hubHref + '" title="返回闖關基地" style="position:fixed;top:1rem;left:1rem;z-index:9999;display:inline-flex;align-items:center;gap:.35rem;background:#1e293b;color:#fff;font-weight:700;font-size:.875rem;padding:.5rem .875rem;border-radius:9999px;box-shadow:0 10px 15px -3px rgba(0,0,0,.2);text-decoration:none;">&#8592; 返回基地</a>'
 
     + '<div id="app" class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto">'
 
@@ -386,10 +382,6 @@
     root.id = 'qz-root';
     root.innerHTML = html;
     document.body.appendChild(root);
-
-    if (window.self !== window.top) {
-      var b = document.getElementById('back-to-hub'); if (b) b.style.display = 'none';
-    }
   }
 
   /* ===================================================================

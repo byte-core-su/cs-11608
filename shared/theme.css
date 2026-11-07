@@ -86,7 +86,7 @@ body{
 /* ── 返回基地（每頁只放一顆，嵌入 iframe 時自動隱藏）──── */
 #back-to-hub{
   position:fixed; top:1rem; left:1rem; z-index:9999;
-  display:inline-flex; align-items:center; gap:.35rem;
+  display:none !important; align-items:center; gap:.35rem;
   background:#1e293b; color:#fff;
   font-weight:700; font-size:.875rem;
   padding:.5rem .875rem; border-radius:9999px;

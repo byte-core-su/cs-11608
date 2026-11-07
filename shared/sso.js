@@ -113,10 +113,8 @@
     }
 
     if (!data) {
-      // 【測試模式】名冊查無此測試學號時，自動回傳預覽用測試島民資料，不導回登入頁
-      var demoProfile = toMe(id, { cls: '801', no: '01', name: '測試島民' });
-      writeCache(demoProfile);
-      return demoProfile;
+      if (!opts.silent && !embedded()) toHub('名冊查無此學號：' + id);
+      return null;
     }
 
     var profile = toMe(id, data);

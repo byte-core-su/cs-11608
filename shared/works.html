@@ -8,7 +8,8 @@
   <style>.embedded [data-standalone] { display: none !important; }</style>
   <title>作品評分</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="../course/config.js"></script>
+  <script src="../config.js"></script>
+<script src="term.js"></script>
   <script src="auth.js"></script>
   <script src="grading.js"></script>
   <style>
@@ -62,7 +63,9 @@ import { getFirestore, collection, getDocs, doc, setDoc, arrayUnion }
 const C = window.CONFIG || {};
 const ROSTER = (C.COLLECTIONS && C.COLLECTIONS.ROSTER) || 'roster';
 const PROGRESS = (C.COLLECTIONS && C.COLLECTIONS.PROGRESS) || (C.TERM + '-progress');
-const UNITS = (C.UNITS || []).map((u, i) => ({ id: u[0], title: u[1], no: i + 1 }));
+/* 這一學期要交作品的關卡（{學期}/config.js 的 NO_UPLOAD 列出不必交的，例如下學期第 5、10 關） */
+const NO_UPLOAD = C.NO_UPLOAD || [];
+const UNITS = (C.UNITS || []).map((u, i) => ({ id: u[0], title: u[1], no: i + 1 })).filter(u => NO_UPLOAD.indexOf(u.id) < 0);
 const app = initializeApp(C.FIREBASE);
 const auth = getAuth(app);
 setPersistence(auth, browserSessionPersistence).catch(() => {});

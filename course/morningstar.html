@@ -23,14 +23,17 @@
        和 content/flowchart.js；升級經驗一級比一級多、打怪經驗倍率 3/(Lv+2)。
      ===================================================================== -->
 <!-- 全站共用設定（要在 guard 之前載入）-->
-<script src="config.js"></script>
+<script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
+  <!-- 別的學期沒有這一頁（晨星勇者跟著流程圖課程）⇒ 回闖關基地 -->
+  <script>if (!CONFIG.FLOWCHART) location.replace('hub.html');</script>
 <!-- 登入邏輯單一來源 -->
 <script src="../shared/auth.js"></script>
 <!-- 身分守門：未從闖關基地登入者導回入口 -->
 <script src="../shared/guard.js"></script>
 <!-- 開放條件要用的：通關規則、十個單元 -->
 <script src="../shared/grading.js"></script>
-<script src="content/flowchart.js"></script>
+<script>if (CONFIG.FLOWCHART) TERMSEL.include(CONFIG.FLOWCHART.CONTENT);</script>
 <!-- 存檔（雲端） -->
 <script src="../shared/gamesave.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">

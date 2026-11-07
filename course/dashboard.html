@@ -17,7 +17,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
   <!-- 全站共用計分規則（單一來源；與學生端共用，改這支即同步「重算星星」） -->
-  <script src="config.js"></script>
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
   <!-- 老師 email 的判斷（與 shared/firestore.rules 的 isTeacher 同一份定義）-->
   <script src="../shared/auth.js"></script>
   <script src="../shared/grading.js"></script>
@@ -28,8 +29,7 @@
   <!-- 關卡清單（教師端的「各科關卡進度」矩陣要用）。
        ⚠️ 只取清單與順序，題目本身用不到 —— 但這兩支就是清單的單一來源，
           在教師端另抄一份的話，課程調整時這裡不會跟著改。 -->
-  <script src="content/ethics.js"></script>
-  <script src="content/flowchart.js"></script>
+  <script>TERMSEL.include(CONFIG.QUIZ.CONTENT); if (CONFIG.FLOWCHART) TERMSEL.include(CONFIG.FLOWCHART.CONTENT);</script>
 
   <style>
     @keyframes fade-in-down {
@@ -106,7 +106,7 @@
     <!-- Header -->
     <header data-standalone class="bg-white border-b shadow-sm px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-40 relative">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800">教師成績登錄系統</h1>
+        <h1 class="text-2xl font-bold text-gray-800">教師成績登錄系統 <span class="text-base font-bold text-indigo-600"><script>document.write((window.CONFIG.TERM_NAME||"") + "（" + window.CONFIG.TERM + "）")</script></span></h1>
         <p id="status-text" class="text-sm text-gray-500 mt-1">正準備載入資料...</p>
       </div>
       <button onclick="teacherLogout()" class="self-start sm:self-auto text-slate-400 hover:text-slate-700 flex items-center gap-1 text-xs bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 transition-colors">
@@ -533,20 +533,21 @@
       });
     }
 
-    // 預設成績簿：首次沒有設定時，用 7 個課程模組當科目
+    /* 這一學期的科目：{學期}/config.js 的 SUBJECTS。
+       grader：要有接 Apps Script 評分（GRADER_URL）才有這一科（作品星）。
+       computed：星數不存、每次現算（下學期的 🧠 概念星），「儲存到雲端」不寫它。 */
+    const SUBJ = (window.CONFIG.SUBJECTS || []).filter(x => !x.grader || window.CONFIG.GRADER_URL);
+    const SUBJ_OF = k => SUBJ.find(x => x.key === k) || {};
+    const TERM_SUBJ_LABELS = {};   // 預設的分類名稱＝科目名稱
+    SUBJ.forEach(x => { TERM_SUBJ_LABELS[x.key] = x.group || x.label; });
+
+    // 預設成績簿：首次沒有設定時，用這一學期的科目
     function defaultGradebook() {
       return {
-        // 與學生端一致的四個計星模組（滿星 100★：30+20+20+30）
-        subjects: [
-          { key: 'ethics',    label: '資訊倫理',   index: 0 },
-          { key: 'thinking',  label: '運算思維',   index: 1 },
-          { key: 'flowchart', label: '流程圖',     index: 2 }
-          /* 有接 Apps Script 評分（GRADER_URL）才列「程式設計」（作品星） */
-        ].concat(window.CONFIG.GRADER_URL ? [{ key: 'scratch', label: '程式設計', index: 3 }] : []),
+        subjects: SUBJ.map((x, i) => ({ key: x.key, label: x.label, index: i })),
         customMapping: {
-          categories: ['法律倫理', '運算思維', '流程圖'].concat(window.CONFIG.GRADER_URL ? ['程式設計'] : []),
-          taskMap: Object.assign({ ethics: '法律倫理', thinking: '運算思維', flowchart: '流程圖' },
-                                 window.CONFIG.GRADER_URL ? { scratch: '程式設計' } : {})
+          categories: [...new Set(SUBJ.map(x => TERM_SUBJ_LABELS[x.key]))],
+          taskMap: Object.assign({}, TERM_SUBJ_LABELS)
         }
       };
     }
@@ -561,8 +562,8 @@
         rawSubjects = gb.subjects;
         if (gb.customMapping) customMapping = gb.customMapping;
 
-        // 🧹 自動清掉已淘汰的科目（Scratch 清單、音樂程式、Arduino 現在都沒有星數機制）
-        const VALID = ['ethics', 'thinking', 'flowchart'].concat(window.CONFIG.GRADER_URL ? ['scratch'] : []);   // 有評分服務才有作品星
+        // 🧹 自動清掉這一學期沒有的科目（例如拿掉評分服務之後的「程式設計」）
+        const VALID = SUBJ.map(x => x.key);
         const cleaned = rawSubjects.filter(s => VALID.includes(s.key));
         if (cleaned.length !== rawSubjects.length && cleaned.length) {
           rawSubjects = cleaned.map((s, i) => ({ ...s, index: i }));
@@ -575,23 +576,28 @@
               .set({ subjects: rawSubjects, customMapping }, { merge: true });
           } catch (e) { console.warn('清理成績簿科目失敗', e); }
         }
-        /* 後來才接上評分服務（GRADER_URL）的話，舊的成績簿沒有「程式設計」這一科 —— 補上 */
-        if (window.CONFIG.GRADER_URL && !rawSubjects.some(s => s.key === 'scratch')) {
-          rawSubjects = rawSubjects.concat([{ key: 'scratch', label: '程式設計', index: rawSubjects.length }]);
+        /* 成績簿建好之後才多出來的科目（例如後來才接上評分服務的「程式設計」）—— 補上 */
+        const lack = SUBJ.filter(x => !rawSubjects.some(s => s.key === x.key));
+        if (lack.length) {
+          rawSubjects = rawSubjects.concat(lack.map((x, i) => ({ key: x.key, label: x.label, index: rawSubjects.length + i })));
           customMapping.categories = customMapping.categories || [];
-          if (!customMapping.categories.includes('程式設計')) customMapping.categories.push('程式設計');
-          customMapping.taskMap = Object.assign({}, customMapping.taskMap || {}, { scratch: '程式設計' });
+          customMapping.taskMap = Object.assign({}, customMapping.taskMap || {});
+          lack.forEach(x => {
+            const cat = TERM_SUBJ_LABELS[x.key];
+            if (!customMapping.categories.includes(cat)) customMapping.categories.push(cat);
+            customMapping.taskMap[x.key] = cat;
+          });
           try {
             await extDb.collection(window.CONFIG.COLLECTIONS.CONFIG).doc('gradebook')
               .set({ subjects: rawSubjects, customMapping }, { merge: true });
-          } catch (e) { console.warn('補上程式設計科目失敗', e); }
+          } catch (e) { console.warn('補上科目失敗', e); }
         }
       } else {
         const def = defaultGradebook();
         rawSubjects = def.subjects; customMapping = def.customMapping;
         await extDb.collection(window.CONFIG.COLLECTIONS.CONFIG).doc('gradebook').set(def, { merge: true });
       }
-      localStorage.setItem('gradeSystemCustomMap', JSON.stringify(customMapping));
+      localStorage.setItem('gradeSystemCustomMap_' + window.CONFIG.TERM, JSON.stringify(customMapping));
 
       // 2. 名冊（學生）＋ 學生闖關進度（{TERM}-progress，與 hub 同一套星星）
       const [rosterSnap, progressSnap] = await Promise.all([
@@ -615,6 +621,10 @@
           const us = mods.scratch && mods.scratch.unitStars;
           if (sub.key === 'scratch' && us) {
             v = Object.values(us).reduce((a, b) => a + (Number(b) > 0 ? Number(b) : 0), 0);
+          }
+          /* 🧠 概念星（下學期）：不存，由 modules.scratch.quiz 的分數現算 */
+          if (sub.key === 'concept') {
+            v = (window.GRADING && GRADING.quizTotal) ? GRADING.quizTotal(((mods.scratch || {}).quiz) || {}).stars : 0;
           }
           /* ⚠️ 星星**只有一個來源**：{TERM}-progress（和學生端同一份），教師端不另外算一套。 */
           student[sub.key] = v;
@@ -645,7 +655,7 @@
     function loadFallbackData() {
       // 不提供假資料，避免混淆：讀不到雲端時顯示空名冊狀態
       const def = defaultGradebook();
-      const savedMapping = localStorage.getItem('gradeSystemCustomMap');
+      const savedMapping = localStorage.getItem('gradeSystemCustomMap_' + window.CONFIG.TERM);
       customMapping = savedMapping ? JSON.parse(savedMapping) : def.customMapping;
       subjects = applyCustomMappingToSubjects(def.subjects);
       spreadsheetData = {};
@@ -662,15 +672,9 @@
       select.innerHTML = options;
     }
 
-    // 各模組星數上限（與學生端 hub 完全一致）
-    //   資訊倫理 10 章 × 3★ = 30　　運算思維 10 關 × 2★ = 20
-    //   流程圖   10 關 × 2★ = 20　　程式設計 10 關 × 3★ = 30（未達 75 分 0★）
-    /* 流程圖與程式設計的上限含「繳交加分」，所以從 grading.js 算 ——
-       加分權重只寫在那一支，這裡跟著變，不會兩邊各改各的。 */
-    const MODULE_MAX = Object.assign(
-      { ethics: 30, thinking: 20 },
-      (window.GRADING && GRADING.moduleMax) ? GRADING.moduleMax(10) : { flowchart: 30, scratch: 40 }
-    );
+    // 各科星數上限：{學期}/config.js 的 SUBJECTS[].max（和學生端闖關基地的分母一致）
+    const MODULE_MAX = {};
+    SUBJ.forEach(x => { MODULE_MAX[x.key] = Number(x.max) || 0; });
     function subjMax(key){ return MODULE_MAX[key] || 3; }
     function sumSubjMax(subjectList){ return subjectList.reduce((a, s) => a + subjMax(s.key), 0); }
 
@@ -818,7 +822,7 @@
       try{ await loadSchedule(); }catch(e){}
       const att = stu.attendance || {};
       const cls = String(stu.cls || activeSheet || '');
-      const START = new Date((localStorage.getItem('wky_start') || window.CONFIG.TERM_START) + 'T00:00:00');
+      const START = new Date((localStorage.getItem('wky_start_' + window.CONFIG.TERM) || window.CONFIG.TERM_START) + 'T00:00:00');
       const today = new Date(); today.setHours(23,59,59,999);
 
       // 逐週推算應到日期（只算到今天）
@@ -924,7 +928,8 @@
         const batch = extDb.batch();
         classData.forEach(student => {
           const modules = {};
-          subjects.forEach(sub => { modules[sub.key] = { stars: (student[sub.key] != null ? student[sub.key] : 0) }; });
+          subjects.filter(sub => !SUBJ_OF(sub.key).computed)   // 現算的（概念星）不寫回
+            .forEach(sub => { modules[sub.key] = { stars: (student[sub.key] != null ? student[sub.key] : 0) }; });
           batch.set(extDb.collection(window.CONFIG.COLLECTIONS.PROGRESS).doc(student.id), {
             studentId: student.id, modules, updatedAt: Date.now()
           }, { merge: true });
@@ -998,7 +1003,7 @@
     }
 
 
-    /* ═══ 關卡矩陣：橫式四欄（法律倫理／運算思維／流程圖／程式設計），往下列出所有關卡 ═══
+    /* ═══ 關卡矩陣：每一科一欄（上學期：法律倫理／運算思維／流程圖／程式設計；下學期：媒體與社會議題／運算思維／程式設計／概念星），往下列出所有關卡 ═══
        ⚠️ 各科的「第 N 關」不是同一件事（資訊倫理的第 5 個是整章挑戰），
           所以每一格都印出**該科自己的代號**，不要只印第幾關。
        ⚠️ 每一科的滿星上限也不一樣：
@@ -1006,11 +1011,10 @@
           用同一個上限畫的話，流程圖永遠看起來差一顆。
 
        ★ 關卡清單哪裡來（一律取現成的單一來源，不在這裡另抄一份）
-            資訊倫理 → content/ethics.js 的 QUIZ_CONTENT
-            流程圖   → content/flowchart.js 的 FLOW_UNITS
-            程式設計 → config.js 的 CONFIG.UNITS
-            運算思維 → 只有編號（題目清單寫在 thinking.html 裡面，
-                       沒有共用檔可讀）—— 所以顯示「第 N 題」。 */
+            章節測驗 → {學期}/content/ 的題庫（QUIZ_CONTENT）
+            流程圖   → 11501/content/flowchart.js 的 FLOW_UNITS
+            程式設計、概念星 → {學期}/config.js 的 CONFIG.UNITS
+            運算思維 → {學期}/config.js 的 THINKING.CHALLENGES（顯示「第 N 題」） */
     function unitColumns() {
       const cols = [];
       const has = k => subjects.some(s => s.key === k);
@@ -1025,8 +1029,9 @@
                     cap: 3, units: list });
       }
       if (has('thinking')) {
-        cols.push({ key: 'thinking', name: '運算思維', cap: 2,
-                    units: Array.from({ length: 10 }, (_, i) => ({ id: String(i+1), label: '第' + (i+1) + '題' })) });
+        const n = ((window.CONFIG.THINKING || {}).CHALLENGES || []).length || 10;
+        cols.push({ key: 'thinking', name: SUBJ_OF('thinking').label || '運算思維', cap: 2,
+                    units: Array.from({ length: n }, (_, i) => ({ id: String(i+1), label: '第' + (i+1) + '題' })) });
       }
       if (has('flowchart') && window.FLOW_UNITS) {
         cols.push({ key: 'flowchart', name: '流程圖',
@@ -1034,8 +1039,13 @@
                     units: FLOW_UNITS.map(u => ({ id: u.id, label: u.id })) });
       }
       if (has('scratch')) {
-        cols.push({ key: 'scratch', name: '程式設計',
+        const noUp = window.CONFIG.NO_UPLOAD || [];   // 沒有作品要交的關卡（下學期第 5、10 關）不列
+        cols.push({ key: 'scratch', name: SUBJ_OF('scratch').label || '程式設計',
                     cap: 3,
+                    units: (window.CONFIG.UNITS || []).filter(u => noUp.indexOf(u[0]) < 0).map(u => ({ id: u[0], label: u[0] })) });
+      }
+      if (has('concept')) {
+        cols.push({ key: 'concept', name: SUBJ_OF('concept').label || '概念星', cap: 3,
                     units: (window.CONFIG.UNITS || []).map(u => ({ id: u[0], label: u[0] })) });
       }
       return cols;
@@ -1062,6 +1072,9 @@
       }
       if (key === 'scratch') {
         return Number(((m.scratch || {}).unitStars || {})[unitId]) || 0;
+      }
+      if (key === 'concept') {
+        return (window.GRADING && GRADING.quizStars) ? GRADING.quizStars(((m.scratch || {}).quiz) || {}, unitId) : 0;
       }
       return 0;
     }
@@ -1155,7 +1168,7 @@
           let lvlNote = '', detailHTML = '';
           if (max > 3) {
             // 自動累加型（運算思維／資訊倫理）：唯讀顯示星數 + 可展開明細
-            const RULE = { ethics:'每章 1–3★', thinking:'每關 2★', flowchart:'每關 2★', scratch:'每關 2–3★' };
+            const RULE = {}; SUBJ.forEach(x => { RULE[x.key] = x.rule || ''; });
 const __bn = bonusOf(student, sub.key);
             /* 顯示成「原始 + 加分」兩段，不要合成一個數字 ——
                合起來就看不出加分給了沒，老師會找不到為什麼是這個數。 */
@@ -1166,6 +1179,10 @@ const __bn = bonusOf(student, sub.key);
             if (sub.key === 'scratch') {
               // 一律以「實際拿到星數的關卡」為準；舊資料沒有 unitStars 就是 0（沒經過批改）
               doneCount = Object.values(meta.unitStars || {}).filter(v => Number(v) > 0).length;
+            }
+            if (sub.key === 'concept') {
+              doneCount = (window.GRADING && GRADING.quizTotal)
+                ? GRADING.quizTotal((((student.__modules || {}).scratch) || {}).quiz || {}).done : 0;
             }
             if (doneCount != null) {
               const unit = sub.key === 'ethics' ? '章節' : '關';
@@ -1474,7 +1491,7 @@ const __bn = bonusOf(student, sub.key);
 
     // ===== 📡 本節課即時看板 =====
     let _lvUnsubs = [], _lvRoster = [], _lvSince = null, _lvData = {};
-    const LV_MOD = { flowchart:['🧩','emerald'], scratch:['🐱','orange'], ethics:['⚖️','pink'], thinking:['🧠','green'] };
+    const LV_MOD = { flowchart:['🧩','emerald'], scratch:['🐱','orange'], ethics:['⚖️','pink'], thinking:['🧠','green'], concept:['💡','indigo'] };
 
     async function openLiveModal(){
       const m = document.getElementById('liveModal');
@@ -1531,8 +1548,9 @@ const __bn = bonusOf(student, sub.key);
       const rows=_lvRoster.map(s=>{
         const d=_lvData[s.studentId];
         const mods=(d&&d.modules)||{};
-        const total=['ethics','thinking','flowchart','scratch']
-          .reduce((a,k)=>a+(Number((mods[k]||{}).stars)||0),0);
+        const total=SUBJ.filter(x=>!x.computed).map(x=>x.key)
+          .reduce((a,k)=>a+(Number((mods[k]||{}).stars)||0),0)
+          + (SUBJ_OF('concept').key && window.GRADING && GRADING.quizTotal ? GRADING.quizTotal(((mods.scratch||{}).quiz)||{}).stars : 0);
         const hist=(window.GRADING&&GRADING.statHistory)?GRADING.statHistory(d||{}):((d&&d.history)||[]);
         const recent=hist.filter(h=>Number(h.at)>=since);
         const gained=recent.reduce((a,h)=>a+(Number(h.stars)||0),0);
@@ -1669,7 +1687,7 @@ const __bn = bonusOf(student, sub.key);
       }
       /* 起點和「出席紀錄」「每週評分」一致：老師在每週評分改過學期開始日就用那個，沒有就用 config.js */
       let startStr=window.CONFIG.TERM_START;
-      try{ startStr=localStorage.getItem('wky_start')||startStr; }catch(e){}
+      try{ startStr=localStorage.getItem('wky_start_' + window.CONFIG.TERM)||startStr; }catch(e){}
       const start=new Date(startStr+'T00:00:00');
       const rows=SCHEDULE.classLessons(_sched, cls, start, new Date());
       if(!rows.length){
@@ -1847,7 +1865,7 @@ const __bn = bonusOf(student, sub.key);
         } catch (e) { sel.innerHTML = '<option value="">（讀取班級失敗）</option>'; }
       }
       // 學期開始日：預設值來自 config.js 的 TERM_START，可自行調整並記住
-      const saved = localStorage.getItem('wky_start');
+      const saved = localStorage.getItem('wky_start_' + window.CONFIG.TERM);
       if (saved) document.getElementById('wkyStart').value = saved;
       else document.getElementById('wkyStart').value = window.CONFIG.TERM_START;
       const b = localStorage.getItem('wky_base'); if (b) document.getElementById('wkyBase').value = b;
@@ -1872,7 +1890,7 @@ const __bn = bonusOf(student, sub.key);
       const per  = Math.max(1, Number(document.getElementById('wkyPer').value) || 4);
       const weeks = Math.max(1, Math.min(25, Number(document.getElementById('wkyWeeks').value) || 10));
       if (!cls || !startStr) { box.textContent = '請先選擇班級並填入學期開始日。'; return; }
-      localStorage.setItem('wky_start', startStr);
+      localStorage.setItem('wky_start_' + window.CONFIG.TERM, startStr);
       localStorage.setItem('wky_base', String(base));
       localStorage.setItem('wky_per', String(per));
       box.textContent = '計算中…';
@@ -1983,7 +2001,9 @@ const __bn = bonusOf(student, sub.key);
   var list = document.querySelectorAll('a[data-bust]');
   for (var i = 0; i < list.length; i++) {
     var a = list[i];
-    a.href += (a.href.indexOf('?') < 0 ? '?' : '&') + 'v=' + t;
+    /* 繳交審核是上學期的流程圖圖片加分：沒有逐關流程圖的學期不顯示 */
+    if (/review\.html/.test(a.getAttribute('href')) && !window.CONFIG.FLOWCHART) { a.remove(); continue; }
+    a.href += (a.href.indexOf('?') < 0 ? '?' : '&') + 'term=' + encodeURIComponent(window.CONFIG.TERM) + '&v=' + t;
   }
 })();
 </script>

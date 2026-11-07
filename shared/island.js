@@ -293,14 +293,78 @@
     return tex;
   }
 
-  /* ── 3. 精準 3D 地形高度與懸崖碰撞（徹底解決角色穿模消失問題） ──── */
-  // 北側二層高台範圍：wx ∈ [-27, 27], wz ∈ [-24, -12.5]，高度 +2.8
-  // 石階斜坡範圍：wx ∈ [-9.5, -2.5], wz ∈ [-12.5, -7.5]，高度由 0 平滑升至 +2.8
+  /* ── 3. 精準 3D 地形高度與各島專屬地形配置（每座島擁有獨立地形與石階動線） ──── */
   var CLIFF_Z_EDGE = -12.5;
   var RAMP_Z_SOUTH = -7.5;
   var RAMP_X_MIN   = -9.8;
   var RAMP_X_MAX   = -2.2;
   var CLIFF_HEIGHT = 2.8;
+  var currentVariantKey = 'hub';
+
+  var TERRAIN_PROFILES = {
+    hub: {
+      sides: 56, scaleX: 1.04, scaleZ: 0.68,
+      sandColor: 0xfde68a, cliffWallColor: 0x8b6946,
+      rampXMin: -9.8, rampXMax: -2.2,
+      stepColorA: 0xe7d7c1, stepColorB: 0xd6c7ae,
+      riverSign: 1, waterColor: 0x38bdf8,
+      bridgeDeckColor: 0xb45309, bridgeRailColor: 0xdc2626,
+      plazaShape: 'box'
+    },
+    ethics: {
+      // 🍎 豐收梯田果園島：雙弧梯田果園海岸、中央寬敞石階、西側灌溉溪流與水車平橋、圓形紅磚農莊廣場
+      sides: 32, scaleX: 1.08, scaleZ: 0.71,
+      sandColor: 0xfef08a, cliffWallColor: 0x9a5b32,
+      rampXMin: -3.8, rampXMax: 3.8,
+      stepColorA: 0xfde68a, stepColorB: 0xf59e0b,
+      riverSign: -1, waterColor: 0x38bdf8,
+      bridgeDeckColor: 0x92400e, bridgeRailColor: 0xf59e0b,
+      plazaShape: 'circle'
+    },
+    thinking: {
+      // 🎪 星光環湖遊樂園島：十二芒星海岸、東側彩虹階梯、八角星光舞台廣場、寶石藍星光湖與金邊拱橋
+      sides: 12, scaleX: 1.06, scaleZ: 0.70,
+      sandColor: 0xfef9c3, cliffWallColor: 0x7e4a6e,
+      rampXMin: 2.2, rampXMax: 9.8,
+      stepColorA: 0xf472b6, stepColorB: 0x38bdf8,
+      riverSign: 1, waterColor: 0x0ea5e9,
+      bridgeDeckColor: 0xec4899, bridgeRailColor: 0xfacc15,
+      plazaShape: 'octagon'
+    },
+    code: {
+      // ⚙️ 蒸氣峽谷鐵道木工島：八角岩盤峽谷島、玄武岩山壁與礦坑隧道口、枕木階梯、鋼鐵桁架橋
+      sides: 8, scaleX: 1.06, scaleZ: 0.69,
+      sandColor: 0xd6c7ae, cliffWallColor: 0x57534e,
+      rampXMin: -9.8, rampXMax: -2.2,
+      stepColorA: 0xa8a29e, stepColorB: 0x78716c,
+      riverSign: 1, waterColor: 0x0284c7,
+      bridgeDeckColor: 0x475569, bridgeRailColor: 0xd97706,
+      plazaShape: 'box'
+    },
+    flowchart: {
+      sides: 8, scaleX: 1.06, scaleZ: 0.69,
+      sandColor: 0xd6c7ae, cliffWallColor: 0x57534e,
+      rampXMin: -9.8, rampXMax: -2.2,
+      stepColorA: 0xa8a29e, stepColorB: 0x78716c,
+      riverSign: 1, waterColor: 0x0284c7,
+      bridgeDeckColor: 0x475569, bridgeRailColor: 0xd97706,
+      plazaShape: 'box'
+    },
+    arduino: {
+      // 🤖 未來科技海灣岬角島：六角蜂巢科技人工島、銀白石英堤岸、中央發光能量階梯、海上雙子光電浮島
+      sides: 6, scaleX: 1.08, scaleZ: 0.70,
+      sandColor: 0xe2e8f0, cliffWallColor: 0x334155,
+      rampXMin: -3.6, rampXMax: 3.6,
+      stepColorA: 0xe0f2fe, stepColorB: 0x38bdf8,
+      riverSign: 1, waterColor: 0x06b6d4,
+      bridgeDeckColor: 0xe2e8f0, bridgeRailColor: 0x0ea5e9,
+      plazaShape: 'hexagon'
+    }
+  };
+
+  function getTerrainProfile(variantKey) {
+    return TERRAIN_PROFILES[variantKey || currentVariantKey] || TERRAIN_PROFILES.hub;
+  }
 
   function pctToWorldX(xPct) {
     return (xPct - 50) * 0.94;
@@ -315,10 +379,11 @@
     return 50 + wz / 0.70;
   }
 
-  // 取得任意 (wx, wz) 的精確地表高度（與 3D 幾何體 100% 吻合，絕不陷入地下）
-  function getExactSurfaceY(wx, wz) {
-    // 1. 在石階斜坡範圍內：平滑爬升
-    if (wx >= RAMP_X_MIN && wx <= RAMP_X_MAX && wz >= CLIFF_Z_EDGE && wz <= RAMP_Z_SOUTH) {
+  // 取得任意 (wx, wz) 的精確地表高度（依目前島嶼地形動態計算，與 3D 幾何體 100% 吻合）
+  function getExactSurfaceY(wx, wz, vKey) {
+    var prof = getTerrainProfile(vKey);
+    // 1. 在該島專屬石階斜坡範圍內：平滑爬升
+    if (wx >= prof.rampXMin && wx <= prof.rampXMax && wz >= CLIFF_Z_EDGE && wz <= RAMP_Z_SOUTH) {
       var t = (RAMP_Z_SOUTH - wz) / (RAMP_Z_SOUTH - CLIFF_Z_EDGE);
       return Math.max(0, Math.min(1, t)) * CLIFF_HEIGHT + 0.12;
     }
@@ -326,9 +391,10 @@
     if (wz <= CLIFF_Z_EDGE && Math.abs(wx) <= 27.5) {
       return CLIFF_HEIGHT + 0.12;
     }
-    // 3. 在拱形紅木橋上（wx ∈ [17.2, 23.8], wz ∈ [-3.2, 0.2]）
-    if (wx >= 17.2 && wx <= 23.8 && wz >= -3.2 && wz <= 0.2) {
-      var bt = 1 - Math.abs((wx - 20.5) / 3.3);
+    // 3. 在拱形橋上（依河道在東側或西側動態判斷）
+    var brCenter = 20.5 * prof.riverSign;
+    if (Math.abs(wx - brCenter) <= 3.3 && wz >= -3.2 && wz <= 0.2) {
+      var bt = 1 - Math.abs((wx - brCenter) / 3.3);
       return 0.15 + Math.max(0, bt) * 0.45;
     }
     // 4. 在中央廣場與南方木棧碼頭上
@@ -339,26 +405,24 @@
     return 0.06;
   }
 
-  // 懸崖岩壁碰撞修正：若角色從一樓直接撞向北側垂直懸崖壁（非斜坡區），自動沿岩壁滑向石階斜坡或順暢躍上
+  // 懸崖岩壁碰撞修正
   function resolveCliffMovement(oldWx, oldWz, newWx, newWz) {
-    var inRampX = newWx >= RAMP_X_MIN && newWx <= RAMP_X_MAX;
+    var prof = getTerrainProfile();
+    var inRampX = newWx >= prof.rampXMin && newWx <= prof.rampXMax;
     if (!inRampX) {
-      // 由南往北跨越懸崖邊界線 CLIFF_Z_EDGE
       if (oldWz > CLIFF_Z_EDGE && newWz <= CLIFF_Z_EDGE && Math.abs(newWx) <= 27.5) {
-        // 若是鍵盤手動撞牆，輕推往斜坡方向並停在崖邊；若是滑鼠點擊高台目標，允許自動飛躍上高台
         return { wx: newWx, wz: newWz };
       }
     }
     return { wx: newWx, wz: newWz };
   }
 
-  /* ── 3B. 地形合理擺放校正器（建築／果樹不可壓在石階、河道、瀑布池、拱橋、碼頭、崖邊或島外） ── */
-  // 各島固定裝飾物（路燈、島長、花叢、主題道具）的世界座標與佔地半徑，需與 3D 場景建構處一致
-  var LAMP_POSITIONS = [[-8.5, 5.2], [8.5, 5.2], [-11.8, -4.5], [8.5, -4.5], [-3.2, 16.5], [3.2, 16.5]];
+  /* ── 3B. 地形合理擺放校正器（建築／果樹不可壓在該島的石階、河道、瀑布池、拱橋、碼頭、崖邊或島外） ── */
+  var LAMP_POSITIONS = [[-8.5, 5.2], [8.5, 5.2], [-11.8, -4.5], [11.8, -4.5], [-3.2, 16.5], [3.2, 16.5]];
   var VARIANT_DECOS = {
     hub:       [[-6.4, 3.6, 1.05]],
-    ethics:    [[16.5, 6.5, 1.55], [-16, 12, 1.1], [-12, 12, 1.1], [12, 12, 1.1], [16, 12, 1.1], [-22, -6, 1.1], [26, -3, 1.1]],
-    thinking:  [[-14.2, 7.4, 1.25], [-11.5, 6.2, 0.6], [11.5, 6.2, 0.6], [-11.5, -5.8, 0.6], [11.5, -5.8, 0.6], [-19.5, 2.0, 0.6], [16.5, 9.0, 0.6]],
+    ethics:    [[16.5, 6.5, 1.55], [-16, 12, 1.1], [-12, 12, 1.1], [12, 12, 1.1], [16, 12, 1.1], [-26, -3, 1.1], [22, -6, 1.1]],
+    thinking:  [[-14.2, 7.4, 1.25], [-11.5, 6.2, 0.6], [11.5, 6.2, 0.6], [-11.5, -5.8, 0.6], [12.5, -5.8, 0.6], [-19.5, 2.0, 0.6], [16.5, 9.0, 0.6]],
     code:      [],
     flowchart: [],
     arduino:   [[6.2, 4.2, 1.15], [-14.5, 9.5, 1.3], [14.5, 9.5, 1.3], [-16.5, -5.5, 1.3], [15.5, -5.5, 1.3]]
@@ -371,32 +435,34 @@
     return list.map(function (d) { return { wx: d[0], wz: d[1], r: d[2] }; });
   }
 
-  function riverCenterX(wz) {
-    return 20.8 - 0.0998 * (wz - 1.2);
+  function riverCenterX(wz, variantKey) {
+    var prof = getTerrainProfile(variantKey);
+    return prof.riverSign * (20.8 - 0.0998 * (wz - 1.2));
   }
 
   // 回傳該點（半徑 r）是否落在不合理地形上
   function isTerrainBlocked(wx, wz, r, variantKey, wantCliff) {
+    var prof = getTerrainProfile(variantKey);
     var pad = 0.3;
-    // 石階斜坡本體、南側入口走道與北側出口平台
-    if (wx + r > RAMP_X_MIN - 0.6 && wx - r < RAMP_X_MAX + 0.6 && wz + r > CLIFF_Z_EDGE - 2.0 && wz - r < -4.0) return true;
-    // 河道（含兩岸緩衝）與紅木拱橋
-    if (wz > -12.8 && wz < 15.2 && Math.abs(wx - riverCenterX(wz)) < 1.7 + r + pad) return true;
-    if (wx + r > 17.0 && wx - r < 24.0 && wz + r > -3.4 && wz - r < 0.4) return true;
-    // 高台池塘與瀑布
-    if (Math.sqrt((wx - 19.5) * (wx - 19.5) + (wz + 15.2) * (wz + 15.2)) < 3.8 + r + pad) return true;
+    // 該島專屬石階斜坡本體、南側入口走道與北側出口平台
+    if (wx + r > prof.rampXMin - 0.6 && wx - r < prof.rampXMax + 0.6 && wz + r > CLIFF_Z_EDGE - 2.0 && wz - r < -4.0) return true;
+    // 該島河道（含兩岸緩衝）與拱橋
+    if (wz > -12.8 && wz < 15.2 && Math.abs(wx - riverCenterX(wz, variantKey)) < 1.7 + r + pad) return true;
+    var brX = 20.5 * prof.riverSign;
+    if (Math.abs(wx - brX) < 3.5 + r && wz + r > -3.4 && wz - r < 0.4) return true;
+    // 該島高台池塘與瀑布
+    var pondX = 19.5 * prof.riverSign;
+    if (Math.sqrt((wx - pondX) * (wx - pondX) + (wz + 15.2) * (wz + 15.2)) < 3.8 + r + pad) return true;
     // 南方木棧碼頭與入口步道
     if (Math.abs(wx) < 2.6 + r && wz + r > 16.0) return true;
     // 蒸氣木工村地面鐵軌
     if ((variantKey === 'code' || variantKey === 'flowchart') && wx + r > -16.2 && wx - r < 14.6 && wz + r > -0.4 && wz - r < 1.4) return true;
 
     if (wantCliff) {
-      // 必須完整站在北側高台上（不可跨崖邊、不可懸空超出高台）
       if (wz + r > CLIFF_Z_EDGE - pad) return true;
       if (Math.abs(wx) + r > 26.5) return true;
       if (wz - r < -24.2) return true;
     } else {
-      // 必須完整站在一樓草地上（不可貼住崖壁、不可落到沙灘或海上）
       if (wz - r < CLIFF_Z_EDGE + pad) return true;
       var ax = 40.8 - r - 1.2, az = 26.7 - r - 1.2;
       if ((wx / ax) * (wx / ax) + (wz / az) * (wz / az) > 1) return true;
@@ -2752,8 +2818,12 @@
     var props = rawProps.map(function (p) {
       return Object.assign({ drops: ['🍎 果實 +1', '💰 100鈴錢'] }, p);
     });
+    currentVariantKey = cfg.variant || 'hub';
+    var activeTerrainProf = getTerrainProfile(currentVariantKey);
+    RAMP_X_MIN = activeTerrainProf.rampXMin;
+    RAMP_X_MAX = activeTerrainProf.rampXMax;
     // ★ 自動校正不合理擺放：建築與果樹不會出現在石階、河道、瀑布池、拱橋、碼頭、崖邊或島外
-    var layoutFixes = relocateIslandLayout(nodes, props, cfg.variant || 'hub');
+    var layoutFixes = relocateIslandLayout(nodes, props, currentVariantKey);
     if (layoutFixes.length && global.console) {
       console.info('[AC_ISLAND] 已自動校正 ' + layoutFixes.length + ' 處不合理擺放：\n' + layoutFixes.join('\n'));
     }
@@ -3224,8 +3294,10 @@
       seaMesh.position.y = -1.25;
       worldGroup.add(seaMesh);
 
-      var foamGeo = new THREE.CylinderGeometry(45.8, 46.5, 0.22, 56);
-      foamGeo.scale(1.06, 1, 0.72);
+      var prof = getTerrainProfile(variantKey);
+
+      var foamGeo = new THREE.CylinderGeometry(45.8, 46.5, 0.22, prof.sides);
+      foamGeo.scale(prof.scaleX * 1.02, 1, prof.scaleZ * 1.06);
       var foamMesh = new THREE.Mesh(
         foamGeo,
         new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.8 })
@@ -3233,20 +3305,20 @@
       foamMesh.position.y = -1.1;
       worldGroup.add(foamMesh);
 
-      // 金色沙灘外環（頂面在 y = -0.15，草地外圈自然露出金色沙灘）
-      var sandGeo = new THREE.CylinderGeometry(42.8, 45.4, 1.8, 56, 1);
-      sandGeo.scale(1.05, 1, 0.70);
+      // 各島專屬沙灘外環（依 TERRAIN_PROFILES 切換海岸多邊形、比例與沙色）
+      var sandGeo = new THREE.CylinderGeometry(42.8, 45.4, 1.8, prof.sides, 1);
+      sandGeo.scale(prof.scaleX * 1.01, 1, prof.scaleZ * 1.03);
       var sandMesh = new THREE.Mesh(
         sandGeo,
-        new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.85 })
+        new THREE.MeshStandardMaterial({ color: prof.sandColor, roughness: 0.85 })
       );
       sandMesh.position.y = -1.0;
       sandMesh.receiveShadow = true;
       worldGroup.add(sandMesh);
 
       // 主島第一層草地高台（頂面精確位於 y = 0.0）
-      var islandGeo = new THREE.CylinderGeometry(39.2, 40.8, 1.6, 56, 1);
-      islandGeo.scale(1.04, 1, 0.68);
+      var islandGeo = new THREE.CylinderGeometry(39.2, 40.8, 1.6, prof.sides, 1);
+      islandGeo.scale(prof.scaleX, 1, prof.scaleZ);
       var islandMesh = new THREE.Mesh(
         islandGeo,
         new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.78 })
@@ -3260,8 +3332,8 @@
       var cliffDepth = 12.2;
       var cliffCenterZ = CLIFF_Z_EDGE - cliffDepth * 0.5; // -18.6
       var cliffWall = new THREE.Mesh(
-        new THREE.BoxGeometry(55.0, CLIFF_HEIGHT, cliffDepth),
-        new THREE.MeshStandardMaterial({ color: 0x8b6946, roughness: 0.88 })
+        new THREE.BoxGeometry(55.0 * (prof.scaleX / 1.04), CLIFF_HEIGHT, cliffDepth),
+        new THREE.MeshStandardMaterial({ color: prof.cliffWallColor, roughness: 0.88 })
       );
       cliffWall.position.set(0, CLIFF_HEIGHT * 0.5, cliffCenterZ);
       cliffWall.castShadow = true;
@@ -3269,7 +3341,7 @@
       cliffGroup.add(cliffWall);
 
       var cliffTop = new THREE.Mesh(
-        new THREE.BoxGeometry(54.8, 0.24, cliffDepth - 0.1),
+        new THREE.BoxGeometry(54.8 * (prof.scaleX / 1.04), 0.24, cliffDepth - 0.1),
         new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.78 })
       );
       cliffTop.position.set(0, CLIFF_HEIGHT, cliffCenterZ);
@@ -3277,17 +3349,17 @@
       cliffGroup.add(cliffTop);
       worldGroup.add(cliffGroup);
 
-      // 懸崖石階斜坡（連接一樓 wz = -7.5 與二層高台 wz = -12.5，wx ∈ [-9.8, -2.2]）
+      // 懸崖石階斜坡（依各島專屬位置 prof.rampXMin ~ prof.rampXMax 與材質配色）
       var rampGroup = new THREE.Group();
-      var rampCenterX = (RAMP_X_MIN + RAMP_X_MAX) * 0.5; // -6.0
-      var rampWidth = RAMP_X_MAX - RAMP_X_MIN;           // 7.6
+      var rampCenterX = (prof.rampXMin + prof.rampXMax) * 0.5;
+      var rampWidth = prof.rampXMax - prof.rampXMin;
       for (var stp = 0; stp < 8; stp++) {
         var frac = (stp + 0.5) / 8;
         var stepZ = RAMP_Z_SOUTH - frac * (RAMP_Z_SOUTH - CLIFF_Z_EDGE);
         var stepH = frac * CLIFF_HEIGHT;
         var stepMesh = new THREE.Mesh(
           new THREE.BoxGeometry(rampWidth, stepH, 0.72),
-          new THREE.MeshStandardMaterial({ color: stp % 2 ? 0xd6c7ae : 0xe7d7c1, roughness: 0.75 })
+          new THREE.MeshStandardMaterial({ color: stp % 2 ? prof.stepColorB : prof.stepColorA, roughness: 0.75 })
         );
         stepMesh.position.set(rampCenterX, stepH * 0.5, stepZ);
         stepMesh.castShadow = true;
@@ -3296,9 +3368,19 @@
       }
       worldGroup.add(rampGroup);
 
-      // 中央動森廣場石磚地坪
+      // 中央動森廣場地坪（依各島主題切換方形、圓形果園、八角星舞台或六角科技平台）
+      var plazaGeo;
+      if (prof.plazaShape === 'circle') {
+        plazaGeo = new THREE.CylinderGeometry(8.2, 8.4, 0.12, 32);
+      } else if (prof.plazaShape === 'octagon') {
+        plazaGeo = new THREE.CylinderGeometry(8.5, 8.7, 0.12, 8);
+      } else if (prof.plazaShape === 'hexagon') {
+        plazaGeo = new THREE.CylinderGeometry(8.5, 8.7, 0.12, 6);
+      } else {
+        plazaGeo = new THREE.BoxGeometry(16.8, 0.12, 10.6);
+      }
       var plazaMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(16.8, 0.12, 10.6),
+        plazaGeo,
         new THREE.MeshStandardMaterial({ map: plazaTex, roughness: 0.75 })
       );
       plazaMesh.position.set(0, 0.02, 0.5);
@@ -3306,7 +3388,7 @@
       worldGroup.add(plazaMesh);
 
       // 石板步道
-      var stonePathMat = new THREE.MeshStandardMaterial({ color: 0xe7d5bc, roughness: 0.8 });
+      var stonePathMat = new THREE.MeshStandardMaterial({ color: prof.stepColorA, roughness: 0.8 });
       var pathCoords = [
         [0, 7.2], [0, 9.8], [0, 12.4], [0, 15.0], [0, 17.6],
         [-10.5, 0.5], [-14.0, 0.5], [-17.5, 0.5],
@@ -3319,41 +3401,42 @@
         worldGroup.add(stone);
       });
 
-      // ── 2. 3D 瀑布、河流與拱形紅木橋 ──
+      // ── 2. 3D 瀑布、河流與跨河大橋（依 prof.riverSign 可位於東側或西側） ──
+      var rSign = prof.riverSign || 1;
       var waterfallGroup = new THREE.Group();
       var upperPond = new THREE.Mesh(
         new THREE.CylinderGeometry(3.8, 3.8, 0.16, 20),
-        new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2 })
+        new THREE.MeshStandardMaterial({ color: prof.waterColor, roughness: 0.2 })
       );
-      upperPond.position.set(19.5, CLIFF_HEIGHT + 0.08, -15.2);
+      upperPond.position.set(19.5 * rSign, CLIFF_HEIGHT + 0.08, -15.2);
       waterfallGroup.add(upperPond);
 
       var fallWater = new THREE.Mesh(
         new THREE.BoxGeometry(3.2, CLIFF_HEIGHT + 0.1, 0.45),
         new THREE.MeshBasicMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.88 })
       );
-      fallWater.position.set(19.5, CLIFF_HEIGHT * 0.5, CLIFF_Z_EDGE + 0.15);
+      fallWater.position.set(19.5 * rSign, CLIFF_HEIGHT * 0.5, CLIFF_Z_EDGE + 0.15);
       waterfallGroup.add(fallWater);
 
       var riverMesh = new THREE.Mesh(
         new THREE.BoxGeometry(3.4, 0.1, 27.5),
-        new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2 })
+        new THREE.MeshStandardMaterial({ color: prof.waterColor, roughness: 0.2 })
       );
-      riverMesh.position.set(20.8, 0.02, 1.2);
-      riverMesh.rotation.y = -0.1;
+      riverMesh.position.set(20.8 * rSign, 0.02, 1.2);
+      riverMesh.rotation.y = -0.1 * rSign;
       waterfallGroup.add(riverMesh);
 
       var bridgeGroup = new THREE.Group();
-      bridgeGroup.position.set(20.5, 0.22, -1.5);
+      bridgeGroup.position.set(20.5 * rSign, 0.22, -1.5);
       var bridgeDeck = new THREE.Mesh(
         new THREE.BoxGeometry(6.2, 0.28, 3.2),
-        new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.7 })
+        new THREE.MeshStandardMaterial({ color: prof.bridgeDeckColor, roughness: 0.7 })
       );
       bridgeGroup.add(bridgeDeck);
       [-1.4, 1.4].forEach(function (bz) {
         var rail = new THREE.Mesh(
           new THREE.BoxGeometry(6.2, 0.68, 0.22),
-          new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 })
+          new THREE.MeshStandardMaterial({ color: prof.bridgeRailColor, roughness: 0.5 })
         );
         rail.position.set(0, 0.44, bz);
         bridgeGroup.add(rail);
@@ -3457,9 +3540,32 @@
       starFieldGroup.add(moonMesh);
       scene.add(starFieldGroup);
 
-      // ── 4B. 依據各課程系列主題（variant）鋪設專屬 3D 島嶼環境裝飾 ──
+      // ── 4B. 依據各課程系列主題（variant）鋪設專屬 3D 地形地貌與環境裝飾 ──
       if (variantKey === 'ethics') {
-        // 🍎 資訊倫理與安全（豐收果園）：原木農莊圍欄 ＋ 廣場野餐墊與豐收水果籃
+        // 🍎 資訊倫理與安全（豐收果園梯田島）：東西雙側果園梯田半島 ＋ 紅磚圓環圍邊 ＋ 原木農莊圍欄
+        [-32, 32].forEach(function (lobeX) {
+          var lobeSand = new THREE.Mesh(
+            new THREE.CylinderGeometry(12.2, 13.5, 1.8, 28),
+            new THREE.MeshStandardMaterial({ color: prof.sandColor, roughness: 0.85 })
+          );
+          lobeSand.position.set(lobeX, -1.0, 2.5);
+          worldGroup.add(lobeSand);
+          var lobeGrass = new THREE.Mesh(
+            new THREE.CylinderGeometry(10.5, 11.4, 1.6, 28),
+            new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.78 })
+          );
+          lobeGrass.position.set(lobeX, -0.8, 2.5);
+          lobeGrass.receiveShadow = true;
+          worldGroup.add(lobeGrass);
+        });
+        var orchardRing = new THREE.Mesh(
+          new THREE.RingGeometry(8.2, 8.9, 32),
+          new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.75, side: THREE.DoubleSide })
+        );
+        orchardRing.rotation.x = -Math.PI / 2;
+        orchardRing.position.set(0, 0.08, 0.5);
+        worldGroup.add(orchardRing);
+
         var fenceMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.78 });
         [[-16, 12], [-12, 12], [12, 12], [16, 12], [-22, -6], [26, -3]].forEach(function (fp) {
           var fg = new THREE.Group();
@@ -3477,7 +3583,7 @@
           enableShadow(fg, true, true);
           worldGroup.add(fg);
         });
-        // 廣場紅白格野餐墊與蘋果籃
+        // 廣場紅白格野餐墊
         var matPicnic = new THREE.Mesh(
           new THREE.BoxGeometry(3.2, 0.08, 2.4),
           new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.65 })
@@ -3485,7 +3591,28 @@
         matPicnic.position.set(-4.2, 0.09, 2.8);
         worldGroup.add(matPicnic);
       } else if (variantKey === 'thinking') {
-        // 🎪 運算思維挑戰（森林遊樂園）：歡樂彩色氣球柱 ＋ 廣場星光舞台圓環
+        // 🎪 運算思維挑戰（星光潟湖樂園島）：西側星光祈願內陸湖 ＋ 彩色氣球柱 ＋ 八角星光舞台圓環
+        var lagoonGroup = new THREE.Group();
+        var lagoonRim = new THREE.Mesh(
+          new THREE.CylinderGeometry(6.2, 6.6, 0.14, 24),
+          new THREE.MeshStandardMaterial({ color: 0xfde047, roughness: 0.6 })
+        );
+        lagoonRim.position.set(-22.5, 0.02, 7.5);
+        lagoonGroup.add(lagoonRim);
+        var lagoonWater = new THREE.Mesh(
+          new THREE.CylinderGeometry(5.5, 5.5, 0.18, 24),
+          new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.25, roughness: 0.15 })
+        );
+        lagoonWater.position.set(-22.5, 0.04, 7.5);
+        lagoonGroup.add(lagoonWater);
+        var starStage = new THREE.Mesh(
+          new THREE.CylinderGeometry(2.2, 2.5, 0.36, 8),
+          new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.45 })
+        );
+        starStage.position.set(-22.5, 0.18, 7.5);
+        lagoonGroup.add(starStage);
+        worldGroup.add(lagoonGroup);
+
         var balloonCols = [0xf43f5e, 0x38bdf8, 0xfacc15, 0xa855f7, 0x4ade80];
         [[-11.5, 6.2], [11.5, 6.2], [-11.5, -5.8], [11.5, -5.8], [-19.5, 2.0], [16.5, 9.0]].forEach(function (bp, idx) {
           var bg = new THREE.Group();
@@ -3513,7 +3640,39 @@
         carnRing.position.set(0, 0.09, 0.5);
         worldGroup.add(carnRing);
       } else if (variantKey === 'code' || variantKey === 'flowchart') {
-        // ⚙️ 清單與流程圖程式設計（蒸氣齒輪木工村）：地面礦山鐵軌枕木 ＋ 金色巨型地面齒輪圖騰
+        // ⚙️ 程式設計（蒸氣礦山峽谷島）：北崖礦坑隧道拱門 ＋ 玄武岩峽谷岩柱 ＋ 地面礦山鐵軌枕木
+        var tunnelGroup = new THREE.Group();
+        var archMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.85 });
+        var timberMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
+        [-2.2, 2.2].forEach(function (tx) {
+          var pillar = new THREE.Mesh(new THREE.BoxGeometry(0.75, 2.5, 0.9), timberMat);
+          pillar.position.set(tx, 1.25, 0);
+          tunnelGroup.add(pillar);
+        });
+        var lintel = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.65, 1.1), timberMat);
+        lintel.position.set(0, 2.55, 0);
+        tunnelGroup.add(lintel);
+        var darkCave = new THREE.Mesh(
+          new THREE.BoxGeometry(3.8, 2.3, 0.35),
+          new THREE.MeshBasicMaterial({ color: 0x0f172a })
+        );
+        darkCave.position.set(0, 1.15, -0.15);
+        tunnelGroup.add(darkCave);
+        tunnelGroup.position.set(-14.5, 0, CLIFF_Z_EDGE + 0.35);
+        worldGroup.add(tunnelGroup);
+
+        // 東西側峽谷玄武岩柱群
+        [[-31.5, -4.5, 3.8], [-33.0, -2.0, 2.6], [31.5, -5.0, 3.6], [33.2, -2.2, 2.4]].forEach(function (rc) {
+          var rockCol = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.6, 2.1, rc[2], 6),
+            archMat
+          );
+          rockCol.position.set(rc[0], rc[2] * 0.5 - 0.1, rc[1]);
+          rockCol.castShadow = true;
+          rockCol.receiveShadow = true;
+          worldGroup.add(rockCol);
+        });
+
         var tieMat = new THREE.MeshStandardMaterial({ color: 0x5c3616, roughness: 0.85 });
         var railMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.75, roughness: 0.35 });
         var trackGroup = new THREE.Group();
@@ -3529,9 +3688,36 @@
         });
         worldGroup.add(trackGroup);
       } else if (variantKey === 'arduino') {
-        // 🤖 智慧家居機電專題（未來科技創客實驗島）：太陽能光電板陣列 ＋ 發光能量導線與科技光柱
+        // 🤖 智慧專題（六角晶格科技半島）：外海雙六角太陽能科技浮島 ＋ 懸崖霓虹光帶 ＋ 太陽能光電板陣列
         var panelMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, metalness: 0.65, roughness: 0.2 });
         var neonLineMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.9 });
+        // 懸崖邊緣科技藍光導線
+        var cliffNeon = new THREE.Mesh(
+          new THREE.BoxGeometry(52.0, 0.18, 0.28),
+          neonLineMat
+        );
+        cliffNeon.position.set(0, CLIFF_HEIGHT + 0.05, CLIFF_Z_EDGE + 0.05);
+        worldGroup.add(cliffNeon);
+
+        // 東西外海六角科技浮島平台
+        [-36.5, 36.5].forEach(function (hx) {
+          var hexPod = new THREE.Group();
+          var hexBase = new THREE.Mesh(
+            new THREE.CylinderGeometry(6.5, 5.2, 1.4, 6),
+            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.4 })
+          );
+          hexBase.position.y = -0.5;
+          hexPod.add(hexBase);
+          var hexRim = new THREE.Mesh(
+            new THREE.CylinderGeometry(6.65, 6.65, 0.18, 6),
+            neonLineMat
+          );
+          hexRim.position.y = 0.18;
+          hexPod.add(hexRim);
+          hexPod.position.set(hx, 0, 6.0);
+          worldGroup.add(hexPod);
+        });
+
         [[-14.5, 9.5], [14.5, 9.5], [-16.5, -5.5], [15.5, -5.5]].forEach(function (sp) {
           var sg = new THREE.Group();
           var stand = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.1, 8), lampMat);
@@ -3545,7 +3731,7 @@
           enableShadow(sg, true, true);
           worldGroup.add(sg);
         });
-        var circuitRing = new THREE.Mesh(new THREE.RingGeometry(4.8, 5.15, 8), neonLineMat);
+        var circuitRing = new THREE.Mesh(new THREE.RingGeometry(4.8, 5.15, 6), neonLineMat);
         circuitRing.rotation.x = -Math.PI / 2;
         circuitRing.position.set(0, 0.09, 0.5);
         worldGroup.add(circuitRing);

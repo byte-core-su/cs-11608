@@ -16,12 +16,13 @@
   「這次挑戰答對 85%」只告訴你學生大概懂了，
   卻沒告訴你他不懂的是哪一件事 —— 而那才是備課要用的。
 -->
+<script src="../config.js"></script>
+<script src="term.js"></script>
 <script>
 (function () {
   /* ?v=… 防快取：老師的工具頁一天開不了幾次，永遠拿最新的最划算。 */
   var v = '?v=' + Date.now();
-  document.write('<scr' + 'ipt src="../course/config.js' + v + '"></scr' + 'ipt>');
-  document.write('<scr' + 'ipt src="../course/content/ethics.js' + v + '"></scr' + 'ipt>');
+  TERMSEL.include(CONFIG.QUIZ.CONTENT);
   /* ⚠️ anskey.js 一定要載：題庫裡的答案是雜湊，
      教師端要靠它反查「哪一個選項才是對的」。 */
   ['auth.js', 'anskey.js', 'qstat.js'].forEach(function (f) {

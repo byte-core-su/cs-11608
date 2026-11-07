@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資訊科技學習系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../shared/island.css?v=20261107">
+
+  <!-- 全站共用設定（載入順序固定：config → term → guard） -->
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
+  <script src="../shared/guard.js"></script>
+  <script src="../shared/island.js?v=20261107"></script>
+</head>
+<body class="ac-theme-bg">
+
+  <!-- ① 內容：教什麼（章節、教材、題庫） -->
+  <script>TERMSEL.include(CONFIG.QUIZ.CONTENT); if (CONFIG.QUIZ.HINTS) TERMSEL.include(CONFIG.QUIZ.HINTS);</script>
+
+  <!-- ② 共用模組：單一登入、計分規則、進度回報 -->
+  <script src="../shared/sso.js"></script>
+  <script src="../shared/grading.js"></script>
+  <script src="../shared/qstat.js"></script>
+  <!-- 選擇題的答案是雜湊，不是明碼 —— 見 shared/anskey.js 開頭的說明。
+       ⚠️ 一定要排在 quiz-engine 之前：引擎判分時就要用到它。 -->
+  <script src="../shared/anskey.js"></script>
+  <script src="../shared/report.js"></script>
+  <!-- 答錯時「想一想」的 10 秒閱讀倒數（離開就暫停；和流程圖閱讀倒數同一套） -->
+  <script src="../shared/readhold.js"></script>
+
+  <!-- ③ 版型與流程引擎：畫面完全由這支產生 -->
+  <script src="../shared/quiz-engine.js?v=20261107"></script>
+  <script type="module" src="../shared/quiz-firebase.js"></script>
+
+</body>
+</html>

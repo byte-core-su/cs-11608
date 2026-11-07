@@ -65,7 +65,7 @@
     if (!url) {
       return Promise.reject(new Error(
         '還沒設定 Apps Script 的網址。請照 gas/classroom.gs 開頭的步驟部署一次，' +
-        '再把網址填進 course/config.js（CLASSROOM.GAS_URL）。'));
+        '再把網址填進根目錄的 config.js（CLASSROOM.GAS_URL）。'));
     }
     if (!key) {
       return Promise.reject(new Error('還沒輸入通行碼。就是 Apps Script 指令碼屬性裡的 QUERY_KEY。'));

@@ -10,13 +10,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 
+<script src="../config.js"></script>
+<script src="term.js"></script>
 <script>
 /* 教師工具頁：設定檔與共用程式都帶時間戳載入，改版後不會拿到瀏覽器快取的舊版
    （GitHub Pages 會快取 10 分鐘，改了 CLASSROOM.GAS_URL 之後畫面會沿用舊值卻毫無徵兆） */
 (function () {
   var v = '?v=' + Date.now();
-  document.write('<scr' + 'ipt src="../course/config.js' + v + '"></scr' + 'ipt>');
-  document.write('<scr' + 'ipt src="../course/content/flowchart.js' + v + '"></scr' + 'ipt>');
+  if (CONFIG.FLOWCHART) TERMSEL.include(CONFIG.FLOWCHART.CONTENT);
   ['auth.js', 'grading.js', 'classroom.js'].forEach(function (f) {
     document.write('<scr' + 'ipt src="' + f + v + '"></scr' + 'ipt>');
   });
@@ -86,7 +87,7 @@ const db = getFirestore(app);
 const PROGRESS = (C.COLLECTIONS && C.COLLECTIONS.PROGRESS) || (TERM + '-progress');
 const ROSTER = (C.COLLECTIONS && C.COLLECTIONS.ROSTER) || 'roster';
 
-/* 十關流程圖（course/content/flowchart.js） */
+/* 十關流程圖（11501/content/flowchart.js） */
 const FLOW = (window.FLOW_UNITS || []).map(u => ({ id: u.id, no: u.no, title: u.title }));
 
 /* 審核的東西：流程圖圖片（給分存 modules.flowchart.imgUnits，退件存 imgReview）。
@@ -651,7 +652,7 @@ function crPanel() {
           <b>不接也能用</b> —— 自己開 Classroom 看完，回來按給分就好。
         </p>
         ${gasUrl ? '' : `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-          還沒設定 <span class="font-mono">CLASSROOM.GAS_URL</span>（在 course/config.js）。
+          還沒設定 <span class="font-mono">CLASSROOM.GAS_URL</span>（在根目錄的 config.js）。
           部署步驟寫在 <span class="font-mono">gas/classroom.gs</span> 開頭，約五分鐘。</p>`}
         ${state.cr.err ? errBox(state.cr.err) : ''}
         <!-- 通行碼刻意不放在 config.js（網站是公開的）：在這裡輸入一次，記在這台瀏覽器裡。 -->

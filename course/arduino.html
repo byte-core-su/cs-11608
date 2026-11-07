@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino 智慧專題 微課程與互動模擬器</title>
+
+    <!-- =====================================================================
+         Arduino 智慧專題（下學期延伸挑戰）
+         ---------------------------------------------------------------------
+         ★ 版面沿用上學期的 5016b.html：五張課程小卡 → 點進去是
+           【學習目標 ｜ 這一節要決定的事 ｜ 互動體驗區 ｜ 積木邏輯】。
+           兩學期長得一樣，學生不必重新學怎麼用這個頁面。
+
+         ★ 內容不一樣的地方
+           上學期是**照著做**的微課程：題目給定（智慧家居）、元件給定，
+           跟著五節做完就有一個成品。
+           下學期是 PBL：題目自己找、元件自己挑，五節做完是**別人沒有的**作品。
+           上學期練「做得出來」，這學期練「想得出來」——
+           名字從「智慧家居」改成「智慧專題」就是因為題目不再固定。
+
+         ★★ 刻意不指定硬體
+           兩個理由：器材數量不一定夠，指定硬體等於先淘汰一部分學生；
+           而且 PBL 的重點是「為了解決這個問題，我需要什麼」——
+           先給零件清單就變成「這些零件可以做什麼」，方向剛好相反。
+           ⇒ 元件一律用「它感覺得到什麼」描述，不寫型號。
+           ⚠️ 但畫面上要**講明為什麼不給**，並告訴他型號查得到；
+              不講的話學生會以為是漏掉了。
+
+         ⚠️ 五張卡可以跳著看（PBL 本來就會來回）。
+            前面沒填的話，後面那幾節會**明講**要回哪一節，不留白畫面。
+         ===================================================================== -->
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Noto Sans TC"','system-ui','sans-serif'] },
+                    colors: {
+                        primary: '#6366f1',   // Indigo 500（下學期＝靛，和上學期的翠綠分開）
+                        secondary: '#0ea5e9',
+                        accent: '#f59e0b',
+                        darkbg: '#0f172a',
+                        cardbg: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; scroll-behavior: smooth; }
+        .unit-card:hover { transform: translateY(-5px); }
+
+        pre::-webkit-scrollbar, textarea::-webkit-scrollbar, body::-webkit-scrollbar { height: 8px; width: 8px; }
+        pre::-webkit-scrollbar-track, textarea::-webkit-scrollbar-track, body::-webkit-scrollbar-track { background: #1e293b; border-radius: 4px; }
+        pre::-webkit-scrollbar-thumb, textarea::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        pre::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .motor-prop { transition: transform 0.1s linear; }
+        /* 選起來的問題卡／元件卡 */
+        .pick-on { border-color:#6366f1 !important; background:#eef2ff !important; box-shadow:0 0 0 3px rgba(99,102,241,.18); }
+    </style>
+<style>
+/* === 全站紙膠帶手作風套件（以 hub 為準，勿重複注入） === */
+.tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08);background:rgba(250,204,21,.3);z-index:5}
+.underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
+</style>
+  <link rel="stylesheet" href="../shared/island.css?v=20261107">
+  <!-- 身分守門：未從闖關基地登入者導回入口（config → term → guard） -->
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
+  <!-- 別的學期沒有這一頁 ⇒ 回闖關基地 -->
+  <script>if (!(CONFIG.MODULES || []).some(function (m) { return m.href === 'arduino.html'; })) location.replace('hub.html');</script>
+  <script src="../shared/guard.js"></script>
+  <script src="../shared/island.js?v=20261107"></script>
+</head>
+<body class="ac-theme-bg text-slate-800">
+
+    <!-- 動森 NookPhone 頂部導覽橫幅 -->
+    <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 pt-3 pb-2">
+        <div class="ac-hud flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 pl-24 sm:pl-28">
+                <div class="w-10 h-10 rounded-2xl bg-indigo-500 text-white flex items-center justify-center shadow-sm">
+                    <i data-lucide="lightbulb" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="text-[11px] font-black text-indigo-700 tracking-wider">Arduino PBL · 未來科技創客實驗島</div>
+                    <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">Arduino 智慧專題微課程與模擬器</h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="ac-pill">🔌 找問題 · 感測判斷驅動 · 選元件 · 調門檻 · 專題發表</span>
+                <button id="arduino-view-toggle" type="button" onclick="toggleArduinoViewMode()" class="ac-pill hover:bg-amber-100 transition cursor-pointer" style="background:#fef3c7;border-color:#f59e0b">
+                    📋 切換課綱卡片
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 動森島嶼探險地圖（預設顯示） -->
+    <section id="arduino-island-section" class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 pb-8">
+        <div id="arduino-island-mount"></div>
+    </section>
+
+    <!-- 傳統卡片課綱檢視（點「切換課綱卡片」展開） -->
+    <div id="arduino-card-view" class="hidden">
+    <section id="about" class="pt-8 pb-12 md:pt-12 md:pb-20 text-slate-800 relative overflow-hidden">
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="absolute -top-24 -right-24 w-96 h-96 bg-indigo-200/40 rounded-full blur-3xl"></div>
+            <div class="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-white/60 to-transparent"></div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center gap-10 relative z-10">
+            <div class="md:w-1/2 space-y-6">
+                <div class="inline-block bg-primary/20 text-indigo-600 border border-primary/30 px-3 py-1 rounded-full text-sm font-bold mb-2">
+                    Arduino 專題製作 · PBL
+                </div>
+                <h1 class="text-4xl md:text-5xl font-black leading-tight">
+                    <span class="underline-doodle">做一個別人沒有的東西</span> <br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-violet-500">五節課專題課程</span>
+                </h1>
+                <p class="text-lg text-slate-500 leading-relaxed">
+                    上學期照著做的是<b>同一個</b>智慧家居；這五節，題目由你自己找。
+                    從生活裡挑一個「這東西應該要會自己動」的問題，拆成感測、判斷、驅動，
+                    挑出你需要的元件，設好門檻測到會動也會停，最後做出一個只有你這一組有的作品。
+                </p>
+                <div class="bg-white/70 border border-indigo-200 rounded-xl p-4 text-sm text-slate-600 leading-relaxed">
+                    <b class="text-indigo-600">⚠️ 這五節不指定硬體。</b>
+                    課本和上學期都會先給你零件，這次不給 —— 因為
+                    「這些零件可以做什麼」和「為了解決這個問題我需要什麼」，方向剛好相反。
+                    元件的<b>型號</b>等你確定要做什麼再查，網路上查得到；
+                    現在要練的是<b>判斷</b>：機器感覺得到嗎？它要做的事做得動嗎？
+                </div>
+                <div class="flex gap-4 pt-2">
+                    <button onclick="scrollToCurriculum()" class="bg-primary text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-indigo-600 hover:shadow-xl transition flex items-center gap-2">
+                        <i data-lucide="arrow-down-circle" class="w-5 h-5"></i> 展開五節課綱與實作
+                    </button>
+                </div>
+            </div>
+
+            <div class="md:w-1/2 flex justify-center w-full">
+                <div class="relative w-full max-w-sm bg-white p-8 rounded-2xl shadow-2xl border border-slate-200">
+                    <div class="flex justify-between items-center mb-6 border-b border-slate-300 pb-4">
+                        <span class="text-slate-600 font-mono">My_Project_v1</span>
+                        <div class="flex gap-2">
+                            <div class="w-3 h-3 rounded-full bg-indigo-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-violet-500"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-center gap-4 mb-6">
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-indigo-500">
+                                <i data-lucide="search" class="w-7 h-7"></i>
+                            </div>
+                            <span class="text-xs text-slate-500">感測</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-violet-500">
+                                <i data-lucide="git-branch" class="w-7 h-7"></i>
+                            </div>
+                            <span class="text-xs text-slate-500">判斷</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-amber-500">
+                                <i data-lucide="zap" class="w-7 h-7"></i>
+                            </div>
+                            <span class="text-xs text-slate-500">驅動</span>
+                        </div>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                        <div class="w-1/3 h-full bg-indigo-500"></div>
+                        <div class="w-1/3 h-full bg-violet-500"></div>
+                        <div class="w-1/3 h-full bg-amber-500"></div>
+                    </div>
+                    <p class="text-center text-sm text-slate-500 mt-4 font-mono">題目：由你決定</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="curriculum" class="py-20 bg-slate-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">專題五節課</h2>
+                <p class="text-slate-500 max-w-2xl mx-auto text-lg">從找問題到發表，一節一個決定。點擊任一單元開啟【互動學習包】！</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+                <!-- 第一節 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-indigo-300" onclick="openCourseDetail(1)">
+                    <div class="w-14 h-14 bg-indigo-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-500 transition-colors">
+                        <i data-lucide="search" class="w-7 h-7 text-indigo-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-indigo-600 bg-indigo-100 px-3 py-1 rounded-full">第一節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">找問題：什麼東西該自己動</h3>
+                    <p class="text-slate-600 mb-4 h-16">從生活裡挑一件「每次都要有人記得去做」的事。但不是每個問題機器都做得到 —— 先學會判斷。</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-indigo-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含問題可行性偵測器</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-indigo-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- 第二節 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-sky-300" onclick="openCourseDetail(2)">
+                    <div class="w-14 h-14 bg-sky-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-500 transition-colors">
+                        <i data-lucide="git-branch" class="w-7 h-7 text-sky-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-sky-600 bg-sky-100 px-3 py-1 rounded-full">第二節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">拆解：感測 → 判斷 → 驅動</h3>
+                    <p class="text-slate-600 mb-4 h-16">再聰明的機器都只做這三件事。把你的問題填進三個空格，它就變成一段「如果…那麼」。</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-sky-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含三步組裝台</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-sky-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- 第三節 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-amber-300" onclick="openCourseDetail(3)">
+                    <div class="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-amber-500 transition-colors">
+                        <i data-lucide="package-search" class="w-7 h-7 text-amber-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-amber-600 bg-amber-100 px-3 py-1 rounded-full">第三節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">選元件：感官與手腳</h3>
+                    <p class="text-slate-600 mb-4 h-16">不背型號，只問兩件事：它<b>感覺得到</b>你要偵測的東西嗎？它<b>做得動</b>你要它做的事嗎？</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-amber-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含元件配對盤</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-amber-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- 第四節 -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group cursor-pointer hover:shadow-xl hover:border-purple-300" onclick="openCourseDetail(4)">
+                    <div class="w-14 h-14 bg-purple-50 rounded-xl flex items-center justify-center mb-6 group-hover:bg-purple-500 transition-colors">
+                        <i data-lucide="sliders-horizontal" class="w-7 h-7 text-purple-500 group-hover:text-white transition-colors"></i>
+                    </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-sm font-bold text-purple-600 bg-purple-100 px-3 py-1 rounded-full">第四節課</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3">做原型：門檻要設多少</h3>
+                    <p class="text-slate-600 mb-4 h-16">會動不算成功。該動的時候動、<b>不該動的時候不動</b>，才叫做完成 —— 這一節在調那條線。</p>
+                    <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                        <span class="text-xs text-purple-600 font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含門檻測試台</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-purple-500 transition-colors"></i>
+                    </div>
+                </div>
+
+                <!-- 第五節（總結，跨兩欄） -->
+                <div class="unit-card bg-white rounded-2xl p-8 border border-slate-200 shadow-sm transition-all duration-300 group lg:col-span-2 cursor-pointer hover:shadow-xl hover:border-primary" onclick="openCourseDetail(5)">
+                    <div class="flex flex-col md:flex-row gap-6 items-start md:items-center h-full">
+                        <div class="w-14 h-14 bg-indigo-50 rounded-xl flex shrink-0 items-center justify-center group-hover:bg-primary transition-colors">
+                            <i data-lucide="presentation" class="w-7 h-7 text-primary group-hover:text-white transition-colors"></i>
+                        </div>
+                        <div class="flex-1 flex flex-col h-full">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-bold text-primary bg-indigo-100 px-3 py-1 rounded-full">第五節課 (總結)</span>
+                            </div>
+                            <h3 class="text-xl md:text-2xl font-bold text-slate-800 mb-2">發表：做出專屬於你的作品</h3>
+                            <p class="text-slate-600 mb-4">前四節的決定會自動組成一張作品卡。再補上一段「我為什麼這樣設計」，交模擬器版或實體版都可以 —— 作品要有人看得懂，才算做完。</p>
+                            <div class="border-t border-slate-100 pt-4 mt-auto flex justify-between items-center">
+                                <span class="text-xs text-primary font-bold flex items-center gap-1"><i data-lucide="play-circle" class="w-4 h-4"></i> 含作品卡自動生成器</span>
+                                <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+    </div>
+
+    <!-- 單元詳細（浮動在 3D 未來科技創客島上方的實驗艙視窗） -->
+    <section id="detail-view" class="ac-float-backdrop hidden text-slate-800">
+        <div class="ac-float-window theme-tech max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+            <div class="ac-window-badge">🤖 未來科技創客實驗島 · Arduino 專題實驗艙</div>
+            <div class="flex items-center justify-between mb-4">
+                <button onclick="closeCourseDetail()" class="ac-pill hover:bg-sky-100 transition cursor-pointer" style="background:#e0f2fe;border-color:#0284c7;color:#0c4a6e">
+                    🏝️ 返回專題島總覽
+                </button>
+                <span class="text-xs font-black text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1 rounded-full">⚡ 3D 創客實驗島背景即時運作中</span>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                <div id="detail-header-bg" class="bg-gradient-to-r from-indigo-50 to-white p-8 border-b border-slate-200 relative overflow-hidden">
+                    <i id="detail-bg-icon" class="absolute -right-10 -top-10 w-48 h-48 text-indigo-200/50"></i>
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span id="detail-badge" class="text-sm font-bold bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full border border-indigo-200">單元 X</span>
+                        </div>
+                        <h2 id="detail-title" class="text-3xl md:text-4xl font-black text-slate-800 mb-4">單元標題</h2>
+                        <p id="detail-desc" class="text-lg text-slate-600 leading-relaxed max-w-3xl">單元描述內容...</p>
+                    </div>
+                </div>
+
+                <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 border-b border-slate-200">
+                    <div class="bg-slate-50/50 p-6 rounded-xl border border-slate-200/50">
+                        <h3 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <i data-lucide="target" class="w-6 h-6 text-primary"></i> 學習目標
+                        </h3>
+                        <ul id="detail-objectives" class="space-y-3 text-slate-600"></ul>
+                    </div>
+
+                    <div class="bg-slate-50/50 p-6 rounded-xl border border-slate-200/50">
+                        <!-- ★ 上學期這一欄是「使用硬體模組」（型號清單）。
+                             這裡改成「這一節你要決定的事」—— 因為不指定硬體，
+                             一節課的產出是一個**決定**，不是一份零件表。 -->
+                        <h3 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <i data-lucide="clipboard-check" class="w-6 h-6 text-accent"></i> 這一節你要決定的事
+                        </h3>
+                        <ul id="detail-materials" class="space-y-3 text-slate-600"></ul>
+                    </div>
+                </div>
+
+                <div class="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 bg-slate-100">
+                    <div class="lg:col-span-6 flex flex-col justify-between space-y-6">
+                        <div>
+                            <span class="text-xs font-bold tracking-widest text-primary uppercase bg-primary/10 px-3 py-1 rounded-full">動手體驗區</span>
+                            <h3 class="text-2xl font-bold text-slate-800 mt-3 mb-2">動手試一次</h3>
+                            <p class="text-slate-500 text-sm">操作下方的模擬元件。你在這裡做的決定，會一路帶到第五節的作品卡。</p>
+                        </div>
+
+                        <div id="interactive-playground" class="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col justify-center items-center min-h-[300px] relative"></div>
+                    </div>
+
+                    <div class="lg:col-span-6 flex flex-col">
+                        <div id="detail-demo-container" class="h-full"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-slate-100 text-slate-500 py-12 text-center border-t border-slate-300">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-center items-center gap-2 mb-4">
+                <i data-lucide="lightbulb" class="w-6 h-6 text-primary"></i>
+                <span class="text-xl font-bold text-slate-500 tracking-wider">Arduino 智慧專題</span>
+            </div>
+            <p class="mb-2">五節課專題製作：問題自己找，作品自己定</p>
+            <p class="text-sm"><script>document.write((window.CONFIG.SCHOOL||{}).NAME||"")</script> · 改編自 SuYungSheng 的課程系統（CC BY-NC-SA 4.0）</p>
+        </div>
+    </footer>
+
+    <script>
+        let animationRequests = [];
+        function clearAnimations() {
+            animationRequests.forEach(req => cancelAnimationFrame(req));
+            animationRequests = [];
+        }
+        function scrollToCurriculum() {
+            const el = document.getElementById('curriculum');
+            window.scrollTo({ top: el.offsetTop - 64, behavior: 'smooth' });
+        }
+
+        /* HTML 逸出：學生打的字會進 innerHTML。
+           ⚠️ 少了這個，有人打一個「<」整張作品卡就會壞掉。 */
+        function esc(s) {
+            return String(s === undefined || s === null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        /* =================================================================
+           學生這五節做的決定
+           ⚠️ 只存在這一次開著的頁面裡：重整就沒了，作品卡請截圖或抄下來。
+              （之後要接 Firestore 的話是 modules.arduino，
+                但等內容定案再接 —— 現在改版還太頻繁。）
+           ================================================================= */
+        const work = { problem: '', sense: '', cond: '', act: '', parts: [], on: 40, note: '' };
+
+        /* 第一節要挑的問題。
+           ★★ 其中兩個是**故意做不到的**。
+              全部都做得到的話，這一節就變成「隨便點一個」——
+              學生要學的不是選對，是判斷一個問題做不做得出來。 */
+        const PROBLEMS = [
+            { id:'p1', icon:'lamp-desk', title:'走廊晚上沒人卻整晚亮著', ok:true,
+              sense:'走廊亮不亮', act:'把燈打開',
+              why:'「暗不暗」和「有沒有東西經過」都是機器<b>量得到</b>的東西，燈也<b>開得動</b>。' },
+            { id:'p2', icon:'sprout', title:'放假回來盆栽都乾死了', ok:true,
+              sense:'土裡還有多少水分', act:'把水閥打開一下下',
+              why:'土的乾濕量得到，水閥也開得動 —— 難的地方在<b>門檻設多少</b>，那是第四節的事。' },
+            { id:'p3', icon:'backpack', title:'早上出門常常忘了帶課本', ok:false,
+              stuck:'感測',
+              why:'卡在<b>感測</b>：機器沒辦法知道書包裡那本是不是課本。<br>' +
+                   '⇒ 除非你改題目，例如「書包重量比平常輕就提醒」—— 重量<b>量得到</b>。' },
+            { id:'p4', icon:'door-closed', title:'冰箱門沒關緊沒人發現', ok:true,
+              sense:'冰箱門有沒有關緊', act:'發出嗶聲提醒',
+              why:'「門開著沒」是很典型的偵測，嗶一聲也很簡單 —— <b>好題目不必複雜</b>。' },
+            { id:'p5', icon:'message-circle', title:'上課同學一直講話', ok:false,
+              stuck:'判斷',
+              why:'卡在<b>判斷</b>：機器測得到「吵不吵」，但分不出是討論功課還是在聊天。<br>' +
+                   '⇒ 改成「音量超過多少就亮紅燈」就做得到了 —— 讓<b>人</b>去判斷該不該安靜。' },
+            { id:'p6', icon:'umbrella', title:'曬衣服時突然下雨沒收', ok:true,
+              sense:'外面有沒有在下雨', act:'把衣架收進來',
+              why:'雨滴感測得到。⚠️ 但「把衣架收進來」要出力 —— 第三節挑致動器時要注意這件事。' }
+        ];
+
+        /* 第三節的元件。★ 一律用「它感覺得到什麼」描述，不寫型號。 */
+        const PARTS = {
+            sense: [
+                { id:'s1', name:'光線感測器',     can:'感覺得到：亮、暗、天黑了沒' },
+                { id:'s2', name:'距離感測器',     can:'感覺得到：前面多遠有東西、有沒有人靠近' },
+                { id:'s3', name:'溫溼度感測器',   can:'感覺得到：熱不熱、潮不潮' },
+                { id:'s4', name:'土壤溼度感測器', can:'感覺得到：土裡還有多少水' },
+                { id:'s5', name:'聲音感測器',     can:'感覺得到：吵不吵（音量大小，聽不懂內容）' },
+                { id:'s6', name:'開關／磁簧',     can:'感覺得到：有沒有被壓到、門關緊了沒' }
+            ],
+            act: [
+                { id:'a1', name:'燈（LED／燈條）', can:'做得到：亮、暗、變顏色' },
+                { id:'a2', name:'蜂鳴器',         can:'做得到：發出聲音提醒' },
+                { id:'a3', name:'小馬達',         can:'做得到：轉（風扇、轉盤）' },
+                { id:'a4', name:'伺服馬達',       can:'做得到：轉到指定角度（開關門、擺動）' },
+                { id:'a5', name:'繼電器',         can:'做得到：幫你按下另一個電器的開關' },
+                { id:'a6', name:'螢幕',           can:'做得到：把數字或字顯示出來' }
+            ]
+        };
+
+        /* 第四節的三個測試情境。
+           ★★ 第二個是「這時候**不應該**動」—— 少了它，門檻設 95 也會過。
+           ★ 第三個在門檻附近，**不判對錯**：那是學生的設計決定，第五節要說得出理由。 */
+        const CASES = [
+            { id:'c1', label:'天很暗（讀到 15）',               v:15, want:true  },
+            { id:'c2', label:'大白天（讀到 80）',               v:80, want:false },
+            { id:'c3', label:'黃昏，剛好在門檻附近（讀到 45）', v:45, want:null  }
+        ];
+
+        /* ── 五節課的資料 ──────────────────────────────── */
+        const courseData = {
+
+            /* ============ 第一節：找問題 ============ */
+            1: {
+                title: "找問題：什麼東西該自己動",
+                badge: "第一節課",
+                colorText: "text-indigo-500",
+                icon: "search",
+                desc: "專題的成敗有一半在這一節就決定了。先在生活裡找一件「每次都要有人記得去做」的事——但不是每個問題機器都做得到，看出它卡在哪裡，比急著挑一個更重要。",
+                objectives: [
+                    "從生活情境中找出「該自動化」的問題，說得出它現在造成什麼麻煩",
+                    "判斷一個問題機器做不做得到：量得到嗎？分得出來嗎？做得動嗎？",
+                    "把做不到的問題<b>改寫</b>成做得到的（這比換一個題目更有價值）"
+                ],
+                materials: [
+                    "決定：我這一組要解決哪一個問題",
+                    "說得出：這件事現在是誰在做、多久要做一次",
+                    "檢查過：機器<b>量得到</b>我要偵測的東西"
+                ],
+                initPlayground: function (container) {
+                    container.innerHTML =
+                        '<div class="w-full">' +
+                        '  <p class="text-sm text-slate-500 mb-3">點一張卡片，看看這個問題機器<b>做不做得到</b>：</p>' +
+                        '  <div id="prob-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4"></div>' +
+                        '  <div id="prob-say" class="text-sm leading-relaxed p-3 rounded-lg bg-slate-100 text-slate-500">' +
+                        '    還沒選。⚠️ 提醒：這六個裡面有<b>兩個</b>是機器做不到的，看你找不找得出來。' +
+                        '  </div>' +
+                        '</div>';
+                    const grid = container.querySelector('#prob-grid');
+                    const say = container.querySelector('#prob-say');
+                    grid.innerHTML = PROBLEMS.map(function (p) {
+                        return '<button data-p="' + p.id + '" class="text-left bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:border-indigo-300 transition">' +
+                               '<i data-lucide="' + p.icon + '" class="w-4 h-4 inline-block mr-1 text-indigo-400"></i>' + p.title + '</button>';
+                    }).join('');
+                    grid.querySelectorAll('[data-p]').forEach(function (btn) {
+                        btn.onclick = function () {
+                            const p = PROBLEMS.filter(function (x) { return x.id === btn.dataset.p; })[0];
+                            grid.querySelectorAll('[data-p]').forEach(function (b) { b.classList.remove('pick-on'); });
+                            btn.classList.add('pick-on');
+                            if (p.ok) {
+                                work.problem = p.title;
+                                if (!work.sense) work.sense = p.sense;
+                                if (!work.act) work.act = p.act;
+                                say.className = 'text-sm leading-relaxed p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200';
+                                say.innerHTML = '✅ <b>這個做得到。</b>' + p.why + '<br>已經記下來了，第二節會用到。';
+                            } else {
+                                say.className = 'text-sm leading-relaxed p-3 rounded-lg bg-rose-50 text-rose-800 border border-rose-200';
+                                say.innerHTML = '⚠️ <b>這個做不到 —— 卡在「' + p.stuck + '」。</b><br>' + p.why;
+                            }
+                            lucide.createIcons();
+                        };
+                    });
+                    lucide.createIcons();
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="help-circle" class="w-8 h-8 text-indigo-500"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">三個問題，過了才算好題目</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <div class="font-bold text-indigo-600 mb-1">① 量得到嗎？（感測）</div>
+                            <p class="text-sm text-slate-600 leading-relaxed">機器只感覺得到<b>可以變成數字</b>的東西：亮度、距離、溫度、溼度、音量、有沒有被壓到。<br>「那本是不是課本」變不成數字 —— 這一關就過不了。</p>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <div class="font-bold text-violet-600 mb-1">② 分得出來嗎？（判斷）</div>
+                            <p class="text-sm text-slate-600 leading-relaxed">量到數字之後，要有一條<b>畫得出來的線</b>：多少算暗？多少算太乾？<br>「是討論還是聊天」畫不出這條線 —— 那就讓人去判斷，機器只負責顯示。</p>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <div class="font-bold text-amber-600 mb-1">③ 做得動嗎？（驅動）</div>
+                            <p class="text-sm text-slate-600 leading-relaxed">亮個燈、響一聲很容易；<b>要出力</b>的（收衣架、開窗戶）就要看馬達夠不夠力。<br>做不動的時候，退一步做「提醒人去做」也是好作品。</p>
+                        </div>
+                        <div class="bg-indigo-50 rounded-xl border border-indigo-200 p-4 text-sm text-indigo-900 leading-relaxed">
+                            ★ 三關有一關過不了的話，<b>先別換題目，先改題目</b>。<br>
+                            「忘了帶課本」→「書包比平常輕就提醒」，還是同一件事，第一關就過了。
+                        </div>
+                    </div>`
+            },
+
+            /* ============ 第二節：拆解 ============ */
+            2: {
+                title: "拆解：感測 → 判斷 → 驅動",
+                badge: "第二節課",
+                colorText: "text-sky-500",
+                icon: "git-branch",
+                desc: "再複雜的自動裝置都只做三件事：量一個東西、拿它跟一條線比、然後動作。這正是你在 Scratch 寫過的「一直重複」加「如果…那麼」——只是這次感測的不是滑鼠，是真實世界。",
+                objectives: [
+                    "把一個生活問題拆成感測、判斷、驅動三個部分",
+                    "看出這三步就是 Scratch 的「一直重複」＋「如果…那麼」",
+                    "分辨「那麼」和「否則」：什麼時候需要把動作反過來"
+                ],
+                materials: [
+                    "決定：機器要<b>偵測</b>什麼（要能變成數字）",
+                    "決定：在<b>什麼情況</b>下要動作",
+                    "決定：動作是<b>做什麼</b>"
+                ],
+                initPlayground: function (container) {
+                    container.innerHTML =
+                        '<div class="w-full space-y-3">' +
+                        '  <div id="p2-from" class="text-xs px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200"></div>' +
+                        '  <div><label class="text-xs font-bold text-slate-500">① 機器要偵測什麼</label>' +
+                        '    <input id="f-sense" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-slate-200 text-sm focus:border-sky-400 outline-none" placeholder="例如：走廊亮不亮"></div>' +
+                        '  <div><label class="text-xs font-bold text-slate-500">② 什麼情況下要動</label>' +
+                        '    <input id="f-cond" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-slate-200 text-sm focus:border-sky-400 outline-none" placeholder="例如：很暗而且有人"></div>' +
+                        '  <div><label class="text-xs font-bold text-slate-500">③ 那麼就做什麼</label>' +
+                        '    <input id="f-act" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-slate-200 text-sm focus:border-sky-400 outline-none" placeholder="例如：把燈打開"></div>' +
+                        '  <div class="bg-slate-900 rounded-xl p-4 text-sm leading-loose" id="f-preview"></div>' +
+                        '  <div id="f-say" class="text-sm p-2.5 rounded-lg bg-slate-100 text-slate-500"></div>' +
+                        '</div>';
+                    const $ = function (s) { return container.querySelector(s); };
+                    $('#p2-from').innerHTML = work.problem
+                        ? '你在第一節選的題目：<b>' + esc(work.problem) + '</b>'
+                        : '⚠️ 你還沒在第一節選題目。可以先填填看，但記得<b>回第一節</b>挑一個。';
+                    $('#f-sense').value = work.sense; $('#f-cond').value = work.cond; $('#f-act').value = work.act;
+
+                    function draw() {
+                        work.sense = $('#f-sense').value.trim();
+                        work.cond = $('#f-cond').value.trim();
+                        work.act = $('#f-act').value.trim();
+                        const s = work.sense || '？？？', c = work.cond || '？？？', a = work.act || '？？？';
+                        $('#f-preview').innerHTML =
+                            '<div class="text-rose-400 font-bold">一直重複</div>' +
+                            '<div class="pl-4"><span class="text-sky-400">量一下</span> <span class="text-amber-300">' + esc(s) + '</span></div>' +
+                            '<div class="pl-4"><span class="text-rose-400 font-bold">如果</span> <span class="text-amber-300">' + esc(c) + '</span> <span class="text-rose-400 font-bold">那麼</span></div>' +
+                            '<div class="pl-8 text-emerald-300">' + esc(a) + '</div>';
+                        const n = [work.sense, work.cond, work.act].filter(function (x) { return x; }).length;
+                        const say = $('#f-say');
+                        if (n < 3) {
+                            say.className = 'text-sm p-2.5 rounded-lg bg-slate-100 text-slate-500';
+                            say.innerHTML = '還有 ' + (3 - n) + ' 格沒填。';
+                        } else {
+                            say.className = 'text-sm p-2.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200';
+                            say.innerHTML = '✅ 這就是你的程式了。<br>⚠️ 再檢查一次第 ① 格：那個東西<b>變得成數字</b>嗎？變不成的話，第三節會挑不到元件。';
+                        }
+                    }
+                    ['#f-sense', '#f-cond', '#f-act'].forEach(function (id) { $(id).addEventListener('input', draw); });
+                    draw();
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="code-2" class="w-8 h-8 text-sky-500"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">積木邏輯：那麼，還是否則？</h3>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div class="bg-slate-100 px-4 py-2 text-xs font-bold text-slate-600 border-b border-slate-200">A：只有「那麼」</div>
+                            <div class="p-4 text-sm font-mono leading-loose">
+                                <div class="text-rose-600 font-bold">一直重複</div>
+                                <div class="pl-4"><span class="text-sky-600">量一下</span> <span class="text-amber-600">亮度</span></div>
+                                <div class="pl-4"><span class="text-rose-600 font-bold">如果</span> 亮度 &lt; 40 <span class="text-rose-600 font-bold">那麼</span></div>
+                                <div class="pl-8 text-emerald-600">開燈</div>
+                            </div>
+                            <div class="px-4 pb-3 text-xs text-rose-600 leading-relaxed">⚠️ 天亮了燈<b>不會關</b> —— 沒寫的事情機器不會自己做。</div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div class="bg-slate-100 px-4 py-2 text-xs font-bold text-slate-600 border-b border-slate-200">B：加上「否則」</div>
+                            <div class="p-4 text-sm font-mono leading-loose">
+                                <div class="text-rose-600 font-bold">一直重複</div>
+                                <div class="pl-4"><span class="text-sky-600">量一下</span> <span class="text-amber-600">亮度</span></div>
+                                <div class="pl-4"><span class="text-rose-600 font-bold">如果</span> 亮度 &lt; 40 <span class="text-rose-600 font-bold">那麼</span></div>
+                                <div class="pl-8 text-emerald-600">開燈</div>
+                                <div class="pl-4 text-rose-600 font-bold">否則</div>
+                                <div class="pl-8 text-emerald-600">關燈</div>
+                            </div>
+                            <div class="px-4 pb-3 text-xs text-emerald-700 leading-relaxed">✅ 暗了會開、亮了會關 —— <b>兩個方向都交代到</b>。</div>
+                        </div>
+                        <div class="bg-indigo-50 rounded-xl border border-indigo-200 p-4 text-sm text-indigo-900 leading-relaxed">
+                            ★ 這就是你在<b>第 4 關 小鳥吃蟲</b>學的雙向選擇，只是換成真的燈。<br>
+                            要不要「否則」的判準：<b>條件不成立的時候，需要復原嗎？</b><br>
+                            需要（燈要關掉）→ 用否則；不需要（嗶一聲就好）→ 只要「那麼」。
+                        </div>
+                    </div>`
+            },
+
+            /* ============ 第三節：選元件 ============ */
+            3: {
+                title: "選元件：感官與手腳",
+                badge: "第三節課",
+                colorText: "text-amber-500",
+                icon: "package-search",
+                desc: "感測器是機器的五官，致動器是它的手腳。這一節不背型號——只問兩件事：它感覺得到你要偵測的東西嗎？它做得動你要它做的事嗎？型號等你確定要做什麼再查，網路上查得到。",
+                objectives: [
+                    "分辨感測器（輸入）與致動器（輸出），知道一個會動的裝置<b>兩種都要有</b>",
+                    "依照「我要偵測什麼」反推需要哪一類感測器，而不是看零件找用途",
+                    "評估致動器<b>力氣夠不夠</b>：亮個燈很容易，要出力的得另外想辦法"
+                ],
+                materials: [
+                    "決定：用哪一個<b>感測器</b>（至少一個）",
+                    "決定：用哪一個<b>致動器</b>（至少一個）",
+                    "查一查：這一類元件實際有哪些型號、大概多少錢"
+                ],
+                initPlayground: function (container) {
+                    container.innerHTML =
+                        '<div class="w-full space-y-3">' +
+                        '  <div class="text-xs px-3 py-2 rounded-lg bg-amber-50 text-amber-800 border border-amber-200" id="p3-from"></div>' +
+                        '  <div><div class="text-xs font-bold text-slate-500 mb-1.5">🔍 感測器（機器的五官）</div>' +
+                        '    <div id="grid-s" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div></div>' +
+                        '  <div><div class="text-xs font-bold text-slate-500 mb-1.5 mt-2">⚡ 致動器（機器的手腳）</div>' +
+                        '    <div id="grid-a" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div></div>' +
+                        '  <div id="p3-say" class="text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed"></div>' +
+                        '</div>';
+                    const $ = function (s) { return container.querySelector(s); };
+                    $('#p3-from').innerHTML = work.sense
+                        ? '你要偵測的是：<b>' + esc(work.sense) + '</b>　→　下面哪一個感覺得到它？'
+                        : '⚠️ 第二節還沒填「要偵測什麼」。先<b>回第二節</b>填一下，這裡才知道要挑什麼。';
+
+                    function cardHTML(p, kind) {
+                        return '<button data-part="' + p.id + '" data-kind="' + kind + '" class="text-left bg-white border-2 border-slate-200 rounded-xl px-3 py-2 hover:border-amber-300 transition">' +
+                               '<div class="text-sm font-bold text-slate-700">' + p.name + '</div>' +
+                               '<div class="text-[11px] text-slate-500 leading-snug">' + p.can + '</div></button>';
+                    }
+                    $('#grid-s').innerHTML = PARTS.sense.map(function (p) { return cardHTML(p, 'sense'); }).join('');
+                    $('#grid-a').innerHTML = PARTS.act.map(function (p) { return cardHTML(p, 'act'); }).join('');
+
+                    function refresh() {
+                        const say = $('#p3-say');
+                        const picked = work.parts;
+                        const hasS = PARTS.sense.some(function (p) { return picked.indexOf(p.name) >= 0; });
+                        const hasA = PARTS.act.some(function (p) { return picked.indexOf(p.name) >= 0; });
+                        if (!picked.length) {
+                            say.className = 'text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed';
+                            say.innerHTML = '還沒挑。一個會動的裝置，<b>感測器和致動器都要有</b>。';
+                        } else if (!hasA) {
+                            say.className = 'text-sm p-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 leading-relaxed';
+                            say.innerHTML = '⚠️ 還差一個<b>致動器</b> —— 機器感覺到了，然後要做什麼？';
+                        } else if (!hasS) {
+                            say.className = 'text-sm p-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 leading-relaxed';
+                            say.innerHTML = '⚠️ 還差一個<b>感測器</b> —— 沒有五官的話，它靠什麼決定要不要動？';
+                        } else {
+                            say.className = 'text-sm p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 leading-relaxed';
+                            say.innerHTML = '✅ 你的組合：<b>' + esc(picked.join('、')) + '</b><br>' +
+                                '★ 回頭確認一次：這個感測器<b>真的感覺得到</b>「' + esc(work.sense || '你要偵測的東西') + '」嗎？<br>' +
+                                '⚠️ 如果致動器要出力（推、拉、轉重的東西），先確認力氣夠不夠 —— 不夠的話改成「提醒人去做」。';
+                        }
+                    }
+                    container.querySelectorAll('[data-part]').forEach(function (btn) {
+                        const list = btn.dataset.kind === 'sense' ? PARTS.sense : PARTS.act;
+                        const p = list.filter(function (x) { return x.id === btn.dataset.part; })[0];
+                        if (work.parts.indexOf(p.name) >= 0) btn.classList.add('pick-on');
+                        btn.onclick = function () {
+                            const i = work.parts.indexOf(p.name);
+                            if (i >= 0) { work.parts.splice(i, 1); btn.classList.remove('pick-on'); }
+                            else { work.parts.push(p.name); btn.classList.add('pick-on'); }
+                            refresh();
+                        };
+                    });
+                    refresh();
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="scan-search" class="w-8 h-8 text-amber-500"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">為什麼這一節不給型號</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-slate-800 mb-1">先給零件清單會發生什麼事</div>
+                            大家會開始想「這幾顆<b>可以</b>做什麼」，然後挑一個做得出來的題目。<br>
+                            那是<b>倒過來</b>的 —— 專題應該是「為了解決這個問題，我<b>需要</b>什麼」。
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-slate-800 mb-1">型號什麼時候才重要</div>
+                            等你確定「我要量距離」之後，<b>再去查</b>「量距離的感測器有哪些」——
+                            那時候查得到，也看得懂規格在寫什麼（量得到多遠、要幾伏特、多少錢）。<br>
+                            現在背型號，只是背一串英文和數字。
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-slate-800 mb-1">兩個常見的坑</div>
+                            ① <b>感測器只感覺得到一種東西。</b>光線感測器分不出「暗」是天黑了，還是有人擋住。<br>
+                            ② <b>致動器有力氣上限。</b>小馬達轉得動風扇葉片，拉不動一整排衣架。
+                        </div>
+                        <div class="bg-amber-50 rounded-xl border border-amber-200 p-4 text-sm text-amber-900 leading-relaxed">
+                            ★ 挑不到怎麼辦？那通常表示<b>第一節的題目要改</b>。<br>
+                            回去把「要偵測的東西」換成一個量得到的，往往一下子就通了。
+                        </div>
+                    </div>`
+            },
+
+            /* ============ 第四節：做原型 ============ */
+            4: {
+                title: "做原型：門檻要設多少",
+                badge: "第四節課",
+                colorText: "text-purple-500",
+                icon: "sliders-horizontal",
+                desc: "程式寫好了、機器會動了——但會動不算成功。該動的時候動、不該動的時候不動，才叫做完成。這一節你要調的是那條線：多少算「暗」？多少算「太乾」？沒有標準答案，但你要說得出理由。",
+                objectives: [
+                    "理解「門檻」就是把感測到的數字變成一個是非題的那條線",
+                    "用<b>該動</b>和<b>不該動</b>兩種情境測試自己的設定（只測會不會動是不夠的）",
+                    "面對門檻附近的模糊狀況，做出設計判斷並說得出理由"
+                ],
+                materials: [
+                    "決定：門檻設在多少",
+                    "測試過：該動的時候<b>會動</b>",
+                    "測試過：不該動的時候<b>不會動</b>"
+                ],
+                initPlayground: function (container) {
+                    container.innerHTML =
+                        '<div class="w-full space-y-4">' +
+                        '  <div class="text-xs px-3 py-2 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 leading-relaxed">' +
+                        '    ⚠️ <b>會動不算成功。</b>該動的時候動、<b>不該動的時候不動</b>，才叫做完成。</div>' +
+                        '  <div class="flex justify-center gap-4">' +
+                        '    <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 text-center w-32">' +
+                        '      <div class="text-[10px] text-slate-500 mb-1">感測到的值</div>' +
+                        '      <div id="v-val" class="text-purple-500 font-bold text-xl font-mono">50</div></div>' +
+                        '    <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 text-center w-32">' +
+                        '      <div class="text-[10px] text-slate-500 mb-1">裝置狀態</div>' +
+                        '      <div id="st-val" class="text-slate-500 font-bold text-xl font-mono">沒動作</div></div>' +
+                        '  </div>' +
+                        '  <div class="flex justify-center">' +
+                        '    <div class="w-24 h-24 rounded-full border-4 border-slate-300 flex items-center justify-center bg-white transition-all" id="bulb">' +
+                        '      <i data-lucide="lightbulb" class="w-10 h-10 text-slate-300" id="bulb-i"></i></div>' +
+                        '  </div>' +
+                        '  <div><label class="text-xs font-bold text-slate-500">感測到的值（拉拉看）</label>' +
+                        '    <input type="range" id="v" min="0" max="100" value="50" class="w-full accent-purple-500 h-2 bg-slate-200 rounded-lg cursor-pointer"></div>' +
+                        '  <div><label class="text-xs font-bold text-slate-500">我把門檻設在 <b id="on-txt" class="text-purple-600">40</b>（小於這個數就動作）</label>' +
+                        '    <input type="range" id="on" min="5" max="95" value="40" class="w-full accent-indigo-500 h-2 bg-slate-200 rounded-lg cursor-pointer"></div>' +
+                        '  <div><div class="text-xs font-bold text-slate-500 mb-1.5">三個必測情境（把上面那條拉到那個值就會自動檢查）</div>' +
+                        '    <div id="cases" class="space-y-1.5"></div></div>' +
+                        '  <div id="p4-say" class="text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed"></div>' +
+                        '</div>';
+                    const $ = function (s) { return container.querySelector(s); };
+                    const tried = {};
+
+                    function fires(v, on) { return v < on; }
+
+                    function refresh() {
+                        const v = Number($('#v').value), on = Number($('#on').value);
+                        work.on = on;
+                        $('#v-val').textContent = v;
+                        $('#on-txt').textContent = on;
+                        const go = fires(v, on);
+                        $('#st-val').textContent = go ? '動作中' : '沒動作';
+                        $('#st-val').className = go ? 'text-amber-500 font-bold text-xl font-mono'
+                                                    : 'text-slate-500 font-bold text-xl font-mono';
+                        $('#bulb').style.background = go ? '#fde68a' : '#fff';
+                        $('#bulb').style.boxShadow = go ? '0 0 28px rgba(251,191,36,.6)' : 'none';
+
+                        CASES.forEach(function (c) { if (Math.abs(v - c.v) <= 2) tried[c.id] = true; });
+
+                        $('#cases').innerHTML = CASES.map(function (c) {
+                            if (!tried[c.id]) {
+                                return '<div class="text-xs px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-400">' +
+                                       '⬜ ' + c.label + ' <span class="text-[10px]">— 還沒測，把上面那條拉到 ' + c.v + ' 試試</span></div>';
+                            }
+                            const acted = fires(c.v, on);
+                            if (c.want === null) {
+                                return '<div class="text-xs px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800">' +
+                                       '🤔 ' + c.label + ' → 目前<b>' + (acted ? '會動' : '不會動') + '</b>。這個<b>不判對錯</b> —— 你想讓它動嗎？第五節要說得出理由。</div>';
+                            }
+                            const good = acted === c.want;
+                            return '<div class="text-xs px-3 py-2 rounded-lg border ' +
+                                   (good ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800') + '">' +
+                                   (good ? '✅ ' : '❌ ') + c.label + ' → 應該<b>' + (c.want ? '要動' : '不要動') +
+                                   '</b>，目前<b>' + (acted ? '會動' : '不會動') + '</b>' + (good ? '' : '　⚠️ 門檻要調') + '</div>';
+                        }).join('');
+
+                        const testedAll = CASES.every(function (c) { return tried[c.id]; });
+                        const bad = CASES.filter(function (c) { return c.want !== null && tried[c.id] && fires(c.v, on) !== c.want; });
+                        const say = $('#p4-say');
+                        if (!testedAll) {
+                            say.className = 'text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed';
+                            say.innerHTML = '三個情境都要測過。<b>只測「會不會亮」是不夠的</b> —— 門檻設 95 也會亮，可是白天也跟著亮了。';
+                        } else if (bad.length) {
+                            say.className = 'text-sm p-3 rounded-lg bg-rose-50 text-rose-800 border border-rose-200 leading-relaxed';
+                            say.innerHTML = '❌ 門檻<b>不對</b>：' + bad[0].label + ' 的時候表現錯了。<br>把門檻往' +
+                                (bad[0].want ? '<b>大</b>' : '<b>小</b>') + '調調看。';
+                        } else {
+                            say.className = 'text-sm p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 leading-relaxed';
+                            say.innerHTML = '✅ 該動的時候動、不該動的時候不動 —— 這才叫做完成。<br>' +
+                                '你的門檻是 <b>' + on + '</b>，第五節的作品卡會帶著它。';
+                        }
+                        lucide.createIcons();
+                    }
+                    $('#v').addEventListener('input', refresh);
+                    $('#on').addEventListener('input', refresh);
+                    refresh();
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="ruler" class="w-8 h-8 text-purple-500"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">門檻：把數字變成是非題</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm font-mono leading-loose">
+                            <div class="text-rose-600 font-bold">一直重複</div>
+                            <div class="pl-4"><span class="text-sky-600">量一下</span> <span class="text-amber-600">亮度</span></div>
+                            <div class="pl-4"><span class="text-rose-600 font-bold">如果</span> 亮度 &lt; <span class="text-purple-600 font-bold">門檻</span> <span class="text-rose-600 font-bold">那麼</span></div>
+                            <div class="pl-8 text-emerald-600">開燈</div>
+                            <div class="pl-4 text-rose-600 font-bold">否則</div>
+                            <div class="pl-8 text-emerald-600">關燈</div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-slate-800 mb-1">感測器讀到的是<b>數字</b>，不是「暗」</div>
+                            它只會告訴你 15、40、80。<b>幾以下算暗</b>是<b>你</b>決定的 ——
+                            這條線就是門檻，也是這個作品最像「設計」的地方。
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-slate-800 mb-1">門檻設太寬 vs 設太窄</div>
+                            設太寬（門檻拉很高）：白天也在亮，很浪費，<b>而且沒人會發現它其實壞了</b>。<br>
+                            設太窄：真的很暗了才亮，走過去那一段還是黑的。<br>
+                            ⇒ 兩邊都要測，所以測試情境一定要有「<b>這時候不應該動</b>」那一種。
+                        </div>
+                        <div class="bg-purple-50 rounded-xl border border-purple-200 p-4 text-sm text-purple-900 leading-relaxed">
+                            ★ 門檻<b>附近</b>那一格沒有標準答案。<br>
+                            要它早點亮（比較安全、比較費電），還是晚點亮 —— 你選哪個都行，
+                            但第五節要說得出<b>為什麼</b>。這就是工程上的取捨。
+                        </div>
+                    </div>`
+            },
+
+            /* ============ 第五節：發表 ============ */
+            5: {
+                title: "發表：做出專屬於你的作品",
+                badge: "第五節課 (總結)",
+                colorText: "text-primary",
+                icon: "presentation",
+                desc: "前四節的每一個決定，會自動組成下面這張作品卡。剩下只要補一件事：我為什麼這樣設計。作品要有人看得懂才算做完——不然它就只是一堆會亮的零件。",
+                objectives: [
+                    "把問題、拆解、元件、門檻整合成一份說得清楚的作品說明",
+                    "說明設計取捨的理由（尤其是門檻為什麼設在那裡）",
+                    "用模擬器版或實體版呈現作品，並向同學介紹"
+                ],
+                materials: [
+                    "產出：一張完整的作品卡",
+                    "寫下：我為什麼這樣設計（至少十個字）",
+                    "決定：交<b>模擬器版</b>還是<b>實體版</b>（兩種都收）"
+                ],
+                initPlayground: function (container) {
+                    const miss = [];
+                    if (!work.problem) miss.push('第一節：還沒選題目');
+                    if (!(work.sense && work.cond && work.act)) miss.push('第二節：三步還沒填完');
+                    if (!work.parts.length) miss.push('第三節：還沒挑元件');
+
+                    container.innerHTML =
+                        '<div class="w-full space-y-3">' +
+                        (miss.length
+                            ? '<div class="text-sm p-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 leading-relaxed">' +
+                              '⚠️ 作品卡還缺東西：<br>' + miss.map(function (m) { return '· ' + m; }).join('<br>') + '<br>' +
+                              '<button onclick="closeCourseDetail()" class="mt-2 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">回課程總覽補齊</button></div>'
+                            : '') +
+                        '  <div class="bg-white border-2 border-indigo-200 rounded-2xl p-5 space-y-2.5" id="card">' +
+                        '    <div class="text-xs font-bold text-indigo-500 tracking-widest">MY PROJECT</div>' +
+                        '    <div><span class="text-xs text-slate-400 block">我要解決的問題</span>' +
+                        '      <b class="text-slate-800">' + esc(work.problem || '（第一節還沒選）') + '</b></div>' +
+                        '    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">' +
+                        '      <div class="bg-slate-50 rounded-lg p-2"><span class="text-[10px] text-slate-400 block">機器要偵測</span>' +
+                        '        <b class="text-sm text-slate-700">' + esc(work.sense || '—') + '</b></div>' +
+                        '      <div class="bg-slate-50 rounded-lg p-2"><span class="text-[10px] text-slate-400 block">條件</span>' +
+                        '        <b class="text-sm text-slate-700">' + esc(work.cond || '—') + '</b></div>' +
+                        '      <div class="bg-slate-50 rounded-lg p-2"><span class="text-[10px] text-slate-400 block">那麼就</span>' +
+                        '        <b class="text-sm text-slate-700">' + esc(work.act || '—') + '</b></div>' +
+                        '    </div>' +
+                        '    <div><span class="text-xs text-slate-400 block">用到的元件</span>' +
+                        '      <b class="text-slate-800">' + esc(work.parts.join('、') || '（第三節還沒挑）') + '</b></div>' +
+                        '    <div><span class="text-xs text-slate-400 block">我設的門檻</span>' +
+                        '      <b class="text-slate-800">小於 ' + work.on + '</b></div>' +
+                        '  </div>' +
+                        '  <div><label class="text-xs font-bold text-slate-500">我為什麼這樣設計（門檻為什麼設在這裡？中間試過什麼？）</label>' +
+                        '    <textarea id="note" rows="3" maxlength="300" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-slate-200 text-sm focus:border-indigo-400 outline-none" placeholder="例如：一開始設 60，結果白天也會亮，改成 30 才正常。"></textarea></div>' +
+                        '  <div id="p5-say" class="text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed"></div>' +
+                        '</div>';
+                    const t = container.querySelector('#note');
+                    const say = container.querySelector('#p5-say');
+                    t.value = work.note;
+                    function refresh() {
+                        work.note = t.value;
+                        if (work.note.trim().length < 10) {
+                            say.className = 'text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed';
+                            say.innerHTML = '再寫幾個字（至少十個字）。<br>★ 這一段才是把你和「照著做的人」分開的地方 —— 過程中<b>改過什麼</b>最值得寫。';
+                        } else {
+                            say.className = 'text-sm p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 leading-relaxed';
+                            say.innerHTML = '✅ 作品卡完成了。<br>★ 拿去找<b>兩個同學</b>看 —— 他們看得懂你要解決什麼問題嗎？<br>看不懂的話不是他們的問題，是說明還要再改。';
+                        }
+                    }
+                    t.addEventListener('input', refresh);
+                    refresh();
+                },
+                demoHTML: `
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="upload" class="w-8 h-8 text-primary"></i>
+                        <h3 class="text-xl font-bold text-slate-800 tracking-wide">兩種交法，都算完成</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-indigo-600 mb-1">📱 模擬器版（全班都交得出來）</div>
+                            用線上模擬器把電路和程式做出來，錄一小段畫面：
+                            <b>該動的時候動、不該動的時候不動</b>各示範一次。<br>
+                            ⚠️ 沒有實體零件不代表沒做出東西 —— 邏輯對了就是對了。
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-emerald-600 mb-1">🔌 實體版（有器材的組）</div>
+                            真的接起來、真的動給大家看。<br>
+                            ★ 實體版一定會遇到模擬器沒有的問題：接觸不良、數值會跳、光線干擾……
+                            <b>那些踩到的坑就是最好的發表內容</b>，記得寫進設計說明。
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-600 leading-relaxed">
+                            <div class="font-bold text-slate-800 mb-1">發表時講三件事就好</div>
+                            ① 我看到什麼問題　② 我怎麼讓機器判斷　③ 我改過什麼、為什麼<br>
+                            不用講程式每一行 —— 講<b>你做的決定</b>。
+                        </div>
+                        <div class="bg-slate-100 rounded-xl border border-slate-300 p-4 text-xs text-slate-500 leading-relaxed">
+                            ⚠️ 這一頁<b>還沒接上傳功能</b>，作品卡也不會自動存（重新整理就沒了）。
+                            請<b>截圖</b>或抄到學習單上，再照老師說的方式繳交。
+                        </div>
+                    </div>`
+            }
+        };
+
+        function openCourseDetail(unitId) {
+            const data = courseData[unitId];
+            if (!data) return;
+            clearAnimations();
+
+            document.getElementById('detail-view').classList.remove('hidden');
+
+            document.getElementById('detail-badge').textContent = data.badge;
+            document.getElementById('detail-title').textContent = data.title;
+            document.getElementById('detail-desc').textContent = data.desc;
+            document.getElementById('detail-bg-icon').setAttribute('data-lucide', data.icon);
+
+            document.getElementById('detail-objectives').innerHTML = data.objectives.map(function (o) {
+                return '<li class="flex items-start gap-2"><i data-lucide="check-circle" class="w-5 h-5 ' + data.colorText +
+                       ' shrink-0 mt-0.5"></i><span>' + o + '</span></li>';
+            }).join('');
+
+            document.getElementById('detail-materials').innerHTML = data.materials.map(function (m) {
+                return '<li class="flex items-start gap-2"><i data-lucide="circle-dot" class="w-5 h-5 text-slate-400 shrink-0 mt-0.5"></i><span>' +
+                       m + '</span></li>';
+            }).join('');
+
+            document.getElementById('detail-demo-container').innerHTML =
+                typeof data.demoHTML === 'function' ? data.demoHTML() : data.demoHTML;
+
+            data.initPlayground(document.getElementById('interactive-playground'));
+
+            lucide.createIcons();
+            window.scrollTo(0, 0);
+        }
+
+        let arduinoViewMode = 'island';
+        function toggleArduinoViewMode() {
+            arduinoViewMode = arduinoViewMode === 'island' ? 'card' : 'island';
+            const islandSec = document.getElementById('arduino-island-section');
+            const cardView = document.getElementById('arduino-card-view');
+            const btn = document.getElementById('arduino-view-toggle');
+            if (arduinoViewMode === 'island') {
+                if (islandSec) islandSec.classList.remove('hidden');
+                if (cardView) cardView.classList.add('hidden');
+                if (btn) btn.textContent = '📋 切換課綱卡片';
+            } else {
+                if (islandSec) islandSec.classList.add('hidden');
+                if (cardView) cardView.classList.remove('hidden');
+                if (btn) btn.textContent = '🏝️ 切換島嶼探險';
+            }
+        }
+
+        function closeCourseDetail() {
+            clearAnimations();
+            document.getElementById('detail-view').classList.add('hidden');
+            document.getElementById('interactive-playground').innerHTML = '';
+            document.getElementById('detail-demo-container').innerHTML = '';
+        }
+
+        function initArduinoIsland() {
+            const mountEl = document.getElementById('arduino-island-mount');
+            if (!mountEl || !window.AC_ISLAND) return;
+            window.AC_ISLAND.mount(mountEl, {
+                storageKey: 'ac_pos_arduino_11502',
+                variant: 'arduino',
+                startX: 48,
+                startY: 66,
+                trees: [
+                    { id: 'ar-t1', x: 16, y: 27, kind: 'pine-tree' },
+                    { id: 'ar-t2', x: 84, y: 28, kind: 'fruit-tree', fruit: 'orange' },
+                    { id: 'ar-t3', x: 18, y: 69, kind: 'palm-tree' },
+                    { id: 'ar-t4', x: 83, y: 71, kind: 'fruit-tree', fruit: 'apple' }
+                ],
+                nodes: [
+                    {
+                        id: 1, x: 25, y: 32, kind: 'tech-gatehouse', sign: 'U1', num: '第一節',
+                        label: '找問題偵測屋', sub: '什麼東西該自己動',
+                        speaker: '🔍 第一節課：找問題（什麼東西該自己動）',
+                        dialog: '從生活裡挑一件「每次都要有人記得去做」的事。但不是每個問題機器都做得到 —— 先進入實驗室學會判斷可行性！',
+                        actionLabel: '🔍 進入第一節可行性偵測器'
+                    },
+                    {
+                        id: 2, x: 50, y: 26, kind: 'tech-corridor', sign: 'U2', num: '第二節',
+                        label: '三步拆解光廊', sub: '感測 → 判斷 → 驅動',
+                        speaker: '🌿 第二節課：拆解（感測 → 判斷 → 驅動）',
+                        dialog: '再聰明的機器都只做這三件事。把你的問題填進三個空格，它就變成一段「如果…那麼」！',
+                        actionLabel: '🧩 進入第二節三步組裝台'
+                    },
+                    {
+                        id: 3, x: 75, y: 33, kind: 'tech-windtower', num: '第三節',
+                        label: '元件配對高塔', sub: '感官與手腳',
+                        speaker: '📦 第三節課：選元件（感官與手腳）',
+                        dialog: '不背型號，只問兩件事：它感覺得到你要偵測的東西嗎？它做得動你要它做的事嗎？',
+                        actionLabel: '⚙️ 進入第三節元件配對盤'
+                    },
+                    {
+                        id: 4, x: 33, y: 56, kind: 'tech-rgbhouse', sign: 'U4', num: '第四節',
+                        label: '門檻調校穹頂', sub: '門檻要設多少',
+                        speaker: '🎛️ 第四節課：做原型（門檻要設多少）',
+                        dialog: '會動不算成功。該動的時候動、不該動的時候不動，才叫做完成 —— 這一節在調那條線！',
+                        actionLabel: '🎚️ 進入第四節門檻測試台'
+                    },
+                    {
+                        id: 5, x: 66, y: 56, kind: 'tech-hq', sign: 'U5', num: '第五節',
+                        label: '專題發表總部', sub: '做出專屬於你的作品',
+                        speaker: '🏆 第五節課：發表（做出專屬於你的作品）',
+                        dialog: '前四節的決定會自動組成一張作品卡。再補上一段「我為什麼這樣設計」，完成專屬於你們這組的智慧專題！',
+                        actionLabel: '🛠️ 進入第五節作品卡生成器'
+                    }
+                ],
+                onOpen: function (node) {
+                    openCourseDetail(Number(node.id));
+                }
+            });
+        }
+
+        lucide.createIcons();
+        initArduinoIsland();
+    </script>
+
+<!-- 返回基地按鈕（自動加入） -->
+<a id="back-to-hub" href="hub.html" title="返回闖關基地">← 返回基地</a>
+</body>
+</html>

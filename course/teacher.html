@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>教師管理後台</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="config.js"></script>
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
   <script src="../shared/auth.js"></script>
   <style>
     body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
@@ -28,8 +29,13 @@
        ★ 為什麼不把它們全部寫進同一個檔案：成績總覽一支就 25 萬字元，
          合在一起任何一處出錯，整個後台都會一起壞；分開來壞一頁只影響一頁。
 
-       分頁（「作品評分」「評分範本」「排行賽」只在 config.js 有設 GRADER_URL 時出現）：
-         📊 成績總覽　🐱 作品評分　📗 評分範本　📥 繳交審核　📈 題目分析　🏆 排行賽　🔍 可疑紀錄　👥 學生帳號
+       分頁（「作品評分」「評分範本」「通關截圖」「排行賽」只在根目錄 config.js 有設 GRADER_URL 時出現；
+             「繳交審核」是上學期的流程圖圖片加分，只在有逐關流程圖的學期出現）：
+         📊 成績總覽　🐱 作品評分　📗 評分範本　🧠 通關截圖　📥 繳交審核　📈 題目分析　🏆 排行賽　🔍 可疑紀錄　👥 學生帳號
+
+       ★ 上下學期：右上角的學期切換。換學期 ＝ 帶著 ?term= 重新載入這一頁，每個分頁都跟著換
+         （分頁的網址也帶 ?term=，不靠「這個分頁剛才選的」—— 兩個學期開在兩個分頁也不會互相影響）。
+         登入狀態兩學期共用，不必重登。「👥 學生帳號」的名冊、驗證碼兩學期共用一份。
        ===================================================================== -->
   <main class="min-h-screen p-3 sm:p-5">
     <!-- 登入 -->
@@ -46,7 +52,7 @@
           <input id="teacher-password" type="password" autocomplete="current-password" required class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"></label>
         <p id="login-message" class="text-sm text-slate-500 min-h-[1.25rem]" role="status"></p>
         <button id="login-go" class="w-full rounded-xl bg-indigo-600 py-3 font-bold text-white hover:bg-indigo-700 disabled:bg-slate-400">登入</button>
-        <p class="text-xs text-slate-400 leading-relaxed text-center">教師帳號是 Firebase 裡建立的「電子郵件／密碼」帳號（config.js 的 SCHOOL.TEACHER_EMAIL）。</p>
+        <p class="text-xs text-slate-400 leading-relaxed text-center">教師帳號是 Firebase 裡建立的「電子郵件／密碼」帳號（根目錄 config.js 的 SCHOOL.TEACHER_EMAIL）。</p>
       </form>
     </section>
 
@@ -61,8 +67,9 @@
           <h1 class="mt-1 text-xl sm:text-2xl font-black">資訊科技闖關系統｜教師管理</h1>
           <p class="mt-0.5 text-xs text-slate-500">登入身分：<span id="who"></span></p>
         </div>
-        <div class="flex items-center gap-2">
-          <a href="hub.html" target="_blank" rel="noopener" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">學生入口 ↗</a>
+        <div class="flex flex-wrap items-center gap-2">
+          <div id="term-switch" class="flex rounded-xl bg-slate-100 p-1" role="group" aria-label="學期"></div>
+          <a id="student-link" href="hub.html" target="_blank" rel="noopener" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">學生入口 ↗</a>
           <button id="logout" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">登出</button>
         </div>
       </header>
@@ -84,14 +91,15 @@ const auth = getAuth(app);
 const persistReady = setPersistence(auth, browserSessionPersistence).catch(() => {});
 
 const GRADER = !!String(C.GRADER_URL || '').trim();
-/* 分頁清單 —— 加一個功能就加一列 */
+const QUIZ_NAME = (C.QUIZ || {}).NAME || '章節測驗';
+/* 分頁清單 —— 加一個功能就加一列（src 會自動帶上 ?term=，分頁跟著這一頁的學期走） */
 const TABS = [
   { id: 'overview', label: '📊 成績總覽', src: 'dashboard.html',       desc: '全班星數、每週評分、出席、上課日、即時看板' },
   { id: 'works',    label: '🐱 作品評分', src: '../shared/works.html', desc: '每一關的作品分數、開作品、手動調整星數、相同作品', when: GRADER },
   { id: 'refs',     label: '📗 評分範本', src: '../shared/refs.html',  desc: '各關的參考解答與空白範本', when: GRADER },
   { id: 'shots',    label: '🧠 通關截圖', src: '../shared/shots.html', desc: '運算思維每一關的通關截圖、相同截圖', when: GRADER },
-  { id: 'review',   label: '📥 繳交審核', src: '../shared/review.html', desc: '流程圖圖片加分' },
-  { id: 'qstat',    label: '📈 題目分析', src: '../shared/qstat.html',  desc: '資訊倫理哪幾題全班一直錯' },
+  { id: 'review',   label: '📥 繳交審核', src: '../shared/review.html', desc: '流程圖圖片加分', when: !!C.FLOWCHART },
+  { id: 'qstat',    label: '📈 題目分析', src: '../shared/qstat.html',  desc: QUIZ_NAME + '哪幾題全班一直錯' },
   { id: 'arena',    label: '🏆 排行賽',   src: '../shared/arenaboard.html', desc: '資訊倫理闖關排行賽：匯入題庫、全部排名、退回次數', when: GRADER && C.ARENA !== false },
   { id: 'audit',    label: '🔍 可疑紀錄', src: '../shared/audit.html',  desc: '沒有作答過程、作答太快的測驗紀錄' },
   { id: 'accounts', label: '👥 學生帳號', src: '../shared/codes.html',  desc: '匯入名冊、驗證碼查看與重設' }
@@ -100,8 +108,14 @@ const TABS = [
 const $ = id => document.getElementById(id);
 const show = v => { ['login-view', 'loading-view', 'admin-view'].forEach(x => $(x).classList.toggle('hidden', x !== v)); };
 document.querySelectorAll('[data-school]').forEach(el => {
-  el.textContent = [(C.SCHOOL || {}).NAME, (C.SCHOOL || {}).GRADE, C.TERM].filter(Boolean).join(' · ');
+  el.textContent = [(C.SCHOOL || {}).NAME, (C.SCHOOL || {}).GRADE, C.TERM_NAME + '（' + C.TERM + '）'].filter(Boolean).join(' · ');
 });
+
+/* ── 學期切換：帶著 ?term= 重新載入（留在同一個分頁）── */
+$('term-switch').innerHTML = (TERMSEL.list || []).map(t =>
+  `<button data-term="${t.id}" class="rounded-lg px-3 py-1.5 text-sm font-bold ${t.id === C.TERM ? 'bg-white text-indigo-700 shadow' : 'text-slate-500 hover:text-slate-800'}"
+     ${t.id === C.TERM ? 'aria-pressed="true"' : ''}>${t.name}<span class="ml-1 text-xs font-medium opacity-70">${t.short || t.id}</span></button>`).join('');
+$('student-link').href = 'hub.html?term=' + encodeURIComponent(C.TERM);
 $('teacher-email').value = AUTH.TEACHER_EMAIL || '';
 
 /* ── 分頁 ── */
@@ -122,7 +136,7 @@ function openTab(id, reload) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.tab !== t.id));
   const frame = $('frame-' + t.id);
   if (!loaded[t.id] || reload) {
-    frame.src = t.src + (t.src.includes('?') ? '&' : '?') + 'v=' + Date.now();   // 每次都拿最新版（GitHub Pages 會快取 10 分鐘）
+    frame.src = t.src + (t.src.includes('?') ? '&' : '?') + 'term=' + encodeURIComponent(C.TERM) + '&v=' + Date.now();   // 每次都拿最新版（GitHub Pages 會快取 10 分鐘）
     loaded[t.id] = true;
   }
   if (location.hash !== '#' + t.id) history.replaceState(null, '', '#' + t.id);
@@ -137,6 +151,8 @@ function buildTabs() {
     `<div class="tab-panel hidden" data-tab="${t.id}"><iframe id="frame-${t.id}" class="tab-frame" title="${t.label}"></iframe></div>`).join('');
 }
 document.addEventListener('click', e => {
+  const tb = e.target.closest('[data-term]');
+  if (tb && tb.dataset.term !== C.TERM) { TERMSEL.choose(tb.dataset.term); location.href = location.pathname + '?term=' + encodeURIComponent(tb.dataset.term) + location.hash; return; }
   const b = e.target.closest('.tab-btn'); if (b) { openTab(b.dataset.tab); return; }
   if (e.target.closest('#reload-tab')) { openTab(readTab(), true); }
 });
@@ -168,7 +184,7 @@ $('login-form').addEventListener('submit', async e => {
   e.preventDefault();
   const email = $('teacher-email').value.trim(), pw = $('teacher-password').value;
   const msg = $('login-message');
-  if (!AUTH.isTeacherEmail(email)) { msg.textContent = '這不是教師帳號（config.js 的 SCHOOL.TEACHER_EMAIL）。'; return; }
+  if (!AUTH.isTeacherEmail(email)) { msg.textContent = '這不是教師帳號（根目錄 config.js 的 SCHOOL.TEACHER_EMAIL）。'; return; }
   $('login-go').disabled = true; msg.textContent = '登入中…';
   try {
     await persistReady;

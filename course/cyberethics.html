@@ -5,19 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資訊科技學習系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="../shared/island.css?v=20261101v7">
+  <link rel="stylesheet" href="../shared/island.css?v=20261107">
 
-  <!-- 全站共用設定（載入順序固定：config → guard） -->
-  <script src="config.js?v=20261101v7"></script>
+  <!-- 全站共用設定（載入順序固定：config → term → guard） -->
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
   <script src="../shared/guard.js"></script>
-  <script src="../shared/island.js?v=20261101v7"></script>
+  <script src="../shared/island.js?v=20261107"></script>
 </head>
 <body class="ac-theme-bg">
 
   <!-- ① 內容：教什麼（章節、教材、題庫） -->
-  <script src="content/ethics.js"></script>
-  <!-- 答錯時的「想一想」提示（不含答案；沒有這行 ＝ 答錯直接下一題） -->
-  <script src="content/ethics.hints.js"></script>
+  <script>TERMSEL.include(CONFIG.QUIZ.CONTENT); if (CONFIG.QUIZ.HINTS) TERMSEL.include(CONFIG.QUIZ.HINTS);</script>
 
   <!-- ② 共用模組：單一登入、計分規則、進度回報 -->
   <script src="../shared/sso.js"></script>
@@ -31,7 +30,7 @@
   <script src="../shared/readhold.js"></script>
 
   <!-- ③ 版型與流程引擎：畫面完全由這支產生 -->
-  <script src="../shared/quiz-engine.js?v=20261101v7"></script>
+  <script src="../shared/quiz-engine.js?v=20261107"></script>
   <script type="module" src="../shared/quiz-firebase.js"></script>
 
 </body>

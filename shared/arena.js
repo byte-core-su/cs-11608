@@ -159,7 +159,7 @@
     .replace('{{NAME}}', esc0(A.name || '')));
 
   var C = window.CONFIG || {};
-  var TERM = C.TERM || '11501';
+  var TERM = C.TERM || '';
   var URL_ = String(C.GRADER_URL || '').trim();
   var SID = '', TOKEN = null;            // 由 arena.html 的登入程式填進來（ARENA_SET_AUTH）
   var POINTS = { 1: 15, 2: 25, 3: 35, 4: 45, 5: 55 };
@@ -180,7 +180,7 @@
   function api(kind, body) {
     var tok = (TOKEN && kind !== 'arenaAnswer' && kind !== 'arenaLeave') ? TOKEN() : Promise.resolve('');
     return Promise.resolve(tok).then(function (idToken) {
-      var b = Object.assign({ kind: kind }, body || {});
+      var b = Object.assign({ kind: kind, term: TERM }, body || {});   // term：Apps Script 一個部署服務兩個學期
       if (idToken) b.idToken = idToken;
       return fetch(URL_, { method: 'POST', body: JSON.stringify(b) });   // ⚠️ 不加 Content-Type：維持 text/plain，Apps Script 才收得到
     }).then(function (r) {

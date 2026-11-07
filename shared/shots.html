@@ -8,7 +8,8 @@
   <style>.embedded [data-standalone] { display: none !important; }</style>
   <title>通關截圖</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="../course/config.js"></script>
+  <script src="../config.js"></script>
+<script src="term.js"></script>
   <script src="auth.js"></script>
   <style>
     body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
@@ -50,7 +51,9 @@ import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/fireb
 const C = window.CONFIG || {};
 const ROSTER = (C.COLLECTIONS && C.COLLECTIONS.ROSTER) || 'roster';
 const PROGRESS = (C.COLLECTIONS && C.COLLECTIONS.PROGRESS) || (C.TERM + '-progress');
-const LEVELS = Array.from({ length: 10 }, (_, i) => i + 1);
+/* 這一學期的謎題（{學期}/config.js 的 THINKING.CHALLENGES） */
+const CHALLENGES = ((C.THINKING || {}).CHALLENGES) || [];
+const LEVELS = CHALLENGES.length ? CHALLENGES.map(c => Number(c.id)) : Array.from({ length: 10 }, (_, i) => i + 1);
 const app = initializeApp(C.FIREBASE);
 const auth = getAuth(app);
 setPersistence(auth, browserSessionPersistence).catch(() => {});
@@ -72,7 +75,7 @@ async function load() {
   try {
     const [rs, ps, cs] = await Promise.all([
       getDocs(collection(db, ROSTER)), getDocs(collection(db, PROGRESS)),
-      getDocs(collection(db, 'artifacts', 'comp-think-app', 'public', 'data', 'progress'))]);
+      getDocs(collection(db, C.COLLECTIONS.THINKING))]);
     state.roster = rs.docs.map(d => ({ sid: d.id, ...(d.data() || {}) }))
       .sort((a, b) => String(a.cls).localeCompare(String(b.cls)) || (Number(a.no) || 0) - (Number(b.no) || 0));
     state.shots = {};
@@ -89,7 +92,7 @@ async function load() {
 
 const who = sid => state.roster.find(r => r.sid === sid) || { sid, cls: '', no: '', name: '（不在名冊）' };
 const shotOf = (sid, lv) => (state.shots[sid] || {})[String(lv)] || null;
-const titleOf = lv => { for (const s of Object.values(state.shots)) { const t = (s[String(lv)] || {}).title; if (t) return t; } return ''; };
+const titleOf = lv => (CHALLENGES.find(c => Number(c.id) === lv) || {}).title || '';
 
 /* ── 👯 相同截圖：打開這一頁時才比對（上課時不比對）── 指紋 → [{ sid, lv }] */
 let dupCache = null;

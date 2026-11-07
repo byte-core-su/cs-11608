@@ -2,8 +2,8 @@ rules_version = '2';
 /* =====================================================================
    資訊科技闖關系統 · Firestore 安全規則
    ---------------------------------------------------------------------
-   ★ 移植時只改最上面「學校設定」那三個函式，要和 course/config.js 的
-     SCHOOL／TERM／FIREBASE.projectId 對得上（安全規則沒辦法讀 JS，所以兩邊各一份）。
+   ★ 移植時只改最上面「學校設定」那三個函式，要和根目錄 config.js 的
+     SCHOOL.TEACHER_EMAIL／TERMS／FIREBASE.projectId 對得上（安全規則沒辦法讀 JS，所以兩邊各一份）。
    ★ 改完要到 Firebase Console → Firestore Database → 規則，整份貼上後按「發布」，
      親眼看到「已發佈」才算數 —— 只改這個檔案，線上什麼都不會變。
 
@@ -22,10 +22,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ================= 學校設定【必改】=================
-    //   ⚠️ 要和 course/config.js 對得上（一律用小寫）
+    //   ⚠️ 要和根目錄 config.js 對得上（一律用小寫）
     function TEACHER_EMAIL() { return 'teacher@example.com'; }                     // = SCHOOL.TEACHER_EMAIL
     function DOMAIN()        { return '@students.your_project.firebaseapp.com'; }  // = '@students.' + FIREBASE.projectId + '.firebaseapp.com'
-    function TERM()          { return '11501'; }                                   // = TERM
+    function TERMS()         { return ['11501', '11502']; }                        // = TERMS 的每一個 id
+
+    /** 集合名稱是不是「某一個學期 ＋ 這個字尾」：inTerm('11502-progress', '-progress') */
+    function inTerm(col, suffix) {
+      return col.split('-')[0] in TERMS() && col == col.split('-')[0] + suffix;
+    }
 
     // ================= 共用判斷 =================
     function isSignedIn() {
@@ -131,47 +136,13 @@ service cloud.firestore {
     }
 
     // ###################################################################
-    // ##  這個學期（{TERM}-config、{TERM}-progress）
+    // ##  各學期的資料（{學期}-config、{學期}-progress、{學期}-thinking…）
     // ###################################################################
-    //   ★ 用萬用字元比對集合名稱，換學期只要改上面的 TERM()，不必改這裡。
-    match /{col}/{docId} {
-      /* 課程設定（成績簿、快照、上課日）：只有老師。
-         例外：上課日 schedule 開放單筆讀 —— 學生端的「本週成績卡」要用它判出席。 */
-      allow read, write: if col == TERM() + '-config' && isTeacher();
-      allow get: if col == TERM() + '-config' && docId == 'schedule' && isSignedIn();
-
-      /* 程式設計的評分範本（參考解答／空白範本的虛擬碼）：只有老師。
-         ★ Apps Script 評分服務用老師的 Google 帳號讀寫，不經過這些規則；
-           開給老師是讓他在 Firebase Console 之外也看得到。
-         ⚠️ 學生**絕對不可以**讀到這裡 —— 那就是答案。 */
-      allow read, write: if col == TERM() + '-grader' && isTeacher();
-
-      /* 闖關排行賽：最佳成績、每一場的紀錄 —— 只有老師讀得到（教師後台「🏆 排行賽」）。
-         ★ 寫入只有 Apps Script（用老師的 Google 帳號，不經過這些規則）；
-           學生看排行走 Apps Script，只拿得到前 30 名的學號和分數。
-         ⚠️ 不開寫入：連老師的網頁都不直接改成績。{TERM}-arena-days（每天的分級）誰都不開。 */
-      allow read: if (col == TERM() + '-arena-board' || col == TERM() + '-arena-runs') && isTeacher();
-
-      /* 闖關進度與星星（文件 id ＝ 學號） */
-      allow get:  if col == TERM() + '-progress' && isSignedIn();
-      allow list: if col == TERM() + '-progress' && isTeacher();   // 學生不可整批下載全班成績
-      allow create: if col == TERM() + '-progress'
-                    && (isTeacher()
-                        || (isOwner(docId) && inRoster(docId) && bonusEmpty() && scratchStarsEmpty()));
-      allow update: if col == TERM() + '-progress'
-                    && (isTeacher()
-                        || (isOwner(docId) && inRoster(docId) && bonusUnchanged() && scratchStarsUnchanged()));
-      allow delete: if col == TERM() + '-progress' && isTeacher();
-    }
-
-    // ###################################################################
-    // ##  運算思維與舊測驗紀錄
-    // ###################################################################
+    //   ★ 用萬用字元比對集合名稱，學期清單在上面的 TERMS()，不必改這裡。
 
     /* 運算思維：文件 id 是「班級_座號_姓名」，不是學號。
        學生每次寫入都帶 sid 欄位，規則拿它去名冊組出「你應該用的文件 id」，
-       對得上才准寫 ⇒ 改不到別人的紀錄。
-       「班級過關紀錄查詢」要讀全班，所以登入者都能讀。 */
+       對得上才准寫 ⇒ 改不到別人的紀錄。 */
     function ctKeyOf(sid) {
       let r = get(/databases/$(database)/documents/roster/$(sid)).data;
       return string(r.cls) + '_' + string(r.no) + '_' + string(r.name);
@@ -180,15 +151,40 @@ service cloud.firestore {
       let sid = request.resource.data.get('sid', '');
       return sid is string && isOwner(sid) && ctKeyOf(sid) == docId;
     }
-    match /artifacts/{appId}/public/data/progress/{docId} {
-      allow read: if isSignedIn();
-      allow create, update: if isTeacher() || ctOwnDoc(docId);
-      allow delete: if isTeacher();
-    }
 
-    // 舊版章節測驗紀錄：教師端「清除學生進度」會來找、刪
-    match /artifacts/{appId}/public/data/quiz_records/{recId} {
-      allow read, delete: if isTeacher();
+    match /{col}/{docId} {
+      /* 課程設定（成績簿、快照、上課日）：只有老師。
+         例外：上課日 schedule 開放單筆讀 —— 學生端的「本週成績卡」要用它判出席。 */
+      allow read, write: if inTerm(col, '-config') && isTeacher();
+      allow get: if inTerm(col, '-config') && docId == 'schedule' && isSignedIn();
+
+      /* 程式設計的評分範本（參考解答／空白範本的虛擬碼）、排行賽題庫：只有老師。
+         ★ Apps Script 評分服務用老師的 Google 帳號讀寫，不經過這些規則；
+           開給老師是讓他在 Firebase Console 之外也看得到。
+         ⚠️ 學生**絕對不可以**讀到這裡 —— 那就是答案。 */
+      allow read, write: if inTerm(col, '-grader') && isTeacher();
+
+      /* 闖關排行賽：最佳成績、每一場的紀錄 —— 只有老師讀得到（教師後台「🏆 排行賽」）。
+         ★ 寫入只有 Apps Script（用老師的 Google 帳號，不經過這些規則）；
+           學生看排行走 Apps Script，只拿得到前 30 名的學號和分數。
+         ⚠️ 不開寫入：連老師的網頁都不直接改成績。{學期}-arena-days（每天的分級）誰都不開。 */
+      allow read: if (inTerm(col, '-arena-board') || inTerm(col, '-arena-runs')) && isTeacher();
+
+      /* 闖關進度與星星（文件 id ＝ 學號） */
+      allow get:  if inTerm(col, '-progress') && isSignedIn();
+      allow list: if inTerm(col, '-progress') && isTeacher();   // 學生不可整批下載全班成績
+      allow create: if inTerm(col, '-progress')
+                    && (isTeacher()
+                        || (isOwner(docId) && inRoster(docId) && bonusEmpty() && scratchStarsEmpty()));
+      allow update: if inTerm(col, '-progress')
+                    && (isTeacher()
+                        || (isOwner(docId) && inRoster(docId) && bonusUnchanged() && scratchStarsUnchanged()));
+      allow delete: if inTerm(col, '-progress') && isTeacher();
+
+      /* 運算思維的通關紀錄：「班級過關紀錄查詢」要讀全班，所以登入者都能讀；只能寫自己那一份 */
+      allow read: if inTerm(col, '-thinking') && isSignedIn();
+      allow create, update: if inTerm(col, '-thinking') && (isTeacher() || ctOwnDoc(docId));
+      allow delete: if inTerm(col, '-thinking') && isTeacher();
     }
 
     // ###################################################################

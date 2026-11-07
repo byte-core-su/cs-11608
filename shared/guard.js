@@ -19,16 +19,6 @@
     try { sid = sessionStorage.getItem('sid' + term); } catch (e) { sid = null; }
     if (sid && (window.CONFIG && window.CONFIG.isSid ? window.CONFIG.isSid(sid) : /^\d+$/.test(sid))) return;        // 已從闖關基地登入過
 
-    // 【測試模式】暫時關閉登入守門：若尚未登入，自動寫入測試島民身分以利直接預覽各單元
-    try {
-      var demoSid = '1410101';
-      sessionStorage.setItem('sid' + term, demoSid);
-      sessionStorage.setItem('me' + term, JSON.stringify({
-        sid: demoSid, cls: '801', no: '01', name: '測試島民', key: '801_01_測試島民', at: Date.now()
-      }));
-      return;
-    } catch (e) {}
-
     // hub 與關卡頁在同一個學期資料夾裡，用相對檔名即可
     var hub = (window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html';
     location.replace(hub + '?next=' + encodeURIComponent(page + location.search));

@@ -8,12 +8,13 @@
 <style>.embedded [data-standalone] { display: none !important; }</style>
 <title>闖關排行賽 · 教師端</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="../course/config.js"></script>
+<script src="../config.js"></script>
+<script src="term.js"></script>
 <script src="auth.js"></script>
 <script src="arenarank.js"></script>
 <!-- 匯入題庫用：老師的瀏覽器從章節測驗的題目抽出排行賽題庫 -->
 <script src="qstat.js"></script>
-<script src="../course/content/ethics.js"></script>
+<script>TERMSEL.include(CONFIG.QUIZ.CONTENT);</script>
 <script src="arenabank.js"></script>
 <style>
   html,body,button{font-family:'Noto Sans TC',system-ui,sans-serif}
@@ -26,9 +27,9 @@
      🏆 闖關排行賽（老師專用）
      ---------------------------------------------------------------------
      ① 題庫：排行賽的對錯由 Apps Script 判，它要有自己的一份題庫。
-        這一頁從 content/ethics.js 抽出題目，按「匯入題庫」送過去
+        這一頁從這一學期的章節測驗題庫（{學期}/config.js 的 QUIZ.CONTENT）抽出題目，按「匯入題庫」送過去
         （存在 {TERM}-grader/arena_bank，只有老師讀得到）。
-        改了 ethics.js 的題目，這裡會顯示「網站上的題目改過了」，再按一次就好。
+        改了題庫的題目，這裡會顯示「網站上的題目改過了」，再按一次就好。
      ② 排行：全部參賽者的最佳成績（學生頁面只看得到前 30 名的學號）。
         資料直接從 Firestore 讀（規則開給老師讀 {TERM}-arena-board／-arena-runs）。
      ③ 斷線白白用掉一次機會：該列按「退回 1 次」（經 Apps Script 改，學生改不到）。
@@ -38,7 +39,7 @@
     <a href="../course/teacher.html" data-standalone class="text-sm font-bold text-slate-400 hover:text-slate-700">← 回教師端</a>
     <h1 class="text-2xl sm:text-3xl font-black mt-2">🏆 闖關排行賽</h1>
     <p class="text-slate-500 text-sm mt-2 leading-relaxed">
-      20 題、★1 起跳、答對升級答錯降級，全對 1000 分；一天 2 次；資訊倫理 10 章全部通關才能玩。<br>
+      20 題、★1 起跳、答對升級答錯降級，全對 1000 分；一天 2 次；<span id="quiz-name"></span> 10 章全部通關才能玩。<br>
       排序和學生看到的一樣：<b>分數高 → 用時短 → 先達成</b>。</p>
   </header>
   <div id="bank" class="mb-5"></div>
@@ -53,7 +54,8 @@ import { getFirestore, collection, getDocs }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const C = window.CONFIG || {};
-const TERM = C.TERM || '11501';
+const TERM = C.TERM || '';
+{ const qn = document.getElementById('quiz-name'); if (qn) qn.textContent = (C.QUIZ || {}).NAME || '章節測驗'; }
 const URL_ = String(C.GRADER_URL || '').trim();
 const app = initializeApp(C.FIREBASE);
 const auth = getAuth(app);
@@ -69,7 +71,7 @@ const fmtSec = s => { s = Math.round(Number(s) || 0); return Math.floor(s / 60) 
 const state = { who: null, busy: '', msg: '', rows: [], klass: '', today: '', runsN: 0, todayN: 0,
                 bank: undefined, bankMsg: '', bankBusy: false, err: '' };
 
-/* 網站上的題庫（從 ethics.js 抽）＋指紋（和 Apps Script 存的比，知道有沒有改過） */
+/* 網站上的題庫（從這一學期的章節測驗抽）＋指紋（和 Apps Script 存的比，知道有沒有改過） */
 const LOCAL = (window.ARENABANK && window.QUIZ_CONTENT && window.QSTAT) ? ARENABANK.build(window.QUIZ_CONTENT, window.QSTAT, TERM) : null;
 const LOCAL_TEXT = LOCAL ? JSON.stringify(LOCAL) : '';
 async function sha256(text) {
@@ -81,7 +83,7 @@ const LOCAL_SIG = LOCAL_TEXT ? sha256(LOCAL_TEXT) : Promise.resolve('');
 
 async function call(body) {
   const idToken = await auth.currentUser.getIdToken();
-  const r = await fetch(URL_, { method: 'POST', body: JSON.stringify(Object.assign({ idToken }, body)) });
+  const r = await fetch(URL_, { method: 'POST', body: JSON.stringify(Object.assign({ idToken, term: C.TERM }, body)) });
   const j = await r.json();
   if (!j.ok) throw new Error(j.error || j.message || '失敗');
   return j;
@@ -144,7 +146,7 @@ async function renderBank() {
   const box = el('bank');
   if (!URL_) {
     box.innerHTML = `<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm text-amber-900 leading-relaxed">
-      排行賽要用 Apps Script（和程式設計評分同一個部署）—— <span class="font-mono">course/config.js</span> 的
+      排行賽要用 Apps Script（和程式設計評分同一個部署）—— 根目錄 <span class="font-mono">config.js</span> 的
       <span class="font-mono">GRADER_URL</span> 還是空的。部署步驟見 <span class="font-mono">gas/README.md</span>。</div>`;
     return;
   }
@@ -154,12 +156,12 @@ async function renderBank() {
   let line, tone, btn;
   if (b === undefined) { line = state.bankMsg || '讀取題庫狀態…'; tone = 'slate'; btn = ''; }
   else if (!b) { line = '還沒有匯入題庫 —— 學生現在按不了開始。'; tone = 'rose'; btn = '匯入題庫'; }
-  else if (same) { line = `✅ 題庫 ${b.count} 題（${esc(b.at)} 匯入），和網站上的 ethics.js 一致。`; tone = 'emerald'; btn = ''; }
+  else if (same) { line = `✅ 題庫 ${b.count} 題（${esc(b.at)} 匯入），和網站上的題庫一致。`; tone = 'emerald'; btn = ''; }
   else { line = `⚠️ 網站上的題目改過了（目前用的是 ${esc(b.at)} 匯入的 ${b.count} 題）。按「重新匯入」換成新的。`; tone = 'amber'; btn = '重新匯入'; }
   const cls = { slate: 'bg-white border-slate-200 text-slate-600', rose: 'bg-rose-50 border-rose-200 text-rose-800',
                 emerald: 'bg-emerald-50 border-emerald-200 text-emerald-800', amber: 'bg-amber-50 border-amber-200 text-amber-900' }[tone];
   box.innerHTML = `<div class="border rounded-2xl p-4 text-sm flex flex-wrap items-center gap-3 justify-between ${cls}">
-      <div><b>題庫</b>　${line}${LOCAL ? `<span class="text-xs opacity-70">（網站上：${LOCAL.count} 題、參賽要通關 ${LOCAL.units.length} 個章節）</span>` : '<br>⚠️ 讀不到 content/ethics.js'}
+      <div><b>題庫</b>　${line}${LOCAL ? `<span class="text-xs opacity-70">（網站上：${LOCAL.count} 題、參賽要通關 ${LOCAL.units.length} 個章節）</span>` : '<br>⚠️ 讀不到這一學期的題庫（' + esc((C.QUIZ || {}).CONTENT || '') + '）'}
         ${state.bankMsg && b !== undefined ? `<div class="mt-1">${esc(state.bankMsg)}</div>` : ''}</div>
       ${btn && LOCAL ? `<button onclick="arenaImport()" ${state.bankBusy ? 'disabled' : ''} class="px-4 py-2 bg-slate-800 text-white font-bold rounded-xl disabled:opacity-50">${state.bankBusy ? '匯入中…' : btn}</button>` : ''}
       ${same ? `<button onclick="arenaImport()" ${state.bankBusy ? 'disabled' : ''} class="text-xs underline opacity-60">${state.bankBusy ? '匯入中…' : '重新匯入'}</button>` : ''}

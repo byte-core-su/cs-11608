@@ -39,12 +39,12 @@
    ---------------------------------------------------------------------
    部署（約 10 分鐘，步驟見 gas/README.md）
      1. script.google.com 新增專案，貼上這支與 appsscript.json
-     2. 專案設定 → 指令碼屬性：PROJECT_ID、API_KEY、TEACHER_EMAIL、TERM（選填 DRIVE_FOLDER_ID）
+     2. 專案設定 → 指令碼屬性：PROJECT_ID、API_KEY、TEACHER_EMAIL、TERMS（例如 11501,11502；選填 DRIVE_FOLDER_ID）
      3. 部署 → 新增部署作業 → 網頁應用程式：執行身分「我」、存取權「所有人」
      4. 把 /exec 結尾的網址貼到 course/config.js 的 GRADER_URL
    ===================================================================== */
 
-var VERSION = 'grader-2026-10-26';   // 10-26：作品比對＋運算思維截圖
+var VERSION = 'grader-2026-11-02';   // 11-02：一個部署服務上下兩個學期
 
 /* =====================================================================
    第一部分：比對核心（純 JavaScript，不用到任何 Google 服務，可以在 node 裡測）
@@ -369,12 +369,24 @@ function props_() {
   return {
     project: project,
     apiKey: String(p.API_KEY || '').trim(),
-    term: String(p.TERM || '11501').trim(),
+    /* 學期：一個部署服務好幾個學期（TERMS，逗號隔開，例如 11501,11502）。
+       每個請求帶 term，不在名單裡的一律擋下 —— 不會靜悄悄寫進別的學期。
+       ★ 只設 TERM（舊的設定方式）＝ 只有那一個學期，請求可以不帶 term。 */
+    terms: String(p.TERMS || p.TERM || '11501,11502').split(',').map(function (x) { return x.trim(); })
+             .filter(function (x) { return /^[\w-]{1,20}$/.test(x); }),
+    term: '',
     teacher: String(p.TEACHER_EMAIL || '').trim().toLowerCase(),
     domain: String(p.STUDENT_EMAIL_DOMAIN || ('students.' + project.toLowerCase() + '.firebaseapp.com')).trim().toLowerCase(),
     sidPattern: String(p.SID_PATTERN || '^\\d{7}$'),
     folder: String(p.DRIVE_FOLDER_ID || '').trim()
   };
+}
+
+/** 請求的學期：在 TERMS 裡才算數；沒帶的話只有「只設一個學期」時才用那一個 */
+function pickTerm_(t, P) {
+  t = String(t || '').trim();
+  if (!t) return P.terms.length === 1 ? P.terms[0] : '';
+  return P.terms.indexOf(t) >= 0 ? t : '';
 }
 
 function json_(o) {
@@ -390,6 +402,13 @@ function doPost(e) {
     var req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var P = props_();
     if (!P.project || !P.apiKey || !P.teacher) return json_({ ok: false, message: '評分服務還沒設定好（指令碼屬性少了 PROJECT_ID／API_KEY／TEACHER_EMAIL），請告訴老師。' });
+    /* 哪一個學期：排行賽作答用開始那一場時記下的學期（一場打到一半不會換學期） */
+    var want = (req.kind === 'arenaAnswer' || req.kind === 'arenaLeave') ? (arenaRunTerm_(req.run_id) || req.term) : req.term;
+    P.term = pickTerm_(want, P);
+    if (!P.term) {
+      var tm = '不認得的學期「' + String(want || '（沒有帶）') + '」—— 評分服務的指令碼屬性 TERMS 是「' + P.terms.join(',') + '」，請告訴老師。';
+      return json_({ ok: false, message: tm, error: tm });
+    }
     /* 排行賽作答：靠場次代號找這一場，不必每一題都向 Firebase 確認身分（少一次連線，快將近一秒） */
     if (req.kind === 'arenaAnswer' || req.kind === 'arenaLeave') return json_(handleArena_(req, null, P));
     var who = whoIs_(req.idToken, P);
@@ -958,6 +977,14 @@ function arenaWithRun_(runId, fn) {
   } finally { lock.releaseLock(); }
 }
 
+/** 這一場是哪一個學期開始的（場次存在快取裡；找不到就回空字串） */
+function arenaRunTerm_(runId) {
+  try {
+    var raw = arenaCache_().get('arenarun_' + String(runId || ''));
+    return raw ? String(JSON.parse(raw).term || '') : '';
+  } catch (e) { return ''; }
+}
+
 function handleArena_(req, who, P) {
   try { return arenaRoute_(req, who, P); }
   catch (e) { return arenaFail_(String(e && e.message || e)); }
@@ -1011,11 +1038,12 @@ function arenaRoute_(req, who, P) {
     if (!fsGet_(P, 'roster/' + sid)) return arenaFail_('名冊裡沒有這個學號');
     /* ⚠️ 資格一定要在「用掉一次機會」之前擋：沒資格的人按開始，不可以把今天的次數扣掉 */
     var e2 = arenaElig_(P, sid, bank.units);
-    if (!e2.ok) return arenaFail_('要先把資訊倫理 ' + e2.need + ' 個章節全部通關才能挑戰（目前 ' + e2.passed + ' / ' + e2.need + '）');
+    if (!e2.ok) return arenaFail_('要先把章節測驗的 ' + e2.need + ' 個章節全部通關才能挑戰（目前 ' + e2.passed + ' / ' + e2.need + '）');
     var tiers = arenaDayTiers_(P, bank.bank);
     var n = arenaTakeTry_(P, sid);
     if (n < 0) return arenaFail_('今天的 ' + ARENA.DAILY + ' 次挑戰已經用完了，明天再來！');
     var nr = arenaNewRun(sid, bank.bank, tiers, Math.random, Date.now() / 1000);
+    nr.run.term = P.term;                  // 作答時靠它找回是哪一個學期
     var runId = Utilities.getUuid().replace(/-/g, '');
     arenaCache_().put('arenarun_' + runId, JSON.stringify(nr.run), ARENA.RUN_TTL);
     return { ok: true, run_id: runId, question: nr.first, left: Math.max(0, ARENA.DAILY - n) };

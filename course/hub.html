@@ -27,14 +27,15 @@
   <div id="app"></div>
 
   <!-- 全站共用計分規則（單一來源，與各關卡頁、教師端同一份） -->
-  <script src="config.js?v=20261101v7"></script>
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
 <!-- 登入：學號＋六位數驗證碼（單一來源，見 shared/auth.js）-->
 <script src="../shared/auth.js"></script>
   <script src="../shared/grading.js"></script>
   <!-- 課表與「這週有沒有上課日」的判定（教師端同一支）-->
   <script src="../shared/schedule.js"></script>
   <!-- 🏝️ 動物森友會島嶼探險引擎 -->
-  <script src="../shared/island.js?v=20261101v7"></script>
+  <script src="../shared/island.js?v=20261107"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut,
@@ -100,26 +101,29 @@
       }
     }
 
-    // ===== 關卡定義（module ID 對應規格文件） =====
-    const MODULES = [
-      { id:'ethics',    title:'資訊倫理學習系統', tag:'法律倫理', icon:'⚖️', href:'cyberethics.html', theme:'bg-pink-100 border-pink-300 text-pink-900',    tape:'bg-pink-500/25',   rot:'rotate-1',  desc:'資訊倫理、網路禮儀、著作權與個資法。', maxStars:30, subLevels:10 },
-      { id:'thinking',  title:'運算思維挑戰',     tag:'運算思維', icon:'🧠', href:'thinking.html',    theme:'bg-green-100 border-green-300 text-green-900',  tape:'bg-green-500/25',  rot:'-rotate-1', desc:'10 道生活謎題，訓練邏輯與拆解力。', maxStars:20, subLevels:10 },
-      { id:'listprog', combines:['flowchart','scratch'], title:'程式設計（Scratch）', tag:'程式設計', icon:'🐱', href:'flowchart.html', theme:'bg-orange-100 border-orange-300 text-orange-900', tape:'bg-orange-500/25', rot:'-rotate-1',  desc:'含前導「清單學習機」與音階教材；一關關：排流程圖 → 寫 Scratch 程式。', maxStars:(window.CONFIG.GRADER_URL ? 60 : 30), subLevels:20 },
-      /* ⚠️ maxStars 是進度條的分母，一定要和「這張卡真的顯示的星數」對得起來：
-         流程圖 10×2 ＋ 交圖加分 10 ＝ 30；有接 Apps Script 評分（GRADER_URL）再加作品星 10×3 ＝ 60。
-         上限的算法在 GRADING.moduleMax()，改門檻時記得回來對一次。 */
-      { id:'arduino',   title:'智慧家居機電專題', tag:'延伸挑戰', icon:'💡', href:'5016b.html',       theme:'bg-indigo-100 border-indigo-300 text-indigo-900', tape:'bg-indigo-500/25', rot:'rotate-2',  desc:'五節課：感應、換算、調速、混色，最後做一個自己的專題。', maxStars:0, subLevels:0 }   // 延伸體驗，不計星數
-    ];
+    /* ===== 現在是哪一學期 ＋ 切換 =====
+       學期由 shared/term.js 決定（網址 ?term= → 這個分頁剛才選的 → 這台電腦上次選的 → 依日期）。
+       換學期回首頁選；登入狀態兩學期共用，不必重登。 */
+    function termPill(){
+      const others = ((window.TERMSEL && window.TERMSEL.list) || []).length > 1;
+      return `<span class="inline-flex items-center gap-1.5 text-xs font-bold bg-white/80 text-slate-600 border border-slate-200 rounded-full px-3 py-1">
+        ${window.CONFIG.TERM === (((window.TERMSEL && window.TERMSEL.list)||[])[0]||{}).id ? '📘' : '📗'} ${esc(window.CONFIG.TERM_NAME || '')}（${esc(window.CONFIG.TERM_SHORT || window.CONFIG.TERM)}）
+        ${others ? `<a href="../index.html?pick=1" class="text-indigo-600 underline">切換學期</a>` : ''}</span>`;
+    }
 
-    /* ===== 🏆 資訊倫理 闖關排行賽 =====
+    // ===== 關卡定義：每一學期的卡片寫在 {學期}/config.js 的 MODULES =====
+    const MODULES = window.CONFIG.MODULES || [];
+
+    /* ===== 🏆 闖關排行賽 =====
        ★ 排行賽的題目、對錯、時間都由 Apps Script 處理（和程式設計評分同一個部署），
-         所以 config.js 有填 GRADER_URL 才出現；不想開排行賽就把 config.js 的 ARENA 設成 false。
+         所以根目錄 config.js 有填 GRADER_URL 才出現；不想開排行賽就把 ARENA 設成 false。
        ★ 放在模組卡片的最後面：不算一個模組、不進星數、不影響「下一關」提示。
-       ⚠️ 參賽資格的章節清單要和 content/ethics.js 的章節一樣（gas/arena.test.js 會比對）；
+       ★ 名稱與參賽資格（要通關的章節）在 {學期}/config.js 的 ARENA_INFO；
           真正擋人的是 Apps Script（它用老師匯入的題庫裡的章節清單），這裡只是先告訴學生還差幾章。 */
-    const ARENA_ON = !!String(window.CONFIG.GRADER_URL || '').trim() && window.CONFIG.ARENA !== false;
-    const ARENA_UNITS = ['1-1','1-2','1-3','1-4','ch1-all','3-1','3-2','3-3','ch3-all','review-all'];
-    const ARENA_CARD = { title:'資訊倫理 闖關排行賽', tag:'排行挑戰', icon:'🏆', href:'arena.html',
+    const AI_ = window.CONFIG.ARENA_INFO || {};
+    const ARENA_ON = !!String(window.CONFIG.GRADER_URL || '').trim() && window.CONFIG.ARENA !== false && !!(AI_.UNITS || []).length;
+    const ARENA_UNITS = (AI_.UNITS || []).slice();
+    const ARENA_CARD = { title:(AI_.NAME || '') + ' 闖關排行賽', tag:'排行挑戰', icon:'🏆', href:'arena.html',
                          theme:'bg-pink-50 border-pink-200 text-pink-900', tape:'bg-pink-400/20',
                          desc:'全部題目大亂鬥：答對升級、答錯降級，全對 1000 分。挑戰全年級排行榜！',
                          needModule:'ethics', needUnits:ARENA_UNITS };
@@ -136,11 +140,11 @@
             <p class="${SZ.desc} opacity-75 leading-relaxed mb-3">${s.desc}</p>`;
       if (passed < need) return `
           <div class="relative block ${SZ.pad} rounded-2xl border shadow-md rotate-1 ${s.theme} opacity-80 cursor-not-allowed select-none"
-               aria-disabled="true" title="資訊倫理 ${need} 個章節全部通關才能挑戰">${head}
+               aria-disabled="true" title="${esc(AI_.NAME || '')} ${need} 個章節全部通關才能挑戰">${head}
             <div class="h-2 bg-white/70 rounded-full overflow-hidden border border-pink-200 mb-2">
               <div class="h-full bg-pink-300" style="width:${Math.round(passed / need * 100)}%"></div>
             </div>
-            <span class="inline-flex items-center gap-1 ${SZ.go} font-bold">🔒 資訊倫理 ${need} 個章節全部通關才能挑戰（目前 ${passed} / ${need}）</span>
+            <span class="inline-flex items-center gap-1 ${SZ.go} font-bold">🔒 ${esc(AI_.NAME || '')} ${need} 個章節全部通關才能挑戰（目前 ${passed} / ${need}）</span>
           </div>`;
       return `
           <a href="${s.href}" class="group relative block ${SZ.pad} rounded-2xl border shadow-md hover:shadow-xl transition-all duration-300 rotate-1 hover:rotate-0 hover:-translate-y-1 ${s.theme}">${head}
@@ -339,8 +343,15 @@
           const vals = Object.values(dd.unitStars).map(Number).filter(v=>v>0);
           if(vals.length){ st = vals.reduce((a,b)=>a+b,0); lv = vals.length; }
         }
+        /* 🧠 概念星（下學期的概念檢測）：不另外存，由 modules.scratch.quiz 的分數現算 */
+        let stc = dd.status || 'todo';
+        if(id==='concept'){
+          const q = (window.GRADING && window.GRADING.quizTotal) ? window.GRADING.quizTotal(((mods.scratch||{}).quiz)||{}) : { stars:0, done:0 };
+          st = q.stars; lv = q.done;
+          stc = q.done >= (window.CONFIG.UNITS || []).length ? 'pass' : (q.done ? 'in-progress' : 'todo');
+        }
         st += bonusOf(mods, id);          // ★ 老師給的加分星也要算進去
-        stars+=st; levelSum+=lv; if(lv) level=Math.max(level,lv); sts.push(dd.status||'todo');
+        stars+=st; levelSum+=lv; if(lv) level=Math.max(level,lv); sts.push(stc);
       });
       let status='todo';
       if(sts.every(s=>s==='pass')) status='pass';
@@ -348,11 +359,14 @@
       else if(sts.some(s=>s&&s!=='todo')) status='in-progress';
       return { stars, level: level||null, levelSum, status };
     }
-    // 通關進度以「小關卡」計算：資訊倫理 10 + 運算思維 10 + 流程圖 10 + 程式設計 10 ＝ 40 關
+    // 通關進度以「小關卡」計算：各卡片 subLevels 加總（上學期：資訊倫理 10 + 運算思維 10 + 流程圖 10 + 程式設計 10 ＝ 40 關）
     // ===== 每週星星（與教師端「每週評分」同一套規則）=====
     const TERM_START = window.CONFIG.TERM_START;   // 學期起始日集中在 config.js
     const WK_BASE = 60, WK_PER = 4;    // 分數 = 60 + 星數×4（上限 100）
-    const MOD_NAME = { flowchart:'🧩 流程圖', scratch:'🐱 程式設計', ethics:'⚖️ 資訊倫理', thinking:'🧠 運算思維' };
+    /* 每週星數的來源名稱：科目名稱寫在 {學期}/config.js 的 SUBJECTS */
+    const MOD_ICON = { flowchart:'🧩', scratch:'🐱', ethics:'⚖️', thinking:'🧠' };
+    const MOD_NAME = {};
+    (window.CONFIG.SUBJECTS || []).forEach(x => { MOD_NAME[x.key] = (MOD_ICON[x.key] || '⭐') + ' ' + x.label; });
     function evStars(ev){
       if(typeof ev.stars === 'number') return ev.stars;
       if(ev.module==='flowchart' || ev.module==='thinking') return 2;
@@ -430,7 +444,8 @@
             <div class="w-full max-w-md pop">
               <div class="text-center mb-6">
                 <span class="inline-flex items-center gap-1.5 transform -rotate-2 bg-amber-100 text-amber-900 text-xs font-black px-4 py-1.5 rounded-full shadow-sm border-2 border-amber-300">🍃 ${window.CONFIG.SCHOOL.NAME} ${window.CONFIG.SCHOOL.GRADE} · 科技島移居處</span>
-                <h1 class="text-3xl font-black mt-4 text-amber-950">🏝️ 資訊科技 <span class="underline-doodle">探險之島</span></h1>
+                <div class="mt-2">${termPill()}</div>
+                <h1 class="text-3xl font-black mt-3 text-amber-950">🏝️ 資訊科技 <span class="underline-doodle">探險之島</span></h1>
                 <p class="text-stone-600 text-sm font-bold mt-2">${state.setup ? '第一次登島，先設定你的六位數島民通行碼 🔑' : '輸入學號與六位數驗證碼，搭乘水上飛機出發 ✈️'}</p>
                 ${new URLSearchParams(location.search).get('next') ? `<p class="mt-3 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">🔒 請先在這裡確認身分，登入後會自動帶你回到剛才要去的頁面。</p>` : ''}
                 ${(() => { const sw = new URLSearchParams(location.search).get('switched');
@@ -624,6 +639,7 @@
                 <div>
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="ac-pill text-xs">🍃 島民 ${isDemo?'DEMO':state.studentId}</span>
+                    ${termPill()}
                     <span class="text-xs font-extrabold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">進度 ${s.pct}%（${s.subDone}/${s.subTotal} 關）</span>
                   </div>
                   <h1 class="text-xl sm:text-2xl font-black text-amber-950 mt-0.5">${displayName?`嗨，${displayName}！歡迎來到科技探險島`:'歡迎來到科技探險島 🏝️'}</h1>
@@ -668,10 +684,11 @@
       if (state.viewMode !== 'list' && window.AC_ISLAND) {
         const islandEl = document.getElementById('hub-island-mount');
         const islandLayout = {
-          ethics:   { x: 27, y: 38, kind: 'museum',     shortTitle: '資訊倫理市政廳' },
+          ethics:   { x: 27, y: 38, kind: 'museum',     shortTitle: window.CONFIG.TERM === '11502' ? '媒體與社會市政廳' : '資訊倫理市政廳' },
           thinking: { x: 52, y: 22, kind: 'treehouse',  shortTitle: '運算思維神木屋' },
           listprog: { x: 73, y: 38, kind: 'workshop',   shortTitle: '程式設計木工坊' },
-          arduino:  { x: 28, y: 66, kind: 'lighthouse', shortTitle: '智慧家居風車燈塔' }
+          scratch2: { x: 73, y: 38, kind: 'workshop',   shortTitle: 'Scratch 程式木工坊' },
+          arduino:  { x: 28, y: 66, kind: 'lighthouse', shortTitle: window.CONFIG.TERM === '11502' ? 'Arduino 專題燈塔' : '智慧家居風車燈塔' }
         };
         const islandNodes = MODULES.map(m => {
           const d = cardData(m, mods);
@@ -739,13 +756,13 @@
             starsText: `${passed}/${need} 章`,
             statusLabel: unlocked ? '開放挑戰' : '尚未解鎖',
             locked: !unlocked,
-            lockReason: `資訊倫理 ${need} 個章節全部通關才能挑戰（目前 ${passed} / ${need}）`,
+            lockReason: `${AI_.NAME || ''} ${need} 個章節全部通關才能挑戰（目前 ${passed} / ${need}）`,
             actions: [{ label: '進入排行賽 🏆', href: ARENA_CARD.href, primary: true }]
           });
         }
 
         window.AC_ISLAND.mount(islandEl, {
-          pageId: 'hub',
+          pageId: 'hub_' + (window.CONFIG.TERM || '11501'),
           variant: 'hub',
           playerName: displayName || (isDemo ? '範例學生' : state.studentId) || '島民',
           genderCode: genderCode,

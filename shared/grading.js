@@ -49,19 +49,7 @@ window.GRADING = {
     return n * per;
   },
 
-  /**
-   * 各模組的星數上限（進度條的分母）。
-   * 作品星由 Apps Script 比對範本給（config.js 的 GRADER_URL），單關最高 3★；
-   * 沒設 GRADER_URL ＝ 作品星拿不到，分母就不算它（不然進度條永遠到不了 100%）。
-   */
-  moduleMax: function (units) {
-    units = units || 10;
-    var cfg = ((typeof window !== 'undefined' && window.CONFIG) || {});
-    return {
-      flowchart: units * (this.FLOWCHART_PER_UNIT + this.BONUS.img),
-      scratch:   cfg.GRADER_URL ? units * 3 : 0
-    };
-  },
+  /* 各模組的星數上限（進度條的分母）寫在 {學期}/config.js 的 MODULES[].maxStars 與 SUBJECTS[].max */
 
   /**
    * 從一份 progress 文件算出「顯示用」的各模組星數（含加分）。
@@ -110,6 +98,37 @@ window.GRADING = {
     return !!((unitsMap || {})[unitId]);
   },
 
+  /* ── 🧠 概念星（下學期 Scratch 每一關的概念檢測）──────────────
+     ★ 兩組星星，各自算各自的：
+         🧩 作品星（unitStars）—— 上傳 .sb3 和範例比對，Apps Script 寫入
+         🧠 概念星 —— 概念檢測五題開放式作答，講到幾題（本機關鍵字判定，shared/answer.js）
+     ⚠️ 概念星不寫進 unitStars，也不另外存：每次讀進度時從 modules.scratch.quiz 的分數**現算**，
+        沒有第二份資料，就沒有兩份會不一致的問題。
+     ⚠️ 概念檢測可以一直重寫到過為止，而且是學生端自己寫的 —— 它是「成就」，不是「通行證」。 */
+  QUIZ_PASS: 3,          // 五題講到幾題才能往下走（＝第 1 顆概念星）
+  QUIZ_FULL: 4,          // 講到幾題才拿得到第 2 顆概念星（五題全講到＝3 顆）
+
+  /** 這一關的概念星（0～3）。沒考過就是 0 —— 那不是懲罰，是還沒做。 */
+  quizStars: function (quiz, unitId) {
+    var q = (quiz || {})[unitId];
+    var n = q && typeof q.score === 'number' ? q.score : -1;
+    if (n < 0) return 0;
+    if (n >= 5) return 3;
+    if (n >= this.QUIZ_FULL) return 2;
+    if (n >= this.QUIZ_PASS) return 1;
+    return 0;
+  },
+
+  /** 概念星的總數與拿到星的關數 */
+  quizTotal: function (quiz) {
+    var total = 0, done = 0, self = this;
+    Object.keys(quiz || {}).forEach(function (k) {
+      var s = self.quizStars(quiz, k);
+      if (s > 0) { total += s; done++; }
+    });
+    return { stars: total, done: done };
+  },
+
   /** 由「各單元最佳星數」算出作品星總數與拿到星的關數（0 星不算） */
   scratchTotal: function (unitStars) {
     var total = 0, done = 0;
@@ -131,6 +150,11 @@ window.GRADING = {
      =================================================================== */
   GATE: {
     PASS_STARS: 2,
+    /** 這一關要不要上傳程式作品（{學期}/config.js 的 NO_UPLOAD 列出不必上傳的關卡） */
+    needsUpload: function (unitId) {
+      var c = ((typeof window !== 'undefined' && window.CONFIG) || {});
+      return (c.NO_UPLOAD || []).indexOf(String(unitId)) < 0;
+    },
     cleared: function (unitId, flowDone, unitStars) {
       var flow = !!(flowDone || {})[unitId];
       var g = ((typeof window !== 'undefined' && window.CONFIG) || {}).GRADER_URL;

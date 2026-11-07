@@ -3,27 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>資訊倫理 闖關排行賽</title>
+  <title>闖關排行賽</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- 載入順序固定：config → guard（沒從闖關基地登入就導回去） -->
-  <script src="config.js"></script>
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
   <script src="../shared/guard.js"></script>
   <script src="../shared/auth.js"></script>
 </head>
 <body>
   <!-- =====================================================================
-       🏆 資訊倫理 闖關排行賽
+       🏆 闖關排行賽（這一學期的章節測驗題目大亂鬥）
        ---------------------------------------------------------------------
        ★ 畫面、規則、計分流程全部在 shared/arena.js。
        ★ 題目由 Apps Script 出（gas/grader.gs，和程式設計評分同一個部署）：
-         題庫是老師在教師後台「🏆 排行賽」從 content/ethics.js 匯入的。
-       ⚠️ config.js 的 GRADER_URL 沒填就不能玩（闖關基地也不會出現這張卡片）。
+         題庫是老師在教師後台「🏆 排行賽」從這一學期的測驗題庫匯入的。
+       ★ 名稱在 {學期}/config.js 的 ARENA_INFO。
+       ⚠️ 根目錄 config.js 的 GRADER_URL 沒填就不能玩（闖關基地也不會出現這張卡片）。
        ===================================================================== -->
   <script>
     window.ARENA_CONTENT = {
-      name: '資訊倫理',
-      subtitle: '資訊倫理與相關法律',
-      chapterPage: 'cyberethics.html'        // 沒資格時「去闖關 →」連到這裡
+      name: (CONFIG.ARENA_INFO || {}).NAME || '',
+      subtitle: (CONFIG.ARENA_INFO || {}).SUBTITLE || '',
+      chapterPage: 'quiz.html'        // 沒資格時「去闖關 →」連到這裡
     };
   </script>
   <!-- 共用引擎（一定要在 body 裡：它會把畫面畫進 body） -->

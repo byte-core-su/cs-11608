@@ -6,6 +6,7 @@
      · 同一個檔案 ⇒ 指紋一樣；拖一下、改個數字 ⇒ 指紋不同、積木編號相同；自己做的 ⇒ 都不同
      · 老師取消之後：同一份、改一點點的再交 ⇒ 擋下；自己重做的 ⇒ 照常評分
      · 截圖：存進雲端硬碟對的資料夾、連結寫進進度、同一張不重存、換一張舊的丟垃圾桶
+     · 一個部署服務兩個學期：沒帶學期或學期不對 ⇒ 擋下；範本、星數、截圖各學期分開
    不需要安裝任何套件。
    ===================================================================== */
 'use strict';
@@ -183,6 +184,49 @@ const env2 = makeFakeGas({});
 env2.seed('roster/' + STU.A, { cls: '801', no: 1, name: '學生A' });
 r = env2.post({ kind: 'shot', idToken: env2.login(STU.A + '@' + env2.DOMAIN), challenge: 3, mime: 'image/png', b64: png(1) });
 ok(!r.ok && r.skipped, '★★ 沒設 DRIVE_FOLDER_ID ⇒ 回 skipped（學生頁之後就不再送）', r.message);
+
+/* ===================================================================== */
+section('一個部署服務兩個學期（指令碼屬性 TERMS）');
+const env3 = makeFakeGas({ TERMS: '11501,11502', DRIVE_FOLDER_ID: 'root' });
+env3.seed('roster/' + STU.A, { cls: '801', no: 1, name: '學生A' });
+const tA = env3.login(STU.A + '@' + env3.DOMAIN), tT = env3.login('teacher@school.tw');
+const up = (term, which, files) => env3.post({ kind: 'setRef', idToken: tT, term, unit: UNIT, which, b64: b64(files) });
+ok(up('11502', 'example', ANS).ok && up('11502', 'template', BLANK).ok, '老師上傳 11502 的範本');
+r = env3.post({ kind: 'grade', idToken: tA, unit: UNIT, unitNo: 1, total: 10, b64: b64(ANS) });
+ok(!r.ok && /學期/.test(r.message), '★★ 兩個學期時沒帶 term ⇒ 擋下並說清楚（不會猜一個寫進去）', r.message);
+r = env3.post({ kind: 'grade', idToken: tA, term: '11599', unit: UNIT, unitNo: 1, total: 10, b64: b64(ANS) });
+ok(!r.ok && /11599/.test(r.message), '★ 不在 TERMS 裡的學期 ⇒ 擋下', r.message);
+r = env3.post({ kind: 'grade', idToken: tA, term: '11501', unit: UNIT, unitNo: 1, total: 10, b64: b64(ANS) });
+ok(!r.ok && /還沒上傳/.test(r.message), '★★ 11501 沒有這一關的範本 ⇒ 不會拿 11502 的範本來比', r.message);
+r = env3.post({ kind: 'grade', idToken: tA, term: '11502', unit: UNIT, unitNo: 1, total: 8, b64: b64(ANS) });
+ok(r.ok && r.stars === 3, '11502 的作品評分', r.score + ' 分');
+ok(env3.docOf('11502-progress/' + STU.A).modules.scratch.unitStars[UNIT] === 3 && !env3.docOf('11501-progress/' + STU.A), '★★ 星數寫進 11502-progress，11501 沒有被動到');
+ok(env3.docOf('11502-progress/' + STU.A).modules.scratch.status === 'in-progress', 'total 是「要交作品的關數」');
+r = env3.post({ kind: 'shot', idToken: tA, term: '11502', challenge: 2, title: '必勝棋局', mime: 'image/png', b64: png(9) });
+const s2 = env3.docOf('11502-progress/' + STU.A).modules.thinking.shots['2'];
+ok(r.ok && env3.drive.pathOf(env3.drive.files[s2.fileId].parent) === '11502/thinking/801', '★ 截圖存在 11502/thinking/801', env3.drive.pathOf(env3.drive.files[s2.fileId].parent));
+/* 排行賽：開始時記下學期，之後作答不帶 term 也寫進同一學期 */
+{
+  const ROOT = path.join(__dirname, '..'), cfg = makeFakeGas.loadTerm(ROOT, '11502'), W = {};
+  new Function('window', fs.readFileSync(path.join(ROOT, 'shared', 'qstat.js'), 'utf8'))(W);
+  new Function('window', fs.readFileSync(path.join(ROOT, '11502', cfg.QUIZ.CONTENT), 'utf8'))(W);
+  const raw = require(path.join(ROOT, 'shared', 'arenabank.js')).build(W.QUIZ_CONTENT, W.QSTAT, '11502');
+  r = env3.post({ kind: 'arenaSetBank', idToken: tT, term: '11502', bankText: JSON.stringify(raw) });
+  ok(r.ok, '匯入 11502 的排行賽題庫', r.message);
+  const units = {}; raw.units.forEach(u => { units[u] = { star: 3 }; });
+  env3.seed('11502-progress/' + STU.A, Object.assign(env3.docOf('11502-progress/' + STU.A), { modules: Object.assign(env3.docOf('11502-progress/' + STU.A).modules, { ethics: { units } }) }));
+  r = env3.post({ kind: 'arenaStart', idToken: tA, term: '11502' });
+  ok(r.ok && r.run_id, '11502 開始一場', r.error || '');
+  const runId = r.run_id;
+  for (let n = 0; n < 25; n++) { env3.clock += 3000; r = env3.post({ kind: 'arenaAnswer', run_id: runId, choice: 0 }); if (!r.ok || r.done) break; }
+  const runs = Object.keys(env3.DB).filter(k => /arena-runs\//.test(k));
+  ok(runs.length === 1 && /^11502-arena-runs\//.test(runs[0]) && env3.docOf('11502-arena-board/' + STU.A), '★★ 作答不帶 term ⇒ 照樣記在 11502（開始時記下的學期）', runs.join(','));
+}
+
+const env4 = makeFakeGas({ TERM: '11501' });
+env4.seed('roster/' + STU.A, { cls: '801', no: 1, name: '學生A' });
+r = env4.post({ kind: 'grade', idToken: env4.login(STU.A + '@' + env4.DOMAIN), unit: UNIT, unitNo: 1, total: 10, b64: b64(ANS) });
+ok(!/學期/.test(r.message || ''), '只設 TERM（只有一個學期）⇒ 請求可以不帶 term（舊的設定照樣能用）', r.message);
 
 console.log(fail ? `\n❌ ${fail} 項沒過（通過 ${pass} 項）` : `\n✅ 全部通過（${pass} 項）`);
 process.exit(fail ? 1 : 0);

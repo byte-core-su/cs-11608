@@ -9,11 +9,12 @@
 <title>可疑紀錄 · 資訊科技課程</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="../config.js"></script>
+<script src="term.js"></script>
 <script>
 /* 教師工具頁：設定檔與共用程式都帶時間戳載入，改版後不會拿到瀏覽器快取的舊版 */
 (function () {
   var v = '?v=' + Date.now();
-  document.write('<scr' + 'ipt src="../course/config.js' + v + '"></scr' + 'ipt>');
   ['auth.js', 'audit.js'].forEach(function (f) {
     document.write('<scr' + 'ipt src="' + f + v + '"></scr' + 'ipt>');
   });
@@ -37,7 +38,7 @@
     <a href="../course/teacher.html" data-standalone class="text-sm font-bold text-slate-400 hover:text-slate-700">← 回教師端</a>
     <h1 class="text-2xl sm:text-3xl font-black mt-2">🔍 可疑紀錄</h1>
     <p class="text-slate-500 text-sm mt-2 leading-relaxed">
-      找出資訊倫理章節測驗裡，不像是從測驗畫面正常作答寫進來的通關紀錄。<br>
+      找出章節測驗裡，不像是從測驗畫面正常作答寫進來的通關紀錄。<br>
       <b class="text-slate-700">這是提醒你去看，不是判定。</b>
       系統不會因為這一頁擋任何人，這一頁也不會改任何資料。
     </p>

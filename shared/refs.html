@@ -8,7 +8,8 @@
   <style>.embedded [data-standalone] { display: none !important; }</style>
   <title>評分範本</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="../course/config.js"></script>
+  <script src="../config.js"></script>
+<script src="term.js"></script>
   <script src="auth.js"></script>
   <style>
     body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
@@ -49,12 +50,14 @@ setPersistence(auth, browserSessionPersistence).catch(() => {});   // 老師的�
 
 const el = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
-const UNITS = (C.UNITS || []).map((u, i) => ({ id: u[0], title: u[1], no: i + 1 }));
+/* 這一學期要交作品的關卡（{學期}/config.js 的 NO_UPLOAD 列出不必交的，例如下學期第 5、10 關） */
+const NO_UPLOAD = C.NO_UPLOAD || [];
+const UNITS = (C.UNITS || []).map((u, i) => ({ id: u[0], title: u[1], no: i + 1 })).filter(u => NO_UPLOAD.indexOf(u.id) < 0);
 const state = { who: null, units: {}, busy: '', msg: {}, err: '' };
 
 async function call(body) {
   const idToken = await auth.currentUser.getIdToken();
-  const r = await fetch(URL_, { method: 'POST', body: JSON.stringify(Object.assign({ idToken }, body)) });
+  const r = await fetch(URL_, { method: 'POST', body: JSON.stringify(Object.assign({ idToken, term: C.TERM }, body)) });
   const j = await r.json();
   if (!j.ok) throw new Error(j.message || '失敗');
   return j;
@@ -83,7 +86,7 @@ function draw() {
   const box = el('app');
   if (!URL_) {
     box.innerHTML = `<div class="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-sm text-amber-900 leading-relaxed">
-      還沒有接上評分服務 —— <span class="font-mono">course/config.js</span> 的 <span class="font-mono">GRADER_URL</span> 是空的。<br>
+      還沒有接上評分服務 —— 根目錄 <span class="font-mono">config.js</span> 的 <span class="font-mono">GRADER_URL</span> 是空的。<br>
       部署步驟見 <span class="font-mono">gas/README.md</span>（約 10 分鐘）。</div>`;
     return;
   }

@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>關卡｜Scratch 程式設計</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<style>
+  html, body, button, input, select, textarea { font-family:'Noto Sans TC', system-ui, sans-serif; }
+  
+  /* ⚠️ 螢光筆（.hl）的定義在 shared/theme.css，這裡不要再寫一份 ——
+     兩份會慢慢長得不一樣，而且沒有人會發現是哪一天開始的。 */
+  @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .pop{animation:pop .35s ease-out both}
+  /* 步驟列。
+     ★ 改成「換行」而不是「橫向捲」：
+       捲動的版本在寬度不夠時，最後一個步驟會被切掉一半 ——
+       而學生不會知道右邊還有東西（沒有捲軸提示），
+       他看到的只是一個壞掉的畫面。
+       換行永遠不會切掉，最多就是排成兩列。
+     ⚠️ 手機上再縮小一點字和內距，讓一列塞得下更多個。 */
+  /* ★ 步驟列包成一張滿版的卡片。
+     ⚠️ 原本只是一排 chip，寬度跟著內容走 ——
+        底下的白色卡片是滿版的，兩者一比就變成「上面短、下面長」，
+        看起來像跑版。**同一欄的東西要對齊同一條邊。** */
+  .steps-bar{display:flex;flex-wrap:wrap;gap:6px;
+             background:#fff;border:1px solid #e2e8f0;border-radius:16px;
+             padding:8px 10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .stp{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;
+       font-size:13px;font-weight:800;border:2px solid transparent;white-space:nowrap;cursor:pointer}
+  @media (max-width:520px){
+    .stp{padding:6px 9px;font-size:12px;gap:4px}
+  }
+  .stp-now {background:#4f46e5;color:#fff}
+  .stp-done{background:#ecfdf5;color:#047857;border-color:#6ee7b7}
+  .stp-todo{background:#fff;color:#94a3b8;border-color:#e2e8f0;cursor:not-allowed}
+  .resume{background:#eef2ff;border:1px solid #c7d2fe;border-radius:14px;
+          padding:10px 14px;font-size:13.5px;line-height:1.9;color:#3730a3}
+  .resume button{margin-left:8px;background:none;border:0;color:#4f46e5;
+                 font:inherit;font-weight:800;text-decoration:underline;cursor:pointer}
+  .scene-shot{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .scene-shot > div{flex:1 1 200px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px}
+  /* ── 每一步最前面的「目標＋過關標準」 ─────────────
+     ⚠️ 這條橫幅要**明顯**。做得太素的話它會被當成裝飾滑過去，
+        而它正是為了「學生不知道怎樣才算過」才加的。
+     ★ 兩行分開、標籤各有顏色：綠色那一行是通過條件，
+       學生卡住的時候會直接找綠色那一條。 */
+  .goalbar{background:#fff;border:2px solid #6366f1;border-radius:16px;
+           padding:12px 15px;box-shadow:0 3px 12px rgba(99,102,241,.13)}
+  .gb-row{display:flex;gap:10px;align-items:flex-start}
+  .gb-row + .gb-row{margin-top:9px;padding-top:9px;border-top:1px dashed #e2e8f0}
+  .gb-tag{flex:0 0 auto;font-size:11.5px;font-weight:900;padding:4px 9px;
+          border-radius:9999px;white-space:nowrap;line-height:1.4}
+  .gb-why{background:#eef2ff;color:#4338ca}
+  .gb-ok{background:#dcfce7;color:#166534}
+  .gb-txt{font-size:13.5px;line-height:1.9;color:#334155}
+  .gb-txt b{color:#4338ca}
+  .gb-pass .gb-txt b{color:#166534}
+  @media (max-width:520px){
+    /* 手機上標籤自己一行 —— 並排的話文字只剩十幾個字寬 */
+    .gb-row{flex-direction:column;gap:5px}
+  }
+</style>
+
+<script src="../config.js"></script>
+<script src="../shared/term.js"></script>
+<!-- 別的學期沒有這一頁（Scratch 十關是下學期的）⇒ 回闖關基地 -->
+<script>if (!CONFIG.BLOCKS) location.replace('hub.html');</script>
+<script src="../shared/auth.js"></script>
+<script src="../shared/guard.js"></script>
+<script src="../shared/grading.js"></script>
+<script src="../shared/readhold.js"></script>
+<script src="../shared/blocks.js"></script>
+<script src="../shared/derive.js"></script>
+<script src="../shared/combo.js"></script>
+<!-- 互動實驗室。三支都是由原本的獨立頁面（logic／search／sort.html）
+     改寫而來 —— 玩法留下，內容換成課本／關卡自己的教材，原檔已刪。
+     ⚠️ 規則只有一份。兩份的話，改一邊忘一邊，
+        而學生只會覺得自己記錯。 -->
+<script src="../shared/labtest.js"></script>
+<script src="../shared/sortlab.js"></script>
+<script src="../shared/searchlab.js"></script>
+<script src="../shared/logiclab.js"></script>
+<script src="../shared/minlab.js"></script>
+<script src="../shared/bigfind.js"></script>
+<script src="../shared/bigcost.js"></script>
+<!-- 期末檢核（第 10 關最後一步）。
+     ⚠️ anskey.js 一定要排在 finaltest.js **前面** ——
+        判分走 ANSKEY.check，載得比較晚的話那時候它還是 undefined，
+        而且不會報錯，只會每一題都判成錯。 -->
+<script src="../shared/anskey.js"></script>
+<script src="../shared/finaltest.js"></script>
+<script src="../shared/answer.js"></script>
+<script src="../shared/quiz.js"></script>
+<!-- 上傳作品 → Apps Script 和範例比對（和上學期的流程圖頁同一支） -->
+<script src="../shared/workup.js"></script>
+<!-- 這一學期的關卡資料、期末檢核題庫 -->
+<script>if (CONFIG.BLOCKS) { TERMSEL.include(CONFIG.BLOCKS.CONTENT); TERMSEL.include(CONFIG.BLOCKS.FINAL); }</script>
+<link rel="stylesheet" href="../shared/theme.css">
+  <link rel="stylesheet" href="../shared/island.css?v=20261107">
+</head>
+
+<body class="ac-theme-bg text-slate-800 min-h-screen pb-24">
+
+<a href="scratch.html"
+   class="fixed top-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800 text-white
+          font-bold text-sm px-3.5 py-2 rounded-full shadow-lg hover:bg-slate-700 transition">← 闖關地圖</a>
+
+<!-- ★ 寬度和闖關地圖（scratch.html）一樣，都是 4xl。
+     ⚠️ 一度改成 5xl 想讓步驟列放得下，結果內容比標題寬一大截，
+        而且從地圖點進來會「跳一下」—— 兩頁不同寬，看起來像兩個網站。
+     ⇒ 步驟列改成會換行（見上面的 .steps）就不必靠加寬解決，
+        寬度回到和地圖一致。**版面一致比多幾十像素重要。** -->
+<main class="max-w-4xl mx-auto px-4 pt-20 sm:pt-8">
+  <div id="app"></div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ── 這一頁在做哪一關（十關全部開放，網址帶 ?unit=） ── */
+const UNITS = (window.CONFIG.UNITS || []).map((u, i) => ({ no: i + 1, id: u[0], name: u[1] }));
+const wantId = new URLSearchParams(location.search).get('unit') || '';
+const unit = UNITS.filter(u => u.id === wantId)[0] || null;
+const lv = unit ? (window.BLOCK_LEVELS || {})[unit.id] : null;
+
+/* ★ 兩組星星，各自算各自的：
+     🧩 作品星 unitStars —— 上傳 .sb3 和範例比對（Apps Script 寫入）
+     🧠 概念星         —— 由 quizDone 的分數現算 */
+let unitStars = {};      // 作品星（和範例比對給的）
+let quizDone = {};       // { '4-2-1': { score: 4 } }
+let preDone = {};        // 思考關卡做完了沒
+/* 沒有作品要交的關卡：「實作體驗」做完了沒 */
+let playDone = {};
+let at = 0;              // 現在第幾步
+let ready = { 1:false, 2:false, 3:false };   // 各步驟完成了沒（步驟 0、4 不必判定）
+let resumed = false;     // 這一次是不是從記錄點接回來的（要跟學生講一聲）
+
+const GATE = (window.GRADING && window.GRADING.GATE) || null;
+/* 有沒有作品星：要接 Apps Script 評分（根目錄 config.js 的 GRADER_URL）。
+   沒接的話最後一步是「在 Scratch 做出來，照老師說的方式交」，不上傳、沒有作品星。 */
+const WORK = !!String(window.CONFIG.GRADER_URL || '').trim();
+
+/* ── 五個步驟 ─────────────────────────────────────
+   ★ 為什麼是這五個而不是「拆解 → 拼圖 → 上傳」
+     原本的三段沒有名字，學生看不出自己在整件事的哪個位置。
+     課本的順序本來就是「先看範例 → 問題分析 → 問題拆解 → 組裝 → 執行」，
+     照那個順序命名，學生在課本和網站上看到的是同一件事。
+
+   ⚠️ 有些關卡沒有某一步（例如第 5 關沒有拼圖，課本用的是圖解）——
+     沒有資料的步驟直接不出現，不要留一個空殼。 */
+/* 這一關的 lab 要掛哪一支模組。
+   ⚠️ 回傳的是模組本身，不是 true —— steps() 拿它判斷「這一步出不出現」。
+      模組沒載進來就當作沒有這一步：少一步學生還走得完，
+      多一個點不動的空步驟才是真的卡住。 */
+/* 最後一步（實作體驗）要掛哪一支模組。
+   ⚠️ 沒有作品要交的關卡才有這一步（見 GATE.NO_UPLOAD），
+      而**每一關的體驗不一樣**：
+        第 5 關  bigfind → 100 個人，找最矮的
+        第 10 關 bigcost → 資料大爆炸（排序 vs 搜尋的成本）
+   ★ 用關卡資料的 finish 欄位決定，不要在畫面那一段寫 if (unit.id === …) ——
+     那樣每加一關就要回去改一次畫面的程式碼。 */
+function finishMod(fin) {
+  if (!fin) return null;
+  if (fin.kind === 'bigfind') return window.BIGFIND || null;
+  if (fin.kind === 'bigcost') return window.BIGCOST || null;
+  return null;
+}
+
+/* ★★ 一關可以有**兩個**實驗室（第 10 關：先比排序、再比搜尋）。
+   ⚠️ 老師 2026-08-17：「動手試一次就只有搜尋，沒有排序 …
+      應該是兩個都要」—— 第 6、7 關（排序）和第 8、9 關（搜尋）
+      在前面是分開教的，第 10 關才是把它們放在一起比的地方。
+   ⇒ lv.lab 可以是一個物件，也可以是一個陣列。 */
+function labList(lab) {
+  if (!lab) return [];
+  return Array.isArray(lab) ? lab.slice() : [lab];
+}
+
+function labMod(lab) {
+  if (!lab) return null;
+  if (Array.isArray(lab)) return labMod(lab[0]);
+  if (lab.kind === 'search') return window.SEARCHLAB || null;
+  if (lab.kind === 'sort')   return window.SORTLAB   || null;
+  if (lab.kind === 'logic')  return window.LOGICLAB  || null;
+  if (lab.kind === 'min')    return window.MINLAB    || null;
+  return null;
+}
+
+function steps() {
+  const out = [{ key:'scene', icon:'🎬', name:'情境解說' }];
+  /* 抽象概念先用生活裡的東西玩一次，再回來看程式。
+     ⚠️ 只有宣告 combo 的關卡有 —— 每一關都放的話它就變成點擊過場。 */
+  if (lv && lv.combo && window.COMBO) out.push({ key:'combo', icon:'🍔', name:'套餐工廠' });
+  /* ⚠️ 「確認理解」不再是獨立的一步。
+     圈選題本來就是某一問的判斷，寫作題本來就是整段的收尾 ——
+     搬到另一頁等於把同一件事切成兩半，
+     學生還要重新想起「剛剛那一題在問什麼」。
+     現在問題分析自己一題一題走完，最後一題就是寫作題。 */
+  if (lv && lv.analysis) out.push({ key:'analysis', icon:'🔍', name:'問題分析' });
+  if (lv && lv.derive) out.push({ key:'derive', icon:'📐', name:'推導' });
+  /* ★ 互動實驗室 —— 第 6 章那五關的主角，第 4 關也有一個。
+     ⚠️ 第 6 章那幾關和第 4 章不一樣：
+        「每一輪挑出最小的」「從第一個一格一格往下比」這種事，
+        用讀的三秒鐘就讀完了，但學生要**自己動手被擋一次**才會記得。
+        所以那幾關的重心在這一步，程式拼圖只留一小段收尾。
+     ★ 第 4 關（小鳥吃蟲）是第 4 章唯一有實驗室的：
+        條件判斷是那一關第一次出現的東西，而它光讀是讀不會的。
+        另外三關的主角仍然是程式拼圖。
+     ⚠️ 只有宣告 lab 的關卡才有 —— 每一關都放的話就變成點擊過場。 */
+  if (lv && lv.lab && labMod(lv.lab)) out.push({ key:'lab', icon:'🕹️', name:'動手試一次' });
+  /* 概念檢測排在程式拼圖**之前**：
+     先確定他懂了，再讓他動手拼 —— 反過來的話，拼對了就沒有人會回頭讀。
+     ⚠️ 題庫不到 5 題的關卡就不辦（每次要抽 5 題）。 */
+  if (lv && (lv.quiz || []).length >= (window.QUIZ ? window.QUIZ.N_TOTAL : 5)) {
+    out.push({ key:'quiz', icon:'🧠', name:'概念檢測' });
+  }
+  if (lv && lv.goal)   out.push({ key:'blocks', icon:'🧩', name:'程式拼圖' });
+  /* ⚠️ 最後一步不一定是「實作測試」：
+     沒有程式作品要交的關卡（第 5 關，課本這一節是觀念導入）
+     換成「實作體驗」—— 100 個人的找最矮遊戲。
+     ★ 不可以直接把最後一步拿掉：概念檢測過關會呼叫 advance()，
+       沒有下一步的話 at 走出範圍，畫面直接空掉。
+     ⚠️ 名單只有一份，在 {學期}/config.js 的 NO_UPLOAD（GRADING.GATE.needsUpload 讀它）。
+        這裡不要自己再寫一份 —— 兩份會長得不一樣，
+        症狀是「畫面叫他上傳，但系統不等他上傳」。 */
+  const needUp = !GATE || GATE.needsUpload(unit.id);
+  out.push(needUp ? { key:'test', icon:'🚀', name:'實作測試' }
+                  : { key:'play', icon:'🎮', name:'實作體驗' });
+  /* ★★ 期末檢核（老師 2026-08-18）——「既然是整個課程的最後」。
+     ⚠️ 只有宣告 finalTest 的關卡有（目前只有第 10 關）。
+        每一關都放的話，這一步就從「期末」變成「每關都要考一次」。
+     ⚠️ 排在**最後一步之後** —— 它要考的東西（實作體驗算的那筆帳）
+        必須先做過，不然第一題就在考他還沒看過的內容。 */
+  if (lv && lv.finalTest && window.FINALTEST && window.FINAL_BANK) {
+    out.push({ key:'final', icon:'🏁', name:'期末檢核' });
+  }
+  return out;
+}
+
+/* 這一步做完了沒。沒有判定條件的步驟（情境、推導）看過就算。 */
+function stepDone(i) {
+  const S = steps();
+  if (i >= S.length - 1) return false;             // 最後一步不標完成
+  return ready[i] === true || i < at;
+}
+function canGo(i) { return i <= at || stepDone(i - 1); }
+
+/* 走到下一步 —— 順便把記錄點存起來。
+   ⚠️ 有七個地方要前進。各寫一次的話，漏掉的那一個**不會有任何症狀**：
+      學生當下走得過去，只是那一步沒被記下來，
+      下次重進來又要從那裡再做一遍 —— 而他不會知道為什麼。
+   ⇒ 前進這件事只有這一個入口。 */
+function advance(scroll) {
+  ready[at] = true;
+  at++;
+  resumed = false;          // 已經自己往前走了，不必再提醒「上次做到這裡」
+  if (window.saveStep && unit) window.saveStep(unit.id, at);
+  render();
+  if (scroll !== false) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function render() {
+  stopHold();               // ⚠️ 見 nextBtn：不清的話計時器會愈疊愈多
+  if (!unit) {
+    $('app').innerHTML = card('❓ 找不到這一關',
+      '網址裡的 <code>unit</code> 不在課程清單裡。回<a class="underline font-bold" href="scratch.html">闖關地圖</a>重選一關。');
+    return;
+  }
+
+  const S = steps();
+  const s = S[at];
+  $('app').innerHTML = `
+    <header class="mb-4">
+      <span class="text-xs font-bold px-2.5 py-1 rounded-full border border-orange-300 bg-orange-50 text-orange-700">
+        🐱 第 ${String(unit.no).padStart(2,'0')} 關
+      </span>
+      <h1 class="text-2xl sm:text-3xl font-black mt-2">${esc(unit.name)}</h1>
+    </header>
+    <div class="steps-bar mb-5">${S.map((x, i) => `
+      <button class="stp ${i === at ? 'stp-now' : stepDone(i) ? 'stp-done' : canGo(i) ? 'stp-done' : 'stp-todo'}"
+              data-step="${i}" ${canGo(i) ? '' : 'disabled'}>
+        <span>${x.icon}</span><span>${i + 1}. ${x.name}</span>
+      </button>`).join('')}</div>
+    ${resumed ? `<div class="resume mb-4">
+      📍 上次做到<b>第 ${at + 1} 步（${S[at].name}）</b>，直接從這裡接下去。
+      <button id="fromTop">想從第 1 步再看一次</button>
+    </div>` : ''}
+    <div id="goalbar"></div>
+    <section id="body" class="bg-white rounded-2xl border border-slate-200 shadow-md p-5 sm:p-7 pop"></section>
+    <div id="foot" class="mt-4"></div>
+    ${materialPanel()}`;
+
+  document.querySelectorAll('[data-step]').forEach(b => {
+    b.onclick = () => { if (canGo(+b.dataset.step)) { at = +b.dataset.step; render(); window.scrollTo({top:0,behavior:'smooth'}); } };
+  });
+  const mt = $('toggle-material');
+  if (mt) mt.onclick = () => { materialOpen = !materialOpen; render(); };
+  /* ★ 一定要留這顆。被系統丟到第 5 步、又回不去第 1 步的話，
+     學生會覺得「它把我踢走了」—— 而想重看的通常是認真的那一個。 */
+  const ft = $('fromTop');
+  if (ft) ft.onclick = () => { at = 0; resumed = false; render(); };
+  draw(s);
+}
+
+/* ── 補充教材面板 ────────────────────────────────────
+   ★ 為什麼是「嵌在關卡裡」而不是掛在入口
+     logic.html／sort.html／search.html 三支原本掛在闖關基地。
+     問題是：學生會先自己玩過一次，等真正上到那一關時
+     就沒有「第一次看到」的效果了 —— 而那個效果正是它們存在的理由。
+     ⇒ 2026-08-12 收進關卡：只有相關的那一關看得到。
+
+   ⚠️ 2026-08-12 後續：那三支後來都**改寫成系統自己的模組**
+      （sortlab.js／searchlab.js／logiclab.js）並刪掉原檔 ——
+      嵌一份別人風格的頁面不叫整合，用詞、判定、畫面都還是兩套。
+      ⇒ 目前沒有任何關卡在用 material。機制留著，
+        以後真的要掛外部教材（例如上學期的 music.html）還用得到。
+
+   ⚠️ 欄位叫 material 不叫 ref —— 這一份的 quiz 題目裡
+      已經有一個 ref（指回哪個步驟）。同一個檔案裡兩個 ref
+      各有各的意思，遲早會有人搞混。
+   ⚠️ 預設收合。展開才載入 iframe（loading="lazy" 也擋不住
+      已經寫進 DOM 的請求）—— 十關都嵌一個模擬器會很慢。 */
+let materialOpen = false;
+function materialPanel() {
+  const m = lv && lv.material;
+  if (!m) return '';
+  return `
+    <div class="border border-violet-200 rounded-xl overflow-hidden mt-4">
+      <button id="toggle-material"
+              class="w-full flex items-center justify-between gap-2 bg-violet-50 hover:bg-violet-100 px-3 py-2.5 text-left transition">
+        <span class="flex items-center gap-2">
+          <span class="text-lg">${m.icon || '🧪'}</span>
+          <span><span class="text-sm font-bold text-violet-700">補充教材：${esc(m.title)}</span>
+          <span class="block text-xs text-violet-500 leading-snug">${esc(m.note || '')}</span></span>
+        </span>
+        <span class="text-violet-500 font-black flex-shrink-0">${materialOpen ? '▾ 收合' : '▸ 展開'}</span>
+      </button>
+      ${materialOpen ? `<iframe src="${esc(m.href)}" class="w-full block bg-white"
+            style="height:72vh;border:0" title="${esc(m.title)}" loading="lazy"></iframe>
+        <div class="text-[11px] text-slate-400 px-3 py-1.5 text-center bg-violet-50">
+          玩完往上滑，回到這一關繼續</div>` : ''}
+    </div>`;
+}
+
+function card(title, html) {
+  return `<div class="bg-white rounded-2xl border border-slate-200 shadow-md p-7 text-center">
+    <h1 class="text-xl font-black mb-2">${title}</h1>
+    <p class="text-slate-600 leading-relaxed">${html}</p></div>`;
+}
+
+/* ── 純閱讀的步驟要停留久一點 ─────────────────────
+   ★ 為什麼要有
+     情境解說和問題分析沒有任何判定條件 —— 按一下就過去了。
+     結果是：最需要讀的那幾個學生，兩秒就滑到程式拼圖，
+     然後在那裡卡住，再回頭問「這題到底要幹嘛」。
+     這 30 秒不是懲罰，是**把「讀完」變成一件真的發生過的事**。
+
+   ★ 規則本身在 shared/readhold.js，這裡只管畫面
+     什麼叫「離開」（切分頁／並列視窗焦點跑掉）、寬限幾秒、
+     什麼時候從頭算、保險絲 —— 全部在那一支，兩學期共用一份。
+     ⚠️ 不要在這裡另外判一次：各寫一套的話，兩邊各自對一半、各自錯一半，而且沒有人會發現。
+
+   ★ 已經通關的關卡不必再等
+     強制停留是為了「第一次別亂點」，不是懲罰。
+     已經拿到星星的人回來查資料、或想重做一次練習，
+     每次都被鎖 30 秒只會讓他覺得系統在找麻煩。
+
+   ⚠️ 計時器一定要在 render() 裡清掉。
+      不清的話，每重畫一次就多一個計時器在跑，
+      倒數會愈跳愈快 —— 而且畫面上看不出原因。 */
+const HOLD_SEC = 30;
+let held = {};          // 這一步的停留時間已經滿了沒
+let hold = null;        // 目前的倒數（READHOLD 傳回來的控制器）
+
+function stopHold() { if (hold) { hold.stop(); hold = null; } }
+
+/** 這一步要停留幾秒。已經通關的關卡回傳 0（見上面那段 ★）
+    ⚠️ 看的是作品星（unitStars），不是概念星 —— 作品星是「這一關真的做完了」的憑據。 */
+function holdSecFor() {
+  return (unit && unitStars[unit.id] > 0) ? 0 : HOLD_SEC;
+}
+
+/* ⚠️ 第二個參數不要叫 hold —— 那會蓋掉上面存控制器的 hold，
+      而症狀是「倒數停不下來」，看起來完全不像是名字的問題。 */
+function nextBtn(label, wantHold) {
+  const step = at;
+  const needHold = wantHold && !held[step] && holdSecFor() > 0;
+  $('foot').innerHTML = `<button id="go" ${needHold ? 'disabled' : ''}
+    class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white
+    font-black text-lg rounded-2xl px-6 py-4 shadow-md transition">${label} →</button>`;
+
+  const btn = $('go');
+  btn.onclick = () => {
+    if (btn.disabled) return;
+    stopHold();
+    advance();
+  };
+  if (!needHold) return;
+
+  /* 規則全部在 shared/readhold.js。這裡只負責把狀態畫出來。
+     ⚠️ 沒載到 readhold.js 就直接放行，不要把學生鎖死在一個
+        永遠不會動的按鈕前面 —— 少讀 30 秒的代價遠小於整節課卡住。 */
+  if (!window.READHOLD) { done(); return; }
+  stopHold();
+  hold = window.READHOLD.start({
+    sec: holdSecFor(),
+    onTick: v => paint(v),
+    onDone: done
+  });
+
+  function done() {
+    stopHold();
+    held[step] = true;
+    btn.disabled = false;
+    btn.textContent = label + ' →';
+  }
+
+  /* ★ 只顯示秒數，不解釋規則。
+     「這一段沒有題目所以請讀 30 秒」那種話，讀起來像在說
+     「我知道你不會讀」—— 而且它本身就佔掉了要讀的注意力。
+     狀態變了只換一個詞，學生看得出來就夠。
+     ⚠️ 但「重來」一定要說出口。秒數自己跳回 30 而沒有任何說明，
+        看起來就是系統壞了 —— 那會讓人去按重新整理，不是回來讀。 */
+  function paint(v) {
+    btn.textContent =
+      v.state === 'reset' ? `${label}（離開太久，重來）` :
+      v.state === 'pause' ? `${label}（暫停）` :
+                            `${label}（${v.left}）`;
+  }
+}
+
+/* ── 每一步最前面的「目標＋過關標準」 ──────────────────
+   ⚠️ 2026-08-17 老師的要求，起因是他自己卡在第 9 關：
+      自由玩走了三次還是不能往下一步，因為真正的門檻是
+      「驗收挑戰三關全過」—— 而畫面上從來沒寫過。
+      學生遇到這種事不會去猜規則，只會以為系統壞了。
+
+   ★ 兩件事都要寫，而且**寫在最前面**：
+       🎯 為什麼要做這一步（目標）—— 不然學生只是在照指令點
+       ✅ 怎樣才算過（標準）　　 —— 而且要具體到「幾題」「幾次」「哪兩種情況」
+
+   ⚠️ 實驗室那一步的標準**不可以寫在這裡**。
+      通過條件本來就是模組自己決定的（見各模組的 openTest／finishAll）；
+      這裡再抄一份的話，改了一邊另一邊不會跟 ——
+      而學生看到的是這一份，也就是**錯的那一份**。
+      ⇒ 一律問模組要（mod.goal(lab)）。模組沒給就不畫，不要自己編。 */
+const STEP_GOAL = {
+  scene: {
+    why: '先看清楚「這一關要做出什麼」。不知道成品長什麼樣的話，' +
+         '後面的分析等於在拆一段不知道要幹嘛的程式。',
+    pass: '讀完，按下面的按鈕。' +
+          '<br>（第一次做這一關的話，按鈕會等你 <b>30 秒</b> —— ' +
+          '不是懲罰，是讓「讀完」真的發生過。已經通關過就不會等。）'
+  },
+  combo: {
+    why: '「把重複的那一段包起來」對還沒寫過幾行程式的人太抽象，' +
+         '但速食店的套餐你每個人都點過。這一步是把你已經有的直覺搬過來，' +
+         '不是教你新東西。',
+    pass: '把三個套餐都組出來。'
+  },
+  analysis: {
+    why: '這是課本的<b>問題拆解</b>，也是這一章真正在教的東西 —— ' +
+         '先把大題目切成幾個小問題，才知道程式要分成哪幾塊。' +
+         '不是拼積木的技巧。',
+    pass: '一題一題答完（想不出來可以點 💡）。' +
+          '<br>最後一題要用<b>自己的話</b>寫，寫夠字數才算完成 —— 不判分，寫了就過。'
+  },
+  derive: {
+    why: '自己把規則<b>推出來</b>，不是背公式。' +
+         '推過一遍的東西，下次忘了還推得回來；背的忘了就沒了。',
+    pass: '每一步都答對才會開下一步。' +
+          '<br>⚠️ <b>答錯不扣任何東西，可以一直試</b> —— 這一步就是拿來試的。'
+  },
+  quiz: {
+    why: '檢查你懂的是「<b>為什麼</b>」，不是「怎麼點」。' +
+         '題目問的全部都是你前面幾步親手做過、被擋過的事。',
+    pass: '五題裡<b>講到 3 題</b>才能往下走（講到 4 題 🧠🧠、5 題 🧠🧠🧠）。' +
+          '<br>⚠️ 不到 3 題會被<b>送回情境解說</b>重讀一遍 —— 不是讓你一直按重考亂猜。'
+  },
+  blocks: {
+    why: '把前面想清楚的東西，排成<b>真的程式</b>。' +
+         '講得出來和排得出來是兩回事 —— 這一步在補那個差距。',
+    pass: '拼出和目標<b>一模一樣</b>的程式：積木對、<b>順序</b>對、' +
+          '包在裡面的那幾塊也要在對的地方。' +
+          '<br>（調色盤裡有故意放錯的誘餌，拿錯會被擋下來並說明差在哪。）'
+  },
+  test: WORK ? {
+    why: '真的在 Scratch 裡做一次，然後交出來。' +
+         '前面所有步驟都是為了這一步 —— 而且 🧩 <b>作品星只有這裡拿得到</b>。',
+    pass: '把 .sb3 上傳，和範例比對：<b>75 分以上 2⭐</b>，<b>90 分以上而且和範例一致 3⭐</b>。' +
+          '<br>可以一直重傳，星數取最高、不會變低。'
+  } : {
+    why: '真的在 Scratch 裡做一次 —— 前面所有步驟都是為了這一步。',
+    pass: '在 Scratch 做出來、存成 .sb3，<b>照老師說的方式交作品</b>（例如 Google Classroom）。'
+  }
+};
+
+/** 這一步的目標與標準。實驗室一律問模組要，問不到就不畫。 */
+function stepGoal(key) {
+  /* 實作體驗的標準由 BIGFIND 自己給（和實驗室同一個道理：
+     通過條件是模組決定的，關卡頁抄一份就會不同步）。 */
+  if (key === 'play') {
+    const mod = finishMod(lv && lv.finish);
+    return (mod && typeof mod.goal === 'function') ? mod.goal(lv.finish) : null;
+  }
+  /* 期末檢核的門檻寫在模組裡（十題全對／4 題以下重置）——
+     ⚠️ 這一頁不要再抄一份：抄的那一份和真正的判定不一樣的話，
+        學生看到的會是**錯的那一份**，而且是最嚴的那一條規則。 */
+  if (key === 'final') {
+    return (window.FINALTEST && typeof window.FINALTEST.goal === 'function')
+      ? window.FINALTEST.goal() : null;
+  }
+  if (key === 'lab') {
+    const mod = labMod(lv && lv.lab);
+    /* 兩個實驗室的話，目標與過關標準要**兩份都講** ——
+       只講第一個的話，學生做完第一個會以為可以往下走了。 */
+    const labs = labList(lv && lv.lab);
+    if (labs.length > 1) {
+      const gs = labs.map(l => {
+        const m = labMod(l);
+        return (m && typeof m.goal === 'function') ? m.goal(l) : null;
+      }).filter(Boolean);
+      if (gs.length) {
+        return {
+          why: gs.map((g, i) => '<b>' + (i + 1) + '.</b> ' + g.why).join('<br><br>'),
+          pass: gs.map((g, i) => '<b>' + (i + 1) + '.</b> ' + g.pass).join('<br>')
+        };
+      }
+    }
+    /* ⚠️ 模組沒有 goal() 就回 null（不畫），不要自己編一份 ——
+       編出來的和模組真正的判定不一樣的話，比不寫更糟。 */
+    return (mod && typeof mod.goal === 'function') ? mod.goal(lv.lab) : null;
+  }
+  return STEP_GOAL[key] || null;
+}
+
+function drawGoal(s) {
+  const bar = $('goalbar');
+  if (!bar) return;
+  const g = stepGoal(s.key);
+  if (!g) { bar.innerHTML = ''; return; }
+  bar.innerHTML = `
+    <div class="goalbar mb-4">
+      <div class="gb-row">
+        <span class="gb-tag gb-why">🎯 這一步在做什麼</span>
+        <div class="gb-txt">${g.why}</div>
+      </div>
+      <div class="gb-row gb-pass">
+        <span class="gb-tag gb-ok">✅ 怎樣才算過</span>
+        <div class="gb-txt">${g.pass}</div>
+      </div>
+    </div>`;
+}
+
+function draw(s) {
+  const body = $('body');
+  $('foot').innerHTML = '';
+  drawGoal(s);
+
+  if (s.key === 'scene') {
+    /* 情境解說：先看懂「要做出什麼」，才有東西可以分析。
+       ★ 課本的順序就是「先執行範例、看畫面，再進問題分析」——
+         少了這一步，學生是在對一段不知道要幹嘛的程式做拆解。 */
+    const sc = (lv && lv.scene) || null;
+    body.innerHTML = `
+      <h2 class="text-xl font-black mb-3">🎬 這一關要做出什麼</h2>
+      <p class="text-slate-700 leading-relaxed">${(lv && lv.task) || '（尚未撰寫）'}</p>
+      ${sc && sc.why ? `<div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+        <div class="font-black text-amber-900 text-sm mb-1">💡 為什麼要學這個</div>
+        <div class="text-sm text-amber-900 leading-relaxed">${sc.why}</div></div>` : ''}
+      ${sc && sc.shots ? `<div class="mt-4">
+        <div class="font-black text-sm text-slate-700">按下綠旗之後會看到：</div>
+        <div class="scene-shot">${sc.shots.map((t, i) =>
+          `<div><div class="text-xs font-black text-slate-400 mb-1">${i + 1}</div>
+                <div class="text-sm leading-relaxed">${t}</div></div>`).join('')}</div></div>` : ''}
+      ${sc && sc.pre ? `<p class="mt-4 text-xs text-slate-500 leading-relaxed">📚 ${sc.pre}</p>` : ''}`;
+    nextBtn('看懂了，開始分析', true);
+    return;
+  }
+
+  if (s.key === 'combo') {
+    /* 速食店的套餐：主餐 ＋ 配餐 ＋ 飲料，主餐裡面還能再拆開。
+       ★ 為什麼放在情境和分析中間
+         「把重複的那一段包起來」對還沒寫過幾行程式的學生太抽象，
+         但套餐他每個人都點過 —— 這一段是把他已經有的直覺搬過來，
+         不是教他新東西。 */
+    body.innerHTML = '<h2 class="text-xl font-black mb-1">🍔 先玩一個東西：套餐工廠</h2>' +
+      '<p class="text-sm text-slate-600 leading-relaxed mb-4">' +
+      '等一下要把「畫正方形」包成一塊積木。在那之前，先看看速食店怎麼組套餐。</p>' +
+      '<div id="combo-host"></div>';
+    window.COMBO.mount($('combo-host'), {
+      onDone: () => { advance(); }
+    });
+    /* ⚠️ 這裡不設時間也不給跳過 —— 三關本來就要動手才過得去，
+       再加倒數是雙重處罰。 */
+    return;
+  }
+
+  if (s.key === 'lab') {
+    /* 互動實驗室：自己動手跑一次演算法。
+       ★ 為什麼「操作」擺在「概念檢測」前面
+         等一下的題目會問「為什麼不能跳」「找不到怎麼結束」——
+         那兩件事都是他在這裡被擋過、走完過才答得出來的。
+         反過來的話，他只能猜我想看什麼字。
+       ⚠️ 通過條件由模組自己決定（例如搜尋要找得到、找不到各走一次）——
+          寫在這裡的話，模組和關卡頁會各有一套規則。 */
+    const labs = labList(lv.lab);
+    const mod = labMod(lv.lab);
+    /* ★★ 一關可以掛**兩個**實驗室（第 10 關：先比排序、再比搜尋）。
+       ⚠️ 兩個都做完才往下走 —— 只要第一個過就 advance 的話，
+          第二個等於沒有人做（那正是老師 2026-08-17 指出的缺口：
+          「動手試一次就只有搜尋，沒有排序」）。 */
+    const multiLab = labs.length > 1;
+    const labTitle = l => {
+      const m = labMod(l);
+      const info = (m && m.INFO && m.INFO[l.mode]) || {};
+      return (info.icon || '🕹️') + ' ' + (info.name || '動手試一次');
+    };
+    body.innerHTML =
+      '<h2 class="text-xl font-black mb-1">🕹️ 動手試一次</h2>' +
+      '<p class="text-sm text-slate-600 leading-relaxed mb-4">' +
+      (multiLab
+        ? '這一關要比<b>兩組</b>：前面第 6、7 關的<b>排序</b>，' +
+          '和第 8、9 關的<b>搜尋</b>。兩組都比過才算走完。' +
+          /* ★ 2026-08-18 老師：「怎麼找不到可以看動畫的位置？只有一個動畫嗎？」
+             ⚠️ 兩段動畫都藏在按鈕後面，而按鈕在畫面下半部 ——
+                頁面最上面完全沒有提到「這裡會有動畫」。 */
+          '<br>🎬 兩組各有一段動畫：' +
+          '<b>排序</b>選好資料量與資料長相後按「▶ 播放排序過程」；' +
+          '<b>搜尋</b>選一個資料量、砍完之後按「🏁 讓兩種搜尋比一場」。' +
+          /* ★ 老師 2026-08-18：「可以真實體驗大量數據排列的過程」——
+             兩邊的資料量選鈕就是那個入口，但它長得像設定，不像內容。 */
+          '<br>💥 兩邊都可以<b>把資料量調大</b>：' +
+          '排序看的是一整片資料被排好，搜尋看的是一整排資料被刷掉。'
+        : '先自己跑一遍這個演算法。等一下的題目問的就是你在這裡看到的事。') +
+      '</p>' +
+      labs.map((l, i) =>
+        (multiLab
+          ? '<div class="text-sm font-black text-indigo-600 mt-6 mb-2">' +
+            (i + 1) + '／' + labs.length + '　' + labTitle(l) + '</div>'
+          : '') +
+        '<div id="lab-host' + i + '"></div>').join('');
+    /* ★ big:true —— 這一步是這幾關的主角，畫面上就該長得像主角。
+       ⚠️ 放大的是**高度和字級**，不是頁寬。
+          頁寬和闖關地圖一樣是 4xl（見上面版面容器那段說明）——
+          ⚠️ 這裡不要寫出 main 的標籤字樣：check.py 會把它算進標籤數，
+             整頁就被判成「開合不對稱」。
+          只有這一步變寬的話，前後翻步驟會「跳一下」。
+       ⚠️ 放大的規格寫在各模組自己的 CSS（.qs-big／.sl-big／.lg-big），
+          不寫在這一頁：尺寸和它畫的東西要放在一起，
+          分開的話改了一邊另一邊不會跟。 */
+    /* ★ 每一個實驗室各自 mount，各自回報。
+       ⚠️ 兩個都過才 advance —— 用一個計數器收，不要在第一個的 onPass 裡就走。 */
+    const labDone = {};
+    labs.forEach((l, i) => {
+      const m = labMod(l);
+      if (!m) return;
+      m.mount($('lab-host' + i), Object.assign({}, l, {
+        big: true,
+        /* onPass 會帶回挑戰拿到幾顆星（0～3）。
+           ⚠️⚠️ 這**不是**系統的星數。系統只有兩組，各有唯一的寫入者：
+                🧩 作品星 unitStars（Apps Script 比對範例）、🧠 概念星（quiz 現算）。
+                再開第三組會讓 hub 的分母錯掉，也會讓「這顆星是誰給的」說不清楚。
+           ⇒ 這裡只存到 modules.scratch.lab 給老師看，不進任何星數統計。
+              存不進去照樣放行（和其他存檔一樣）。 */
+        onPass: (badge) => {
+          labDone[i] = true;
+          if (window.saveLab) window.saveLab(unit.id, badge);
+          if (labs.every((_, k) => labDone[k])) advance();
+        }
+      }));
+    });
+    /* ⚠️ 這裡不設倒數也不給跳過 —— 過關條件就是「真的做完」，
+       再加時間限制是雙重處罰（和套餐工廠同一個道理）。 */
+    return;
+  }
+
+  if (s.key === 'analysis') {
+    DERIVE.renderAnalysis(body, lv.analysis, {
+      unit: unit.id,
+      student: sid(),
+      onWrite: t => { if (window.saveNote) window.saveNote(unit.id, t); },
+      onDone: () => { advance(); }
+    });
+    /* ⚠️ 這裡**不要**再補一顆按鈕。
+       renderAnalysis 自己會畫「想清楚了，開始動手 →」，
+       兩邊各畫一顆的話，畫面上會同時出現兩個功能一樣的按鈕，
+       學生只會想「這兩個有什麼不同」。 */
+    return;
+  }
+
+  if (s.key === 'derive') {
+    DERIVE.mount(body, lv.derive, {
+      onDone: () => { advance(); }
+    });
+    return;
+  }
+
+  if (s.key === 'quiz') {
+    const prev = quizDone[unit.id];
+    /* 考過了就不必再考一次 —— 但要讓他看得到「上限幾星」，
+       而且要留一顆重考鍵：拿 2 星上限的人應該有機會回頭拿 3 星。 */
+    if (prev && prev.score >= window.GRADING.QUIZ_PASS) {
+      const cap = window.GRADING.quizStars(quizDone, unit.id);
+      body.innerHTML = `
+        <h2 class="text-xl font-black mb-2">🧠 概念檢測</h2>
+        <div class="bg-emerald-50 border-2 border-emerald-200 rounded-xl px-4 py-3 text-emerald-900">
+          <div class="font-black text-lg">上次答對 ${prev.score} / ${window.QUIZ.N_TOTAL}</div>
+          這一關拿到 <b>🧠 ${cap} 顆概念星</b>${cap < 3
+            ? '（五題全講到就是 3 顆，可以再寫一次）' : ''}
+        </div>
+        <button id="again" class="mt-3 w-full border-2 border-indigo-200 text-indigo-700 font-black
+          rounded-xl px-4 py-3">🔁 再考一次</button>`;
+      $('again').onclick = () => { quizDone = Object.assign({}, quizDone); delete quizDone[unit.id]; render(); };
+      nextBtn('往下做');
+      return;
+    }
+    window.QUIZ.mount(body, lv, {
+      unit: unit.id,
+      student: sid(),
+      /* 沒有題庫就整步跳過 —— 不要讓學生看到一個空的檢測。 */
+      onNone: () => { advance(false); },
+      onPass: (score) => {
+        quizDone = Object.assign({}, quizDone, { [unit.id]: { score: score } });
+        if (window.saveQuiz) window.saveQuiz(unit.id, score);
+        advance();
+      },
+      /* ★ 不到門檻就送回情境解說，不是把他丟在原地。
+         「回去重讀」要真的帶他回去 —— 不然他只會一直按重考、亂猜到過為止。 */
+      onFail: (score) => {
+        if (window.saveQuiz) window.saveQuiz(unit.id, score);
+        /* ★ 停留時間要重新算一次。
+           「回去重讀」如果按一下就滑過去，那和沒有退回是一樣的。 */
+        held = {};
+        at = 0; render(); window.scrollTo({top:0,behavior:'smooth'});
+      }
+    });
+    return;
+  }
+
+  if (s.key === 'blocks') {
+    /* ⚠️ BLOCKS.mount 收的是「攤平的選項」，不是整個關卡物件。
+       傳 lv 進去的話 palette／goal 都讀不到，畫面會是一個空的拼圖區 ——
+       而且不會報錯，只會安靜地沒東西可拼。 */
+    /* steps：講「要拼成什麼結構」，不講積木順序 —— 順序是這一步要他排的。
+       ⚠️ 不要把 lv.tips 丟進來：那裡面是給老師看的、直接寫著答案。 */
+    /* ★ sprites：一關有兩個角色時（第 4 關的蟲與小鳥），拼圖要分區。
+       在真的 Scratch 裡那是兩份各自獨立的程式，不是一支很長的程式。
+       ⚠️ 沒有 sprites 的關卡照舊走 goal —— 模組那邊會當成「一個沒有名字的角色」。 */
+    BLOCKS.mount(body, {
+      palette: lv.palette, goal: lv.goal, sprites: lv.sprites,
+      alts: lv.alts, loose: lv.loose,
+      /* ★ hide：虛擬碼裡要挖空的數字 —— 就是那一關刻意不說、
+         要學生自己想出來的那幾個（mustDerive）。
+         ⚠️ 不傳的話，虛擬碼會把「正方形有幾條邊、轉幾度」直接印出來，
+            等於一邊說「你自己想」、一邊把答案寫在旁邊。 */
+      hide: lv.mustDerive,
+      hint: lv.task, steps: lv.build,
+      onPass: () => { markPre(); advance(); }
+    });
+    return;
+  }
+
+  if (s.key === 'play') {
+    /* ★ 沒有作品要交的關卡的最後一步（第 5、10 關）。
+       ⚠️ 不是一頁「完成」—— 是真的有得玩的體驗：
+          第 5 關：100 個人，找最矮的（資料變多，用看的就不夠）
+          第 10 關：資料大爆炸（把四關的數字擺在一起，算一筆帳：到底要不要先排序）
+       ⚠️ 這一步**會擋**（做不完進不了下一關）。
+          紀錄是學生端自己寫的，按 F12 就能偽造 —— 見 GATE.cleared 的說明。 */
+    markPre();
+    const fmod = finishMod(lv && lv.finish);
+    const intro = (lv && lv.finish && lv.finish.kind === 'bigcost')
+      /* ⚠️ 2026-08-18 老師：「比起來，實作體驗的內容是不是太弱了？」
+         原因是「動手試一次」加厚之後，這一步的前三段變成實驗室的重播。
+         ⇒ 這一步收斂成「結帳」：不再重講成本，只算那筆沒人算過的帳。
+         這段引言也要跟著改 —— 不然它還在預告一個已經被拿掉的內容。 */
+      ? '這一關<b>沒有程式要寫</b>。剛才在「動手試一次」你量到了' +
+        '<b>排序要比幾次</b>和<b>搜尋要比幾次</b>——' +
+        '<br>這一步把它們<b>加起來</b>，回答一個前面四關都沒問過的問題：' +
+        '<b>這批資料，到底要不要先排序？</b>'
+      : '這一關<b>沒有程式要交</b> —— 課本這一節是觀念導入，' +
+        '你想清楚的做法，<b>第 6、7 關</b>才用 Scratch 寫出來。' +
+        '<br>先在這裡感受一件事：資料變多的時候，「用看的」為什麼不夠。';
+    body.innerHTML =
+      '<h2 class="text-xl font-black mb-1">🎮 實作體驗</h2>' +
+      '<p class="text-sm text-slate-600 leading-relaxed mb-4">' + intro + '</p>' +
+      '<div id="play-host"></div>';
+    /* ⚠️⚠️ 老師 2026-08-18：「實作體驗結束後，為什麼是『完成，回闖關地圖』？
+       不是應該進入 🏁 期末檢核？」
+       —— 行為本來就是對的（下面 onPass 會 advance），**錯的是按鈕上的字**。
+       ★ 這種錯很傷：學生照著字判斷「這一關結束了」，
+         按下去卻跳到一個他以為不存在的步驟；
+         更糟的是他以為按了會離開，所以**不敢按**。
+       ⚠️ 模組不知道自己後面還有沒有東西 —— 那是關卡頁才知道的事，
+          所以字要由這裡傳進去。 */
+    const hasFinal = !!(lv && lv.finalTest && window.FINALTEST && window.FINAL_BANK);
+    if (fmod) {
+      fmod.mount($('play-host'), Object.assign({}, lv.finish, {
+        big: true,
+        nextLabel: hasFinal ? '完成，進入 🏁 期末檢核 →' : '完成，回闖關地圖 →',
+        onPass: () => {
+          if (window.savePlay) window.savePlay(unit.id);
+          if (hasFinal) { advance(); return; }
+          location.href = 'scratch.html';
+        }
+      }));
+    } else {
+      /* ⚠️ 模組沒載進來也要留一條路，不然這一關就是死路。 */
+      $('play-host').innerHTML =
+        '<div class="bg-amber-50 border-2 border-amber-200 rounded-xl px-4 py-3 text-amber-900">' +
+        '體驗區載不出來（可能是網路問題）。請重新整理；還是不行就跟老師說。</div>';
+      nextBtn('先跳過，回地圖');
+    }
+    return;
+  }
+
+  /* ── 🏁 期末檢核（整門課的最後一步）─────────────────
+     ★ 老師 2026-08-18 指定：十題全對才過；只對 4 題以下要重走第 10 關；
+       過了發證書（和第 5 關一樣）。規則與警語寫在模組裡（見 shared/finaltest.js）。
+     ⚠️ 這一步**不給星星** —— 系統只有兩組，各有唯一的寫入者。
+        成績存到 modules.scratch.final 給老師看（教師端的闖關明細會列出來）。 */
+  if (s.key === 'final') {
+    markPre();
+    body.innerHTML =
+      '<h2 class="text-xl font-black mb-1">🏁 期末檢核</h2>' +
+      '<p class="text-sm text-slate-600 leading-relaxed mb-4">' +
+      '第 6 章的四個演算法 —— <b>循序／二元搜尋</b>、<b>選擇／插入排序</b> —— ' +
+      '這一步一起考一次。<br>題目都是你前面做過的事：實驗室量過、概念檢測寫過、' +
+      '實作體驗算過。</p>' +
+      '<div id="final-host"></div>';
+    window.FINALTEST.mount($('final-host'), {
+      bank: window.FINAL_BANK,
+      big: true,
+      /* 每次交卷都存 —— 沒過也要存，那才看得出他考了幾次、卡在哪一類。 */
+      onScore: (score, res) => { if (window.saveFinal) window.saveFinal(unit.id, score, res); },
+      onPass: () => { location.href = 'scratch.html'; },
+      /* ⚠️⚠️ 重置：學生自己按下去才會發生（模組裡先列清楚會清掉什麼）。
+         這一筆和其他存檔**相反** —— 失敗要講出來。
+         畫面說重置了、伺服器沒重置的話，他下次回來會看到一個不認得的狀態。 */
+      onReset: async () => {
+        const okd = window.resetLevel ? await window.resetLevel(unit.id) : false;
+        if (!okd) {
+          alert('重置沒有成功（可能是網路問題）。\n請重新整理再試一次，或跟老師說。');
+          return;
+        }
+        location.href = 'level.html?unit=' + encodeURIComponent(unit.id);
+      }
+    });
+    return;
+  }
+
+  // 實作測試：上傳 .sb3 → Apps Script 和範例比對（shared/workup.js，和上學期同一支）
+  markPre();
+  const cur = Number(unitStars[unit.id]) || 0;
+  body.innerHTML = WORK ? `
+    <h2 class="text-xl font-black mb-2">🚀 動手做，然後上傳</h2>
+    <p class="text-sm text-slate-600 leading-relaxed mb-4">
+      在 Scratch 做出來，選「<b>檔案 → 下載到你的電腦</b>」會得到 <code class="bg-slate-100 px-1 rounded">.sb3</code>，
+      傳上來和範例比對。<span class="hl">75 分以上 2⭐、90 分以上而且和範例一致 3⭐</span>；可以一直重傳，星數取最高。
+    </p>
+    <div class="rounded-xl border-2 border-orange-300 p-4 space-y-3">
+      <div class="text-sm">目前這一關：<b class="text-amber-600">${cur ? '⭐'.repeat(cur) : '還沒有星'}</b></div>
+      <input id="work-file" type="file" accept=".sb3" class="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-orange-100 file:text-orange-800 file:font-bold">
+      <button id="work-send" class="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 text-white font-black py-2.5 rounded-lg transition">送出評分</button>
+      <div id="work-result" class="text-sm leading-relaxed"></div>
+    </div>` : `
+    <h2 class="text-xl font-black mb-2">🚀 動手做，然後交出來</h2>
+    <p class="text-sm text-slate-600 leading-relaxed">
+      在 Scratch 做出來，選「<b>檔案 → 下載到你的電腦</b>」會得到 <code class="bg-slate-100 px-1 rounded">.sb3</code>，
+      <b>照老師說的方式交作品</b>（例如 Google Classroom）。
+    </p>`;
+  const sendBtn = $('work-send');
+  if (sendBtn) sendBtn.onclick = () => window.WORKUP.send({
+    button: sendBtn, file: $('work-file'), out: $('work-result'),
+    unit: unit.id, unitNo: unit.no, total: UNITS.filter(u => !GATE || GATE.needsUpload(u.id)).length, auth: window.LEVEL_AUTH,   // total：要交作品的關數（全部拿到星＝pass）
+    onDone: r => { if (r && r.bestStars != null) unitStars[unit.id] = r.bestStars; }
+  });
+}
+
+/* ★ 讀進度之後把星數套進來，並重畫。
+   ⚠️ 這個函式一度只有「被呼叫」沒有「被定義」——
+      module 那一段照樣跑，只是靜靜地丟一個 ReferenceError 到主控台，
+      而畫面上的結果是：**每一關都停在「只開第 1 關」**。
+      沒有紅字、沒有錯誤頁，只是永遠開不了第 2 關。
+   ⚠️ 重畫時要保留學生走到第幾步（at），不然讀進度回來會把他踢回第 1 步。 */
+window.applyProgress = function (stars, pre, quiz, step, play) {
+  quizDone = quiz || {};
+  unitStars = stars || {};
+  preDone = pre || {};
+  playDone = play || {};
+  /* ★ 記錄點：上次做到第幾步（2026-08-11）。
+     ⚠️ 存的是「做完了幾步」，不是「停在第幾步」——
+        停在第幾步會把「開著沒做」也記成進度。
+
+     ★ 為什麼不直接跳過去
+       學生自己按重新整理、或想從頭再看一次的時候，
+       被系統丟到最後一步只會覺得「它把我踢走了」。
+       ⇒ 跳到最遠的那一步，但**明講**，而且留一個「回第 1 步」。 */
+  const done = Number((step || {})[unit ? unit.id : ''] || 0);
+  if (done > 0) {
+    const S = steps();
+    for (let i = 0; i < done && i < S.length; i++) ready[i] = true;
+    at = Math.min(done, S.length - 1);
+    resumed = at > 0;
+  }
+  render();
+};
+
+function sid() {
+  try { return sessionStorage.getItem('sid' + window.CONFIG.TERM) || ''; } catch (e) { return ''; }
+}
+/* 思考關卡做完 → 記起來，下次不必重做（存失敗不擋人） */
+let preSaved = false;
+function markPre() {
+  if (preSaved) return;
+  preSaved = true;
+  if (window.savePre) window.savePre(unit.id);
+}
+
+render();
+</script>
+
+<!-- 讀進度：星數決定「這一關開了沒」 -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  /* ⚠️ deleteField 是重置那一支要用的（window.resetLevel）——
+     忘了 import 的話它會是 undefined，而錯誤要到學生真的按下重置那一刻才出現。 */
+  import { getFirestore, doc, getDoc, setDoc, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  const app  = initializeApp(window.CONFIG.FIREBASE);
+  const auth = getAuth(app);
+  window.LEVEL_AUTH = auth;      // 實作測試上傳作品時要拿登入憑證（shared/workup.js）
+  const db   = getFirestore(app);
+  const sid  = sessionStorage.getItem('sid' + window.CONFIG.TERM);
+
+  onAuthStateChanged(auth, async user => {
+    if (!user || !sid) return;
+    try {
+      const snap = await getDoc(doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid));
+      const mods = (snap.exists() && snap.data().modules) || {};
+      window.applyProgress((mods.scratch && mods.scratch.unitStars) || {},
+                           (mods.scratch && mods.scratch.pre) || {},
+                           (mods.scratch && mods.scratch.quiz) || {},
+                           (mods.scratch && mods.scratch.step) || {},
+                           (mods.scratch && mods.scratch.play) || {});
+    } catch (e) {
+      console.error('讀進度失敗', e);
+    }
+  });
+
+  window.savePre = async function (unitId) {
+    if (!sid || !unitId) return;
+    try {
+      await setDoc(doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid),
+        { modules: { scratch: { pre: { [unitId]: true } } } }, { merge: true });
+    } catch (e) { console.warn('思考關卡紀錄沒存成功（不影響闖關）', e); }
+  };
+
+  /* ── 記錄點 ───────────────────────────────────────
+     ★ 為什麼要有
+       這一關有六步，走完要十幾分鐘。電腦教室當機、按到關閉、
+       下課鐘響先關機 —— 任何一件事發生，學生就得整關重跑一次。
+       重跑第二次的內容他不會更認真讀，只會更快亂點過去。
+
+     ★ 為什麼只往前不往後（Math.max）
+       學生點回第 3 步再看一次是好事，不該因此把紀錄退回去。
+       這裡記的是「他最遠做到哪」，不是「他現在在看哪一步」。
+
+     ⚠️ 存不進去不可以擋闖關（和其他四個存檔一樣）：學生**照樣要能把這一關走完**。 */
+  window.saveStep = async function (unitId, n) {
+    if (!sid || !unitId || !(n > 0)) return;
+    try {
+      const ref = doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid);
+      const snap = await getDoc(ref);
+      const cur = Number(((((snap.exists() && snap.data().modules) || {}).scratch || {}).step || {})[unitId] || 0);
+      if (n <= cur) return;                       // 只往前，不往後
+      await setDoc(ref, { modules: { scratch: { step: { [unitId]: n } } } }, { merge: true });
+    } catch (e) { console.warn('記錄點沒存成功（不影響闖關）', e); }
+  };
+  /* 互動實驗室的挑戰徽章（0～3）。
+     ⚠️ 這不是星數 —— 見上面 onPass 那一段的說明。
+        它只是「這個學生在實驗室裡做到哪一關」，教師端看得到。
+     ⚠️ 只往上不往下：學生重做一次拿比較少，不該把紀錄蓋掉。 */
+  window.saveLab = async function (unitId, badge) {
+    if (!sid || !unitId || !(badge > 0)) return;
+    try {
+      const ref = doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid);
+      const snap = await getDoc(ref);
+      const cur = Number(((((snap.exists() && snap.data().modules) || {}).scratch || {}).lab || {})[unitId] || 0);
+      if (badge <= cur) return;
+      await setDoc(ref, { modules: { scratch: { lab: { [unitId]: Number(badge) } } } }, { merge: true });
+    } catch (e) { console.warn('實驗室徽章沒存成功（不影響闖關）', e); }
+  };
+
+  /* 實作體驗（沒有作品要交的關卡的最後一步）做完了沒。
+     ⚠️ 這一筆是那幾關「完成」唯一的紀錄（地圖上的 🏅 體驗完成），
+        所以存不進去要講出來，不然學生下次回來會發現進度不見了。 */
+  window.savePlay = async function (unitId) {
+    if (!sid || !unitId) return;
+    try {
+      await setDoc(doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid),
+        { modules: { scratch: { play: { [unitId]: true } } } }, { merge: true });
+    } catch (e) {
+      console.warn('實作體驗沒存成功', e);
+      alert('這一步沒有存成功（可能是網路問題）。\n回到地圖如果這一關沒有顯示「🏅 體驗完成」，請重新做一次這一步。');
+    }
+  };
+
+  /* 概念檢測的成績。
+     ⚠️ 只寫 modules.scratch.quiz，不碰 unitStars ——
+        作品星只有一個寫入者（Apps Script 比對範例），這裡寫的是概念星的依據。
+        兩個地方都能改星數的話，之後沒有人說得出「到底是誰給的」。 */
+  window.saveQuiz = async function (unitId, score) {
+    if (!sid || !unitId) return;
+    try {
+      const ref = doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid);
+      /* ★ 概念星也要進「每週歷程」（每週評分會用到）。
+         ⚠️ history 的 stars 是「這一次**新增**幾顆」，不是這次拿幾顆 ——
+            概念檢測可以一直重寫到過為止，寫總數的話重寫一次就多算一次，
+            而每週分數是 60 ＋ 星×4，等於送分。
+         ⇒ 先讀出這一關原本的概念星，只把**進步的部分**寫進 history。
+         ★ 這裡仍然不碰 unitStars（作品星只有 Apps Script 寫得動）——
+           概念星是現算的，history 記的是「什麼時候拿到的」。 */
+      const snap = await getDoc(ref);
+      const quiz = ((((snap.exists() && snap.data().modules) || {}).scratch || {}).quiz) || {};
+      const before = (window.GRADING && window.GRADING.quizStars)
+        ? window.GRADING.quizStars(quiz, unitId) : 0;
+      const next = Object.assign({}, quiz);
+      next[unitId] = { score: Number(score) || 0, at: new Date().toISOString().slice(0, 16) };
+      const after = (window.GRADING && window.GRADING.quizStars)
+        ? window.GRADING.quizStars(next, unitId) : 0;
+      const gain = Math.max(0, after - before);
+
+      const payload = { modules: { scratch: { quiz: { [unitId]: next[unitId] } } } };
+      if (gain > 0) {
+        payload.history = arrayUnion({ module: 'scratch', unit: unitId, at: Date.now(),
+                                       stars: gain, score: Number(score) || 0, kind: 'quiz' });
+      }
+      await setDoc(ref, payload, { merge: true });
+    } catch (e) { console.warn('概念檢測成績沒存成功（不影響闖關）', e); }
+  };
+  /* ── 期末檢核的成績（老師 2026-08-18）─────────────────
+     ⚠️ 存**最好的一次**，不是最後一次 —— 學生重考拿比較差，
+        不該把已經拿到的紀錄蓋掉（和實驗室徽章同一條規則）。
+     ⚠️ tries 要**累加**：考了幾次是老師最想看的一個數字
+        （一次全對 vs 考了六次才全對，是兩件完全不同的事）。
+     ★ 這裡不碰任何星數。第 5、10 關的通關證明本來就不是星星。 */
+  window.saveFinal = async function (unitId, score, res) {
+    if (!sid || !unitId) return;
+    try {
+      const ref = doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid);
+      const snap = await getDoc(ref);
+      const cur = ((((snap.exists() && snap.data().modules) || {}).scratch || {}).final || {})[unitId] || {};
+      const total = (res && res.total) || 10;
+      const best = Math.max(Number(cur.best) || 0, Number(score) || 0);
+      await setDoc(ref, { modules: { scratch: { final: { [unitId]: {
+        best: best, total: total,
+        pass: best >= total,
+        tries: (Number(cur.tries) || 0) + 1,
+        at: new Date().toISOString().slice(0, 16)
+      } } } } }, { merge: true });
+    } catch (e) { console.warn('期末檢核成績沒存成功', e); }
+  };
+
+  /* ── 重置一關的步驟進度 ───────────────────────────────
+     ⚠️⚠️ 這是整個系統裡**唯一會刪東西**的函式，所以三件事要說清楚：
+       ① 只清「步驟進度」：pre／step／play／lab。
+          **不動** quiz（概念星）、不動 unitStars（作品星）、不動別關。
+       ② 回傳成功與否 —— 呼叫端要在失敗時擋下來並講出來。
+          其他存檔都是「失敗不擋」，這一支相反：
+          畫面說重置了、伺服器沒重置的話，學生下次回來會看到一個不認得的狀態。
+       ③ 用 deleteField()，不是寫 false ——
+          寫 false 的話那些鍵會一直留著，之後很難分辨
+          「他沒做過」和「他做過但被重置了」。 */
+  window.resetLevel = async function (unitId) {
+    if (!sid || !unitId) return false;
+    try {
+      await setDoc(doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid), {
+        modules: { scratch: {
+          pre:  { [unitId]: deleteField() },
+          step: { [unitId]: deleteField() },
+          play: { [unitId]: deleteField() },
+          lab:  { [unitId]: deleteField() }
+        } }
+      }, { merge: true });
+      return true;
+    } catch (e) {
+      console.error('重置第 ' + unitId + ' 關失敗', e);
+      return false;
+    }
+  };
+
+  window.saveNote = async function (unitId, text) {
+    if (!sid || !unitId) return;
+    try {
+      await setDoc(doc(db, window.CONFIG.COLLECTIONS.PROGRESS, sid),
+        { modules: { scratch: { notes: { [unitId]: String(text || '').slice(0, 500) } } } }, { merge: true });
+    } catch (e) { console.warn('想法沒存成功（不影響闖關）', e); }
+  };
+  AUTH.attachSession(auth, signInAnonymously, onAuthStateChanged);
+</script>
+</body>
+</html>

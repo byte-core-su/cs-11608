@@ -210,3 +210,19 @@ Object.defineProperty(env, 'commits', { get: () => commits });
 return env;
 };
 module.exports.unzip = unzip;
+
+/** 讀網站的設定（給測試用）：根目錄 config.js ＋ {學期}/config.js，回傳合在一起的 CONFIG（沒有凍結） */
+module.exports.loadTerm = function (root, term) {
+  const W = {};
+  new Function('window', fs.readFileSync(path.join(root, 'config.js'), 'utf8'))(W);
+  let out = null;
+  W.defineTerm = d => { out = Object.assign({}, W.SITE, d); };
+  new Function('window', 'defineTerm', fs.readFileSync(path.join(root, term, 'config.js'), 'utf8'))(W, W.defineTerm);
+  return out;
+};
+/** 網站有哪幾個學期（根目錄 config.js 的 SITE.TERMS） */
+module.exports.terms = function (root) {
+  const W = {};
+  new Function('window', fs.readFileSync(path.join(root, 'config.js'), 'utf8'))(W);
+  return (W.SITE.TERMS || []).map(t => t.id);
+};

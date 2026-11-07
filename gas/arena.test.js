@@ -16,17 +16,22 @@ function ok(cond, name, info) {
 }
 const section = t => console.log('\n── ' + t + ' ──');
 
-/* ── 題庫：用網站裡的 ethics.js（和老師後台按「匯入題庫」同一個抽法）── */
+/* ── 題庫：用網站裡各學期的章節測驗（和老師後台按「匯入題庫」同一個抽法）──
+   規則的測試用上學期（11501）的題庫；每一學期都檢查「抽得出來、和闖關基地的參賽資格一致」。 */
 const ROOT = path.join(__dirname, '..');
-const W = {};
-new Function('window', fs.readFileSync(path.join(ROOT, 'shared', 'qstat.js'), 'utf8'))(W);
-new Function('window', fs.readFileSync(path.join(ROOT, 'course', 'content', 'ethics.js'), 'utf8'))(W);
+const FG = require('./fakegas');
 const ARENABANK = require(path.join(ROOT, 'shared', 'arenabank.js'));
-const RAW = ARENABANK.build(W.QUIZ_CONTENT, W.QSTAT, '11501');
+function bankOf(term) {
+  const cfg = FG.loadTerm(ROOT, term), W = {};
+  new Function('window', fs.readFileSync(path.join(ROOT, 'shared', 'qstat.js'), 'utf8'))(W);
+  new Function('window', fs.readFileSync(path.join(ROOT, term, cfg.QUIZ.CONTENT), 'utf8'))(W);
+  return { cfg, raw: ARENABANK.build(W.QUIZ_CONTENT, W.QSTAT, term) };
+}
+const RAW = bankOf('11501').raw;
 const BANK_TEXT = JSON.stringify(RAW);
 
 /* ── 假的 Apps Script（fakegas.js）：Firestore、登入查詢、快取、鎖、時間都存在記憶體 ── */
-const env = require('./fakegas')();
+const env = FG();
 const { G, post, DB, docOf, seed, login, DOMAIN } = env;
 
 const T = login('teacher@school.tw');
@@ -44,9 +49,12 @@ const prepared = G.arenaPrepareBank(RAW);
 ok(RAW.count === 141 && Object.keys(prepared).length === 141, '★★ ethics.js 抽出 141 題，全部反查得到正確選項', RAW.count + ' / ' + Object.keys(prepared).length);
 ok(RAW.items.every(it => G.arenaQid(it.q) === it.id), '★★ 題目 id 和題目分析頁（QSTAT.id）一樣');
 ok(JSON.stringify(RAW.units) === JSON.stringify(['1-1', '1-2', '1-3', '1-4', 'ch1-all', '3-1', '3-2', '3-3', 'ch3-all', 'review-all']), '★ 參賽資格是 10 個章節', RAW.units.join(','));
-const hubSrc = fs.readFileSync(path.join(ROOT, 'course', 'hub.html'), 'utf8');
-const hubUnits = (hubSrc.match(/ARENA_UNITS\s*=\s*(\[[^\]]*\])/) || [])[1];
-ok(hubUnits && JSON.stringify(JSON.parse(hubUnits.replace(/'/g, '"'))) === JSON.stringify(RAW.units), '★★ 闖關基地的排行賽卡片用同一份章節清單', hubUnits || '（hub 沒有 ARENA_UNITS）');
+FG.terms(ROOT).forEach(term => {
+  const { cfg, raw } = bankOf(term);
+  const prep = G.arenaPrepareBank(raw);
+  ok(raw.count > 0 && Object.keys(prep).length === raw.count, '★★ ' + term + ' 的題庫抽得出來、全部反查得到正確選項', raw.count + ' 題');
+  ok(JSON.stringify((cfg.ARENA_INFO || {}).UNITS) === JSON.stringify(raw.units), '★★ ' + term + ' 闖關基地的參賽資格（ARENA_INFO.UNITS）和題庫的章節一樣', raw.units.join(','));
+});
 /* 選填：ARENA_REF=另一份 ethics.arena.json 的路徑，比對兩份題庫是否一致 */
 const REF = process.env.ARENA_REF || '';
 if (REF && fs.existsSync(REF)) {

@@ -11,7 +11,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['"Noto Sans TC"','system-ui','sans-serif'] } } } };</script>
-    <script src="config.js?v=20261101v7"></script>
+    <script src="../config.js"></script>
+    <script src="../shared/term.js"></script>
     <!-- 登入（學生在闖關基地登入過，這裡沿用同一個身分） -->
     <script src="../shared/auth.js"></script>
     <!-- 計分規則（和闖關基地、教師端共用同一份） -->
@@ -156,7 +157,7 @@
                 const idToken = await fbStore.auth.currentUser.getIdToken();
                 /* ⚠️ 不設 Content-Type（預設 text/plain）：Apps Script 不處理跨網域的預檢請求 */
                 const resp = await fetch(GRADER_URL, { method: 'POST',
-                    body: JSON.stringify({ kind: 'shot', idToken, challenge: challenge.id, title: challenge.title, mime, b64: await blobToB64(blob) }) });
+                    body: JSON.stringify({ kind: 'shot', term: window.CONFIG.TERM, idToken, challenge: challenge.id, title: challenge.title, mime, b64: await blobToB64(blob) }) });
                 const j = await resp.json();
                 if (j.skipped) { try { sessionStorage.setItem(SHOT_OFF_KEY, '1'); } catch (e) {} return 'off'; }
                 if (!j.ok) console.warn('截圖沒有存進去：', j.message);
@@ -171,12 +172,16 @@
            自己完成一題時用 noteMyPass 更新快取裡自己那一筆。 */
         const classCache = { room: '', rows: null };
 
+        const THINKING_COL_SEGMENTS = () => (window.CONFIG.COLLECTIONS && window.CONFIG.COLLECTIONS.THINKING)
+            ? [window.CONFIG.COLLECTIONS.THINKING]
+            : ['artifacts', 'comp-think-app', 'public', 'data', 'progress'];
+
         async function loadClassRows(classRoom, force) {
             if (!classRoom) return [];
             if (!force && classCache.room === classRoom && classCache.rows) return classCache.rows;
             const ok = await initFB();
             if (!ok) throw new Error("Firebase 未就緒");
-            const col = fbStore.collection(fbStore.db, 'artifacts', 'comp-think-app', 'public', 'data', 'progress');
+            const col = fbStore.collection(fbStore.db, ...THINKING_COL_SEGMENTS());
             /* where 是單一欄位相等比較，不需要另外建索引 */
             const q = (fbStore.query && fbStore.where)
               ? fbStore.query(col, fbStore.where('classRoom', '==', classRoom)) : col;
@@ -675,7 +680,8 @@
             const islandRef = useRef(null);
             const islandCtrlRef = useRef(null);
 
-            const challenges = [
+            /* 10 道謎題寫在 {學期}/config.js 的 THINKING.CHALLENGES（上下學期不同） */
+            const challenges = ((window.CONFIG.THINKING || {}).CHALLENGES || [
                 { id: 1, title: "跳格子", url: "https://reurl.cc/mpY8EY", difficulty: "★★" },
                 { id: 2, title: "任意門", url: "https://reurl.cc/ovYkWl", difficulty: "★★" },
                 { id: 3, title: "滑梯公園", url: "https://reurl.cc/DxOzRN", difficulty: "★★★" },
@@ -686,7 +692,7 @@
                 { id: 8, title: "換零錢機", url: "https://reurl.cc/epkRrR", difficulty: "★★★★" },
                 { id: 9, title: "打地鼠", url: "https://reurl.cc/ovYkj3", difficulty: "★★★★" },
                 { id: 10, title: "拔蘿蔔", url: "https://reurl.cc/ppYlGr", difficulty: "★★★★" },
-            ];
+            ]).map(c => Object.assign({}, c));
 
             const getDifficultyColor = (level) => {
                 switch (level) {
@@ -743,7 +749,7 @@
                 if (!fbStore.db || !user) throw new Error('資料庫還沒連上');
 
                 /* sid：安全規則拿它去名冊組出「你應該用的文件 id」，對得上才准寫 */
-                await fbStore.setDoc(fbStore.doc(fbStore.db, 'artifacts', 'comp-think-app', 'public', 'data', 'progress', user.docId), {
+                await fbStore.setDoc(fbStore.doc(fbStore.db, ...THINKING_COL_SEGMENTS(), user.docId), {
                     sid: user.sid,
                     completed: fbStore.arrayUnion(challengeId),
                     completionDates: { [challengeId]: passDate },
@@ -790,7 +796,7 @@
                 // 載入先前進度
                 let loadedProgress = [], loadedDates = {};
                 try {
-                    const progressRef = fbStore.doc(fbStore.db, 'artifacts', 'comp-think-app', 'public', 'data', 'progress', docId);
+                    const progressRef = fbStore.doc(fbStore.db, ...THINKING_COL_SEGMENTS(), docId);
                     const snap = await fbStore.getDoc(progressRef);
                     if (snap.exists()) {
                         const data = snap.data();

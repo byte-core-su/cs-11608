@@ -42,15 +42,17 @@
     </style>
 <style>
 /* === 全站紙膠帶手作風套件（以 hub 為準，勿重複注入） === */
+
 .tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08);background:rgba(250,204,21,.3);z-index:5}
 .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
 </style>
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
-  <script src="config.js"></script>
+  <script src="../config.js"></script>
+  <script src="../shared/term.js"></script>
 <script src="../shared/guard.js"></script>
-  <link rel="stylesheet" href="../shared/island.css?v=20261101v7">
+  <link rel="stylesheet" href="../shared/island.css?v=20261107">
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans min-h-screen ac-theme-bg">
+<body class="ac-theme-bg bg-slate-50 text-slate-800 font-sans min-h-screen">
     <div id="root"></div>
 
     <!-- 加入 data-type="module" 以解決 Babel 在特定環境下附加 script 標籤時發生的 import 錯誤 -->

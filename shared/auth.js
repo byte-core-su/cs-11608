@@ -299,8 +299,19 @@
 
   /** 不是學生帳號（老師或外部帳號）：這個分頁沒有身分可用 */
   function toHubSwitched(user, term, hub, opts) {
-    // 【測試模式】暫時不因教師或外部帳號登入而踢回登入頁，保留測試島民快取以方便直接預覽各單元
-    return;
+    try {
+      sessionStorage.removeItem('sid' + term);
+      sessionStorage.removeItem('me'  + term);
+    } catch (e) {}
+    if (typeof opts.onMismatch === 'function') { opts.onMismatch(user); return; }
+    /* 已經在闖關基地就停在原地（由 hub 的 onMismatch 處理），否則會無限重新整理 */
+    try {
+      var here = String(global.location.pathname || '').split('/').pop() || '';
+      if (here === hub) return;
+    } catch (e) {}
+    try {
+      global.location.replace(hub + '?switched=' + encodeURIComponent(user.email || ''));
+    } catch (e) {}
   }
 
   global.AUTH = {

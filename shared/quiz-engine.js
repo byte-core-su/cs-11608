@@ -436,8 +436,9 @@
     mountEl.classList.remove('hidden');
     listEl.classList.add('hidden');
 
-    // 10 個章節在島上的座標與「豐收果園 × 玻璃溫室」主題 3D 模型
+    // 上下學期章節在島上的座標與「豐收果園 × 玻璃溫室」主題 3D 模型
     var layout = {
+      // 11501 上學期（資訊倫理與安全）
       '1-1':        { x: 22, y: 66, kind: 'orchard-apple',       icon: '🍎', shortTitle: '1-1 網路禮儀' },
       '1-2':        { x: 36, y: 55, kind: 'orchard-peach',       icon: '🍑', shortTitle: '1-2 資訊倫理' },
       '1-3':        { x: 24, y: 40, kind: 'orchard-orange',      icon: '🍊', shortTitle: '1-3 著作權法' },
@@ -447,7 +448,18 @@
       '3-2':        { x: 78, y: 64, kind: 'orchard-apple',       icon: '🍎', shortTitle: '3-2 網路犯罪' },
       '3-3':        { x: 76, y: 39, kind: 'orchard-peach',       icon: '🍑', shortTitle: '3-3 媒體素養' },
       'ch3-all':    { x: 68, y: 20, kind: 'orchard-mill',        icon: '🧃', shortTitle: '第3章 風車果坊' },
-      'review-all': { x: 50, y: 18, kind: 'orchard-golden-tree', icon: '🌟', shortTitle: '黃金神木總測驗' }
+      'review-all': { x: 50, y: 18, kind: 'orchard-golden-tree', icon: '🌟', shortTitle: '黃金神木總測驗' },
+      // 11502 下學期（媒體與社會議題・基本演算法）
+      '5-1':        { x: 20, y: 66, kind: 'orchard-apple',       icon: '🍎', shortTitle: '5-1 媒體與科技' },
+      '5-2':        { x: 35, y: 56, kind: 'orchard-peach',       icon: '🍑', shortTitle: '5-2 資訊失序' },
+      '5-3':        { x: 22, y: 42, kind: 'orchard-orange',      icon: '🍊', shortTitle: '5-3 言論自由' },
+      '5-4':        { x: 38, y: 36, kind: 'orchard-pear',        icon: '🍐', shortTitle: '5-4 網路霸凌' },
+      '5-5':        { x: 26, y: 24, kind: 'orchard-cherry',      icon: '🍒', shortTitle: '5-5 網路成癮' },
+      '5-all':      { x: 42, y: 20, kind: 'orchard-barn',        icon: '🏡', shortTitle: '第5章 豐收穀倉' },
+      '6-1':        { x: 64, y: 56, kind: 'orchard-apple',       icon: '🍎', shortTitle: '6-1 演算法概念' },
+      '6-2':        { x: 78, y: 64, kind: 'orchard-peach',       icon: '🍑', shortTitle: '6-2 排序原理' },
+      '6-3':        { x: 76, y: 39, kind: 'orchard-orange',      icon: '🍊', shortTitle: '6-3 搜尋原理' },
+      '6-all':      { x: 68, y: 20, kind: 'orchard-mill',        icon: '🧃', shortTitle: '第6章 風車果坊' }
     };
 
     var firstUnpassed = ORDER.find(function (id) { return !lastUnitsMap[id] || !(lastUnitsMap[id].star > 0); });

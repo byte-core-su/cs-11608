@@ -120,35 +120,49 @@
     });
   }
 
-  /* 各學期航線的目的地群島介紹（Dodo Airlines 機場櫃台展示用，不影響任何課程教材文字） */
+  /* 各學期航線的目的地群島介紹（Dodo Airlines 3D 入境登機室雙櫃台展示用，不影響任何課程教材文字） */
   var FLIGHT_ROUTES = {
     '11501': {
+      counterNo: '1號櫃台',
       flightNo: 'DAL-1151',
       gate: 'GATE A1',
+      staffName: '🦤 地勤 莫里 (Orville)',
       archipelago: '初階科技探險群島（上學期之島）',
       weather: '☀️ 晴朗微風 · 適合果園採收與木工造船',
+      themeHex: 0x0284c7,
+      lightHex: 0x38bdf8,
       colorBadge: 'bg-sky-600 text-white',
-      accentBorder: 'border-sky-400',
       btnClass: 'bg-sky-600 hover:bg-sky-700 text-white shadow-lg shadow-sky-200',
-      orvillePitch: '「DAL-1151 上學期航線」會飛往『初階科技探險群島』！島上有資訊倫理果園、運算思維遊樂園、流程圖與 Scratch 蒸氣峽谷，以及 5016B 智慧家居燈塔喔！',
+      wx: -6.8,
+      wz: -2.0,
+      standWx: -6.8,
+      standWz: 0.85,
+      orvillePitch: '歡迎來到「1號櫃台（GATE A1）」！歐拉～我是莫里！「DAL-1151 上學期航線」直飛『初階科技探險群島』，島上有資訊倫理果園、運算思維遊樂園、流程圖與 Scratch 蒸氣島、以及 5016B 智慧家居燈塔！',
       islands: [
-        { icon: '⚖️', name: '資訊倫理果園島', sub: '網路禮儀、PAPA 理論、著作權與資安（10 章節）' },
-        { icon: '🧠', name: '運算思維遊樂園島', sub: '跳格子、任意門、滑梯公園等 10 座邏輯遊樂設施' },
-        { icon: '🐱', name: '流程圖＆Scratch 蒸氣島', sub: '清單學習機、音階前導、排流程圖與 10 關程式' },
-        { icon: '💡', name: '智慧家居 5016B 科技島', sub: '感應、換算、調速、RGB 混色 5 節創客機電實驗' }
+        { icon: '⚖️', name: '資訊倫理果園島', sub: '網路禮儀、PAPA、著作權與資安（10 章節）' },
+        { icon: '🧠', name: '運算思維遊樂園島', sub: '跳格子、任意門、滑梯公園等 10 座遊樂設施' },
+        { icon: '🐱', name: '流程圖＆Scratch 蒸氣島', sub: '清單學習機、音階前導、流程圖與 10 關程式' },
+        { icon: '💡', name: '智慧家居 5016B 科技島', sub: '感應、換算、調速、RGB 混色 5 節創客實驗' }
       ]
     },
     '11502': {
+      counterNo: '2號櫃台',
       flightNo: 'DAL-1152',
       gate: 'GATE B2',
+      staffName: '🦤 機長 羅德里 (Wilbur)',
       archipelago: '進階創客探險群島（下學期之島）',
       weather: '🌤️ 碧海晴空 · 適合演算法解謎與專題研發',
+      themeHex: 0x059669,
+      lightHex: 0x34d399,
       colorBadge: 'bg-emerald-600 text-white',
-      accentBorder: 'border-emerald-400',
       btnClass: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200',
-      orvillePitch: '「DAL-1152 下學期航線」會飛往『進階創客探險群島』！包含媒體與社會議題果園、二期思維樂園、Scratch 排序與搜尋演算法峽谷，以及 Arduino 專題島！',
+      wx: 6.8,
+      wz: -2.0,
+      standWx: 6.8,
+      standWz: 0.85,
+      orvillePitch: '歡迎來到「2號櫃台（GATE B2）」！羅傑～我是羅德里機長！「DAL-1152 下學期航線」直飛『進階創客探險群島』，包含媒體與社會議題果園、二期思維樂園、Scratch 排序搜尋演算法島、與 Arduino 專題島！',
       islands: [
-        { icon: '📡', name: '媒體與社會議題果園島', sub: '媒體素養、資訊失序、言論自由、霸凌防治與演算法' },
+        { icon: '📡', name: '媒體與社會議題果園島', sub: '媒體素養、資訊失序、言論自由與演算法（10 章）' },
         { icon: '🧠', name: '運算思維二期樂園島', sub: '智慧選卡、必勝棋局、變數謎題等 10 座進階謎題' },
         { icon: '🧩', name: 'Scratch 演算法積木島', sub: '自訂函式、選擇/插入排序、循序/二元搜尋 10 關' },
         { icon: '🤖', name: 'Arduino 智慧專題科技島', sub: '五節課 PBL 專題探究、感測器與硬體互動模擬' }
@@ -156,226 +170,1261 @@
     }
   };
 
+  var threeLoadPromise = null;
+  function ensureThreeLoaded() {
+    if (global.THREE) return Promise.resolve(global.THREE);
+    if (threeLoadPromise) return threeLoadPromise;
+    threeLoadPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+      s.async = true;
+      s.onload = function () { resolve(global.THREE); };
+      s.onerror = function (e) { threeLoadPromise = null; reject(e); };
+      document.head.appendChild(s);
+    });
+    return threeLoadPromise;
+  }
+
+  function makeFloorParquetTex(THREE) {
+    var c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#f3e5cc';
+    ctx.fillRect(0, 0, 512, 512);
+    for (var row = 0; row < 8; row++) {
+      for (var col = 0; col < 8; col++) {
+        var x = col * 64;
+        var y = row * 64;
+        ctx.fillStyle = (row + col) % 2 === 0 ? '#f6ead4' : '#ead7b7';
+        ctx.fillRect(x + 2, y + 2, 60, 60);
+        ctx.strokeStyle = 'rgba(180, 140, 90, 0.25)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 2, y + 2, 60, 60);
+      }
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(6, 4);
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  function makeCounterSignTex(THREE, gateText, titleText, subText, bgHexStr, accentHexStr) {
+    var c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 192;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = bgHexStr || '#0f172a';
+    ctx.fillRect(0, 0, 512, 192);
+    ctx.strokeStyle = accentHexStr || '#38bdf8';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(8, 8, 496, 176);
+
+    ctx.fillStyle = accentHexStr || '#38bdf8';
+    ctx.fillRect(22, 24, 156, 44);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 26px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(gateText, 100, 55);
+
+    ctx.fillStyle = '#fde047';
+    ctx.font = '900 24px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('BOARDING', 485, 54);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 40px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(titleText, 256, 118);
+
+    ctx.fillStyle = '#bae6fd';
+    ctx.font = '700 22px "Noto Sans TC", sans-serif';
+    ctx.fillText(subText, 256, 158);
+
+    var tex = new THREE.CanvasTexture(c);
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  function makeMainBoardTex(THREE, schoolTitle) {
+    var c = document.createElement('canvas');
+    c.width = 768;
+    c.height = 256;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, 768, 256);
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(6, 6, 756, 244);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(16, 16, 736, 56);
+    ctx.fillStyle = '#fde047';
+    ctx.font = '900 28px "Noto Sans TC", monospace, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('✈️ DODO AIRLINES · 入境登機室大廳', 32, 54);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '700 20px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(schoolTitle, 736, 52);
+
+    // Row 1: 11501
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(24, 90, 720, 64);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '900 26px "Noto Sans TC", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('⬅ 1號櫃台 GATE A1 | DAL-1151 | 115-1 上學期群島', 40, 131);
+    ctx.fillStyle = '#4ade80';
+    ctx.textAlign = 'right';
+    ctx.fillText('BOARDING 準點', 726, 131);
+
+    // Row 2: 11502
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(24, 168, 720, 64);
+    ctx.fillStyle = '#34d399';
+    ctx.font = '900 26px "Noto Sans TC", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('➡ 2號櫃台 GATE B2 | DAL-1152 | 115-2 下學期群島', 40, 209);
+    ctx.fillStyle = '#4ade80';
+    ctx.textAlign = 'right';
+    ctx.fillText('BOARDING 準點', 726, 209);
+
+    var tex = new THREE.CanvasTexture(c);
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  function buildDodoStaff3D(THREE, isCaptain, accentHex) {
+    var g = new THREE.Group();
+    var blueFeather = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.5 });
+    var bellyMat = new THREE.MeshStandardMaterial({ color: 0xfef9c3, roughness: 0.6 });
+    var shirtMat = new THREE.MeshStandardMaterial({ color: accentHex || 0x0369a1, roughness: 0.45 });
+    var beakMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.35 });
+    var darkMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.25 });
+
+    var body = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.58, 1.15, 16), shirtMat);
+    body.position.y = 0.95;
+    g.add(body);
+
+    var belly = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 12), bellyMat);
+    belly.scale.set(1, 1.1, 0.45);
+    belly.position.set(0, 0.92, 0.42);
+    g.add(belly);
+
+    // 領帶
+    var tie = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.46, 0.08), new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4 }));
+    tie.position.set(0, 1.05, 0.58);
+    g.add(tie);
+
+    // 雙翼（右翼揮手）
+    var leftWing = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.68, 10), blueFeather);
+    leftWing.position.set(-0.6, 1.0, 0);
+    leftWing.rotation.z = 0.3;
+    g.add(leftWing);
+
+    var rightWingPivot = new THREE.Group();
+    rightWingPivot.position.set(0.56, 1.24, 0);
+    var rightWing = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.68, 10), blueFeather);
+    rightWing.position.set(0.15, 0.24, 0);
+    rightWing.rotation.z = -2.35;
+    rightWingPivot.add(rightWing);
+    g.add(rightWingPivot);
+
+    // 頭部與大鳥喙
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.64, 20, 16), blueFeather);
+    head.position.y = 1.98;
+    g.add(head);
+
+    var beak = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.68, 14), beakMat);
+    beak.rotation.x = Math.PI / 2;
+    beak.position.set(0, 1.9, 0.78);
+    g.add(beak);
+    var beakTip = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 10), darkMat);
+    beakTip.position.set(0, 1.9, 1.05);
+    g.add(beakTip);
+
+    // 眼睛或飛行墨鏡
+    if (isCaptain) {
+      [-0.24, 0.24].forEach(function (ex) {
+        var lens = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 12), darkMat);
+        lens.rotation.x = Math.PI / 2;
+        lens.position.set(ex, 2.08, 0.58);
+        g.add(lens);
+      });
+      var bridge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.06), beakMat);
+      bridge.position.set(0, 2.1, 0.6);
+      g.add(bridge);
+      // 機長帽
+      var capCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.5, 0.28, 16), shirtMat);
+      capCrown.position.y = 2.62;
+      g.add(capCrown);
+      var capVisor = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.08, 0.45), darkMat);
+      capVisor.position.set(0, 2.5, 0.42);
+      g.add(capVisor);
+    } else {
+      [-0.23, 0.23].forEach(function (ex) {
+        var eye = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 12), darkMat);
+        eye.position.set(ex, 2.08, 0.57);
+        g.add(eye);
+      });
+      // 地勤耳麥
+      var band = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.05, 8, 20, Math.PI), darkMat);
+      band.position.set(0, 2.0, 0);
+      g.add(band);
+      [-0.64, 0.64].forEach(function (mx) {
+        var muff = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 12), darkMat);
+        muff.rotation.z = Math.PI / 2;
+        muff.position.set(mx, 1.98, 0);
+        g.add(muff);
+      });
+    }
+
+    g.userData.rightWingPivot = rightWingPivot;
+    g.userData.jumpTime = 0;
+    return g;
+  }
+
+  function buildCheckInCounter3D(THREE, termId, route, isLeft) {
+    var group = new THREE.Group();
+    var accentHex = route.themeHex || 0x0284c7;
+    var lightHex = route.lightHex || 0x38bdf8;
+    var bgHexStr = isLeft ? '#0c4a6e' : '#064e3b';
+    var accHexStr = isLeft ? '#38bdf8' : '#34d399';
+
+    var woodMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.55 });
+    var darkWood = new THREE.MeshStandardMaterial({ color: 0x5c3616, roughness: 0.65 });
+    var creamTop = new THREE.MeshStandardMaterial({ color: 0xfffbeb, roughness: 0.35 });
+    var accentMat = new THREE.MeshStandardMaterial({ color: accentHex, roughness: 0.4 });
+    var glowMat = new THREE.MeshStandardMaterial({ color: lightHex, emissive: accentHex, emissiveIntensity: 0.65 });
+    var metalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.7, roughness: 0.25 });
+    var darkMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3 });
+
+    // 1. 櫃台底部迎賓踏墊
+    var matMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(5.6, 0.06, 2.4),
+      new THREE.MeshStandardMaterial({ color: accentHex, roughness: 0.75 })
+    );
+    matMesh.position.set(0, 0.03, 1.85);
+    group.add(matMesh);
+
+    // 2. 櫃台主體桌檯（寬 5.4m，高 1.28m，深 1.35m）
+    var deskBody = new THREE.Mesh(new THREE.BoxGeometry(5.4, 1.22, 1.32), woodMat);
+    deskBody.position.set(0, 0.61, 0);
+    group.add(deskBody);
+
+    var frontPanel = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.92, 0.08), accentMat);
+    frontPanel.position.set(0, 0.61, 0.66);
+    group.add(frontPanel);
+
+    // 櫃台正面發光燈條
+    var ledBar = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.1, 0.12), glowMat);
+    ledBar.position.set(0, 1.15, 0.68);
+    group.add(ledBar);
+
+    // 櫃台正面航班資訊銘牌
+    var frontSignTex = makeCounterSignTex(
+      THREE,
+      route.gate,
+      route.counterNo + ' · ' + (termId === '11501' ? '上學期' : '下學期'),
+      route.archipelago,
+      bgHexStr,
+      accHexStr
+    );
+    var frontSign = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.8, 1.05),
+      new THREE.MeshBasicMaterial({ map: frontSignTex })
+    );
+    frontSign.position.set(0, 0.6, 0.72);
+    group.add(frontSign);
+
+    // 櫃台桌面
+    var deskTop = new THREE.Mesh(new THREE.BoxGeometry(5.65, 0.14, 1.55), creamTop);
+    deskTop.position.set(0, 1.28, 0.04);
+    group.add(deskTop);
+
+    // 3. 桌面設備：電腦螢幕、登機證印表機、小地球儀/雷達
+    var monStand = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 0.35, 10), darkMat);
+    monStand.position.set(-1.1, 1.5, 0);
+    group.add(monStand);
+    var monScreen = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.62, 0.08), darkMat);
+    monScreen.position.set(-1.1, 1.82, 0);
+    monScreen.rotation.y = 0.2;
+    group.add(monScreen);
+    var monGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.84, 0.5), glowMat);
+    monGlow.position.set(-1.09, 1.82, 0.05);
+    monGlow.rotation.y = 0.2;
+    group.add(monGlow);
+
+    // 登機證出票機
+    var printer = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.38, 0.52), creamTop);
+    printer.position.set(0.35, 1.54, 0.15);
+    group.add(printer);
+    var ticket = new THREE.Mesh(
+      new THREE.BoxGeometry(0.42, 0.03, 0.32),
+      new THREE.MeshBasicMaterial({ color: 0xfef08a })
+    );
+    ticket.position.set(0.35, 1.74, 0.38);
+    ticket.rotation.x = 0.35;
+    group.add(ticket);
+
+    // 桌面小飛機模型
+    var miniPlane = new THREE.Mesh(
+      new THREE.BoxGeometry(0.65, 0.22, 0.22),
+      new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 })
+    );
+    miniPlane.position.set(1.55, 1.52, 0.15);
+    miniPlane.rotation.y = -0.4;
+    group.add(miniPlane);
+    var miniWing = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.72), accentMat);
+    miniWing.position.set(1.55, 1.62, 0.15);
+    miniWing.rotation.y = -0.4;
+    group.add(miniWing);
+
+    // 4. 側邊行李輸送帶與磅秤 + 3D 行李箱
+    var sideDir = isLeft ? -1 : 1;
+    var scaleBase = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.28, 1.45), metalMat);
+    scaleBase.position.set(sideDir * 3.65, 0.14, -0.05);
+    group.add(scaleBase);
+    var beltTop = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.06, 1.28), darkMat);
+    beltTop.position.set(sideDir * 3.65, 0.31, -0.05);
+    group.add(beltTop);
+
+    // 行李箱 1 & 2
+    var case1 = new THREE.Mesh(
+      new THREE.BoxGeometry(0.75, 0.92, 0.46),
+      new THREE.MeshStandardMaterial({ color: isLeft ? 0xf43f5e : 0xf59e0b, roughness: 0.4 })
+    );
+    case1.position.set(sideDir * 3.45, 0.78, -0.1);
+    case1.rotation.y = 0.18;
+    group.add(case1);
+
+    var case2 = new THREE.Mesh(
+      new THREE.BoxGeometry(0.68, 0.48, 0.52),
+      new THREE.MeshStandardMaterial({ color: isLeft ? 0xfacc15 : 0x38bdf8, roughness: 0.4 })
+    );
+    case2.position.set(sideDir * 4.1, 0.56, 0.12);
+    case2.rotation.y = -0.25;
+    group.add(case2);
+
+    // 5. 櫃台上方懸吊式 3D 雙柱航班燈箱與登機拱門
+    [-2.35, 2.35].forEach(function (px) {
+      var pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 4.4, 12), darkWood);
+      pillar.position.set(px, 2.2, -0.45);
+      group.add(pillar);
+    });
+
+    var overheadBox = new THREE.Mesh(new THREE.BoxGeometry(5.4, 1.38, 0.36), darkMat);
+    overheadBox.position.set(0, 4.15, -0.45);
+    group.add(overheadBox);
+
+    var overheadFace = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.16, 1.18),
+      new THREE.MeshBasicMaterial({ map: frontSignTex })
+    );
+    overheadFace.position.set(0, 4.15, -0.26);
+    group.add(overheadFace);
+
+    // 6. 排隊紅龍柱 (Queue Stanchions)
+    [-2.2, 2.2].forEach(function (qx) {
+      var post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.92, 10), metalMat);
+      post.position.set(qx, 0.46, 2.25);
+      group.add(post);
+      var base = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 0.08, 12), metalMat);
+      base.position.set(qx, 0.04, 2.25);
+      group.add(base);
+    });
+
+    // 7. 櫃台後方 3D Dodo 航空地勤人員 (莫里 / 羅德里)
+    var dodoStaff = buildDodoStaff3D(THREE, !isLeft, accentHex);
+    dodoStaff.position.set(0, 0, -1.25);
+    group.add(dodoStaff);
+    group.userData.dodoStaff = dodoStaff;
+    group.userData.termId = termId;
+
+    group.traverse(function (c) {
+      if (c.isMesh) {
+        c.castShadow = true;
+        c.receiveShadow = true;
+      }
+    });
+
+    return group;
+  }
+
+  function buildLoungePlayer3D(THREE) {
+    var look = { hat: 'straw', shirt: '#0284c7', hair: '#5c3616', skin: '#ffedd5', back: 'pack' };
+    try {
+      var raw = global.localStorage.getItem('ac_avatar_look_v1') || global.sessionStorage.getItem('ac_avatar_look_v1');
+      if (raw) Object.assign(look, JSON.parse(raw));
+    } catch (e) {}
+
+    var group = new THREE.Group();
+    var skinMat  = new THREE.MeshStandardMaterial({ color: new THREE.Color(look.skin || '#ffedd5'), roughness: 0.55 });
+    var shirtMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(look.shirt || '#0284c7'), roughness: 0.6 });
+    var hairMat  = new THREE.MeshStandardMaterial({ color: new THREE.Color(look.hair || '#5c3616'), roughness: 0.65 });
+    var pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.7 });
+    var shoeMat  = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.65 });
+
+    var footRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.68, 0.84, 24),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide, transparent: true, opacity: 0.8 })
+    );
+    footRing.rotation.x = -Math.PI / 2;
+    footRing.position.y = 0.04;
+    group.add(footRing);
+
+    var leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.55, 10), shoeMat);
+    leftLeg.position.set(-0.24, 0.28, 0);
+    group.add(leftLeg);
+    var rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.55, 10), shoeMat);
+    rightLeg.position.set(0.24, 0.28, 0);
+    group.add(rightLeg);
+
+    var hips = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.42, 0.4, 14), pantsMat);
+    hips.position.y = 0.72;
+    group.add(hips);
+
+    var torso = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.52, 0.88, 16), shirtMat);
+    torso.position.y = 1.24;
+    group.add(torso);
+
+    // 隨身探險背包與拉桿登機箱
+    var pack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.62, 0.34), new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.6 }));
+    pack.position.set(0, 1.25, -0.44);
+    group.add(pack);
+
+    var leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.15, 0.58, 10), shirtMat);
+    leftArm.position.set(-0.56, 1.28, 0);
+    leftArm.rotation.z = 0.22;
+    group.add(leftArm);
+
+    var rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.15, 0.58, 10), shirtMat);
+    rightArm.position.set(0.56, 1.28, 0);
+    rightArm.rotation.z = -0.22;
+    group.add(rightArm);
+
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.7, 20, 18), skinMat);
+    head.position.y = 2.16;
+    group.add(head);
+
+    var hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.73, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat);
+    hairBack.position.set(0, 2.2, -0.04);
+    hairBack.rotation.x = -0.22;
+    group.add(hairBack);
+
+    var eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+    [-0.24, 0.24].forEach(function (ex) {
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 10), eyeMat);
+      eye.scale.set(0.95, 1.2, 0.55);
+      eye.position.set(ex, 2.18, 0.64);
+      group.add(eye);
+    });
+
+    // 探險草帽
+    var hatMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.55 });
+    var brim = new THREE.Mesh(new THREE.CylinderGeometry(0.96, 0.96, 0.1, 18), hatMat);
+    brim.position.y = 2.6;
+    group.add(brim);
+    var crown = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.65, 0.42, 16), hatMat);
+    crown.position.y = 2.82;
+    group.add(crown);
+
+    group.traverse(function (c) {
+      if (c.isMesh) c.castShadow = true;
+    });
+    group.userData.limbs = { leftLeg: leftLeg, rightLeg: rightLeg, leftArm: leftArm, rightArm: rightArm };
+    return group;
+  }
+
   /**
-   * 在指定容器內渲染「🦤 Dodo Airlines 水上機場・航廈搭機櫃台」完整場景
+   * 在指定容器內渲染「🦤 Dodo Airlines 3D 入境登機室（雙櫃台 3D 互動場景）」
    * @param {HTMLElement} hostEl
    * @param {Object} [opts] { targetPath: 'course/hub.html', isModal: false, onClose: fn, showTeacherLink: false }
    */
   function renderAirportCounter(hostEl, opts) {
     if (!hostEl) return;
     opts = opts || {};
+    if (hostEl._dalCleanup) {
+      hostEl._dalCleanup();
+      hostEl._dalCleanup = null;
+    }
+
     var targetPath = opts.targetPath || 'course/hub.html';
     var schoolObj = (SITE.SCHOOL || {});
     var schoolTitle = [schoolObj.NAME, schoolObj.GRADE].filter(Boolean).join(' ') || '資訊科技探險群島';
     var byDateId = byDate();
-    var activeTermId = current || byDateId;
+    var activeTermId = current || byDateId || '11501';
 
-    var cardsHtml = LIST.map(function (t, idx) {
-      var route = FLIGHT_ROUTES[t.id] || FLIGHT_ROUTES[idx === 0 ? '11501' : '11502'];
-      var isCurrent = (t.id === activeTermId);
-      var isRecommendedByDate = (t.id === byDateId);
-      var destHref = ROOT + targetPath + (String(targetPath).indexOf('?') >= 0 ? '&' : '?') + 'term=' + encodeURIComponent(t.id);
+    var closeBtnHtml = opts.isModal
+      ? '<button type="button" data-dal-close class="px-3.5 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white border border-rose-400 text-xs font-black cursor-pointer transition shadow">✕ 留在目前島嶼</button>'
+      : '';
 
-      var islandsListHtml = route.islands.map(function (isl) {
-        return '<div class="flex items-start gap-2.5 bg-slate-50/90 border border-slate-200/80 rounded-xl px-3 py-2">'
-          + '<span class="text-xl leading-none mt-0.5 shrink-0">' + isl.icon + '</span>'
-          + '<div class="min-w-0 text-left">'
-          +   '<div class="text-xs sm:text-sm font-black text-slate-800 truncate">' + escHtml(isl.name) + '</div>'
-          +   '<div class="text-[11px] font-bold text-slate-500 leading-snug">' + escHtml(isl.sub) + '</div>'
-          + '</div>'
-          + '</div>';
-      }).join('');
+    var teacherBtnHtml = opts.showTeacherLink
+      ? '<a id="dal-teacher-link" href="' + escHtml(ROOT + 'course/teacher.html?term=' + encodeURIComponent(activeTermId)) + '" class="px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-200 border border-slate-600 text-xs font-black transition">🛠️ 教師管理後台</a>'
+      : '';
 
-      return ''
-        + '<div class="dal-boarding-pass ' + (isCurrent ? 'is-current-term' : '') + ' flex flex-col justify-between" data-route-card="' + escHtml(t.id) + '">'
-        +   '<div class="p-4 sm:p-5">'
-        +     '<div class="flex items-center justify-between gap-2 flex-wrap mb-3">'
-        +       '<div class="flex items-center gap-1.5">'
-        +         '<span class="text-[11px] font-black px-2.5 py-0.5 rounded-full ' + route.colorBadge + '">' + escHtml(route.gate) + ' · ' + escHtml(route.flightNo) + '</span>'
-        +         (isRecommendedByDate ? '<span class="text-[11px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">📅 本學期推薦</span>' : '')
-        +       '</div>'
-        +       (isCurrent && opts.isModal
-                  ? '<span class="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">📍 目前所在群島</span>'
-                  : '<span class="text-[11px] font-mono font-bold text-slate-400">BOARDING PASS</span>')
-        +     '</div>'
-        +     '<div class="text-left mb-3">'
-        +       '<div class="text-xs font-extrabold text-amber-700">' + escHtml(t.name) + '（' + escHtml(t.short || t.id) + '）</div>'
-        +       '<h3 class="text-lg sm:text-xl font-black text-slate-900 leading-snug mt-0.5">🏝️ ' + escHtml(route.archipelago) + '</h3>'
-        +       '<div class="text-[11px] font-bold text-slate-500 mt-1">' + escHtml(route.weather) + '</div>'
-        +     '</div>'
-        +     '<div class="text-left mb-1">'
-        +       '<div class="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">🗺️ 航線停靠的 4 座主題小島：</div>'
-        +       '<div class="grid grid-cols-1 gap-1.5">' + islandsListHtml + '</div>'
-        +     '</div>'
-        +   '</div>'
-        +   '<div class="dal-pass-perforation bg-amber-50/60 px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3">'
-        +     '<div class="text-left">'
-        +       '<div class="text-[10px] font-mono font-bold text-slate-400 uppercase">SEAPLANE TERMINAL</div>'
-        +       '<div class="text-xs font-black text-slate-700">🦤 莫里櫃台簽發 · 自由往返</div>'
-        +     '</div>'
-        +     '<button type="button" data-board-term="' + escHtml(t.id) + '" data-board-href="' + escHtml(destHref) + '" '
-        +       'class="dal-board-btn px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm transition transform active:scale-95 cursor-pointer ' + route.btnClass + '">'
-        +       (isCurrent && opts.isModal ? '✈️ 重新登島 (' + escHtml(t.short || t.id) + ')' : '✈️ 辦理登機・飛往此島 →')
-        +     '</button>'
-        +   '</div>'
+    var pinsHtml = LIST.map(function (t, idx) {
+      var r = FLIGHT_ROUTES[t.id] || FLIGHT_ROUTES[idx === 0 ? '11501' : '11502'];
+      var isRec = (t.id === byDateId);
+      var isCur = (t.id === current && opts.isModal);
+      var flagText = isCur ? '📍 目前所在群島' : (isRec ? '📅 本學期推薦' : '');
+      var borderCol = idx === 0 ? '#0284c7' : '#059669';
+      var bgCol = idx === 0 ? '#e0f2fe' : '#d1fae5';
+      var txtCol = idx === 0 ? '#0c4a6e' : '#064e3b';
+      return '<div class="ac-node" tabindex="0" role="button" data-counter-pin="' + escHtml(t.id) + '">'
+        + (flagText ? '<div class="ac-node-flag ' + (isRec ? 'flag-next' : '') + '">' + escHtml(flagText) + '</div>' : '')
+        + '<div class="ac-node-stars">' + escHtml(r.gate + ' · ' + r.flightNo) + '</div>'
+        + '<div class="ac-node-label" style="background:' + bgCol + ';border-color:' + borderCol + ';color:' + txtCol + ';max-width:230px">'
+        +   '<span class="text-[11px] bg-white/90 px-1.5 py-0.2 rounded-full border" style="border-color:' + borderCol + '">' + escHtml(r.counterNo) + '</span>'
+        +   '<span>' + escHtml(t.short || t.name) + ' 登機櫃台</span>'
+        + '</div>'
         + '</div>';
     }).join('');
 
-    var closeBtnHtml = opts.isModal
-      ? '<button type="button" data-dal-close class="px-3.5 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-200 border border-slate-600 text-xs font-black cursor-pointer transition">✕ 留在目前島嶼</button>'
-      : '';
-
-    var teacherFooterHtml = opts.showTeacherLink
-      ? '<div class="bg-amber-100/70 border-t-2 border-amber-200 px-5 py-2.5 flex items-center justify-between text-xs font-bold text-stone-600 flex-wrap gap-2">'
-        + '<span>🍃 ' + escHtml(schoolTitle) + ' · Dodo Airlines 跨學期水上航線總站</span>'
-        + '<a href="' + escHtml(ROOT + 'course/teacher.html?term=' + encodeURIComponent(activeTermId)) + '" class="underline hover:text-amber-900 font-black">🛠️ 教師管理後台入口 →</a>'
-        + '</div>'
-      : '';
-
     hostEl.innerHTML = ''
-      + '<div class="dal-terminal-shell w-full max-w-5xl mx-auto">'
-      +   '<div class="dal-departure-board flex flex-col sm:flex-row sm:items-center justify-between gap-2">'
+      + '<div class="dal-terminal-shell w-full max-w-[1440px] mx-auto">'
+      +   '<div class="dal-departure-board flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">'
       +     '<div class="flex items-center gap-2.5 flex-wrap">'
       +       '<span class="text-2xl">✈️</span>'
-      +       '<div>'
-      +         '<div class="flex items-center gap-2 flex-wrap">'
-      +           '<span class="dal-flap-cell text-xs sm:text-sm">DODO AIRLINES</span>'
-      +           '<span class="text-xs font-black text-sky-300 tracking-wider">' + escHtml(schoolTitle) + ' · 水上機場搭機櫃台</span>'
-      +         '</div>'
-      +       '</div>'
+      +       '<span class="dal-flap-cell text-xs sm:text-sm">DODO AIRLINES · 3D TERMINAL</span>'
+      +       '<span class="text-xs sm:text-sm font-black text-sky-300 tracking-wide">' + escHtml(schoolTitle) + ' · 3D 入境登機室大廳（雙學期櫃台）</span>'
       +     '</div>'
       +     '<div class="flex items-center gap-2 flex-wrap">'
-      +       '<span class="dal-flap-cell text-[11px]" style="color:#4ade80">STATUS: BOARDING 準點登機中</span>'
+      +       '<button type="button" data-goto-counter="11501" class="px-3 py-1.5 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition cursor-pointer shadow">⬅ 1號櫃台（115-1 上學期）</button>'
+      +       '<button type="button" data-goto-counter="11502" class="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer shadow">➡ 2號櫃台（115-2 下學期）</button>'
+      +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer">🎥 視角：登機室全景</button>'
+      +       teacherBtnHtml
       +       closeBtnHtml
       +     '</div>'
       +   '</div>'
-      +   '<div class="dal-counter-stage p-4 sm:p-6">'
-      +     '<div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">'
-      +       '<div class="lg:col-span-7 bg-amber-50/95 border-4 border-amber-800 rounded-2xl p-4 shadow-xl relative">'
-      +         '<div class="flex items-start gap-3.5">'
-      +           '<div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-sky-200 to-sky-400 border-3 border-amber-800 flex flex-col items-center justify-center shrink-0 shadow-inner relative">'
-      +             '<span class="text-3xl sm:text-4xl leading-none">🦤</span>'
-      +             '<span class="text-[10px] font-black bg-amber-800 text-amber-100 px-1.5 py-0.2 rounded-full mt-1">地勤 莫里</span>'
-      +           '</div>'
-      +           '<div class="min-w-0 flex-1 text-left">'
-      +             '<div class="inline-flex items-center gap-1.5 bg-sky-700 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full mb-1">'
-      +               '<span>🎙️ Dodo Airlines 機場櫃檯廣播</span>'
-      +             '</div>'
-      +             '<p id="dal-orville-speech" class="text-xs sm:text-sm font-black text-amber-950 leading-relaxed">'
-      +               '歡迎光臨 Dodo Airlines 水上機場搭機櫃台！歐拉～我是櫃台地勤莫里！請問今天想搭乘「上學期航線」還是「下學期航線」前往哪一座探險群島呢？請點選下方登機證蓋章出發！'
-      +             '</p>'
-      +           '</div>'
-      +         '</div>'
-      +         '<div class="mt-3 pt-2.5 border-t-2 border-dashed border-amber-300 flex items-center justify-between text-[11px] font-extrabold text-amber-900 flex-wrap gap-2">'
-      +           '<div class="flex items-center gap-3 flex-wrap">'
-      +             '<span>🛂 島民護照查驗處</span>'
-      +             '<span>🌍 跨學期雙群島直飛</span>'
-      +             '<span>🧳 星星與學習紀錄自動同步保存</span>'
-      +           '</div>'
-      +           '<span class="text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-full">免費水上包機</span>'
-      +         '</div>'
-      +       '</div>'
-      +       '<div class="lg:col-span-5 flex flex-col items-center justify-center">'
-      +         '<div class="w-full bg-gradient-to-b from-sky-300 via-sky-200 to-cyan-500 rounded-2xl border-4 border-sky-900 p-3 shadow-inner relative overflow-hidden" style="min-height:148px">'
-      +           '<div class="absolute top-2 left-3 text-[10px] font-black text-sky-950 bg-white/80 px-2 py-0.5 rounded-full">🌅 停機坪觀景窗 · 羅德里機長待命中</div>'
-      +           '<svg viewBox="0 0 320 130" class="w-full h-32 sm:h-36">'
-      +             '<g class="dal-cloud-svg">'
-      +               '<ellipse cx="65" cy="30" rx="22" ry="9" fill="#ffffff" opacity="0.88"/>'
-      +               '<ellipse cx="78" cy="27" rx="16" ry="8" fill="#ffffff" opacity="0.88"/>'
-      +               '<ellipse cx="245" cy="24" rx="24" ry="8" fill="#ffffff" opacity="0.85"/>'
-      +             '</g>'
-      +             '<path d="M18,92 Q45,62 78,92 Z" fill="#15803d" opacity="0.75"/>'
-      +             '<path d="M245,92 Q278,58 308,92 Z" fill="#0f766e" opacity="0.75"/>'
-      +             '<rect x="0" y="90" width="320" height="40" fill="#0284c7"/>'
-      +             '<path d="M0,98 Q40,93 80,98 T160,98 T240,98 T320,98" stroke="#7dd3fc" stroke-width="2.5" fill="none"/>'
-      +             '<rect x="10" y="80" width="68" height="8" rx="3" fill="#92400e" stroke="#451a03" stroke-width="1.5"/>'
-      +             '<rect x="22" y="88" width="6" height="18" fill="#78350f"/>'
-      +             '<rect x="58" y="88" width="6" height="18" fill="#78350f"/>'
-      +             '<g id="dal-seaplane-actor" class="dal-seaplane-svg">'
-      +               '<rect x="122" y="92" width="64" height="9" rx="4.5" fill="#0369a1" stroke="#0c4a6e" stroke-width="1.5"/>'
-      +               '<line x1="140" y1="80" x2="136" y2="92" stroke="#334155" stroke-width="2.5"/>'
-      +               '<line x1="168" y1="80" x2="172" y2="92" stroke="#334155" stroke-width="2.5"/>'
-      +               '<path d="M102,68 L118,50 L126,68 Z" fill="#0284c7" stroke="#0c4a6e" stroke-width="1.5"/>'
-      +               '<rect x="115" y="60" width="72" height="24" rx="10" fill="#facc15" stroke="#ca8a04" stroke-width="2"/>'
-      +               '<rect x="118" y="70" width="66" height="6" fill="#0284c7"/>'
-      +               '<path d="M158,62 L178,62 L183,70 L158,70 Z" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>'
-      +               '<rect x="128" y="53" width="52" height="7" rx="3.5" fill="#0284c7" stroke="#0c4a6e" stroke-width="1.5"/>'
-      +               '<circle cx="190" cy="72" r="4" fill="#dc2626"/>'
-      +               '<rect x="188" y="56" width="4" height="32" rx="2" fill="#334155" class="dal-propeller"/>'
-      +             '</g>'
-      +           '</svg>'
-      +         '</div>'
-      +       '</div>'
+      +   '<div class="ac-island-stage" id="dal-3d-stage" style="min-height:570px;max-height:80vh;background:linear-gradient(180deg,#38bdf8 0%,#bae6fd 50%,#fde68a 100%)">'
+      +     '<canvas id="dal-3d-canvas" class="ac-webgl-canvas"></canvas>'
+      +     '<div class="ac-controls-bar">'
+      +       '<div class="ac-controls-hint">🎮 請用 WASD / 方向鍵控制角色走向左、右兩座 3D 登機櫃台 · 點擊櫃台或按 Enter 立即蓋章起飛！</div>'
       +     '</div>'
-      +   '</div>'
-      +   '<div class="p-4 sm:p-6 bg-gradient-to-b from-amber-50/70 to-stone-100/80">'
-      +     '<div class="grid grid-cols-1 md:grid-cols-2 gap-5">'
-      +       cardsHtml
+      +     '<div id="dal-3d-overlay" class="ac-overlay-layer">'
+      +       pinsHtml
+      +       '<div id="dal-player-tag" class="ac-player-tag">🧑‍🌾 島民旅客</div>'
       +     '</div>'
+      +     '<div id="dal-3d-dialog" class="ac-dialog-bar"></div>'
       +   '</div>'
-      +   teacherFooterHtml
       + '</div>';
 
-    var speechEl = hostEl.querySelector('#dal-orville-speech');
-    var planeActor = hostEl.querySelector('#dal-seaplane-actor');
+    var stageEl   = hostEl.querySelector('#dal-3d-stage');
+    var canvasEl  = hostEl.querySelector('#dal-3d-canvas');
+    var dialogEl  = hostEl.querySelector('#dal-3d-dialog');
+    var playerTag = hostEl.querySelector('#dal-player-tag');
+    var camBtn    = hostEl.querySelector('#dal-cam-btn');
+    var teacherLink = hostEl.querySelector('#dal-teacher-link');
 
-    var routeCards = hostEl.querySelectorAll('[data-route-card]');
-    for (var i = 0; i < routeCards.length; i++) {
-      (function (cardEl) {
-        var rId = cardEl.getAttribute('data-route-card');
-        var routeInfo = FLIGHT_ROUTES[rId];
-        cardEl.addEventListener('mouseenter', function () {
-          if (speechEl && routeInfo && !hostEl.dataset.boardingLocked) {
-            speechEl.textContent = routeInfo.orvillePitch;
-          }
-        });
-      })(routeCards[i]);
+    var state = {
+      selectedTerm: activeTermId,
+      px: 0,
+      pz: 5.8,
+      tx: (FLIGHT_ROUTES[activeTermId] || FLIGHT_ROUTES['11501']).standWx,
+      tz: (FLIGHT_ROUTES[activeTermId] || FLIGHT_ROUTES['11501']).standWz,
+      heading: Math.PI,
+      walking: false,
+      keys: {},
+      camMode: 'overview', // 'overview' (登機室全景可同時看兩座櫃台) | 'counter' (櫃台特寫)
+      yawOffset: 0,
+      zoomDist: 1.0,
+      boarding: false,
+      takeoffStart: 0,
+      destroyed: false,
+      rafId: null
+    };
+
+    var counterGroups = {};
+
+    function selectCounter(termId, walkThere) {
+      if (!FLIGHT_ROUTES[termId] || state.boarding) return;
+      state.selectedTerm = termId;
+      var route = FLIGHT_ROUTES[termId];
+      if (walkThere) {
+        state.tx = route.standWx;
+        state.tz = route.standWz;
+      }
+      if (teacherLink) {
+        teacherLink.href = ROOT + 'course/teacher.html?term=' + encodeURIComponent(termId);
+      }
+      var cGroup = counterGroups[termId];
+      if (cGroup && cGroup.userData.dodoStaff) {
+        cGroup.userData.dodoStaff.userData.jumpTime = performance.now();
+      }
+      var pins = hostEl.querySelectorAll('[data-counter-pin]');
+      for (var i = 0; i < pins.length; i++) {
+        pins[i].classList.toggle('is-near', pins[i].getAttribute('data-counter-pin') === termId);
+      }
+      renderBottomDialog();
     }
+
+    function triggerBoarding(termId) {
+      if (state.boarding) return;
+      termId = termId || state.selectedTerm || '11501';
+      var route = FLIGHT_ROUTES[termId] || FLIGHT_ROUTES['11501'];
+      var destHref = ROOT + targetPath + (String(targetPath).indexOf('?') >= 0 ? '&' : '?') + 'term=' + encodeURIComponent(termId);
+
+      state.boarding = true;
+      state.selectedTerm = termId;
+      state.takeoffStart = performance.now();
+      if (valid(termId)) write(termId);
+
+      var cGroup = counterGroups[termId];
+      if (cGroup && cGroup.userData.dodoStaff) {
+        cGroup.userData.dodoStaff.userData.jumpTime = performance.now();
+      }
+
+      renderBottomDialog();
+
+      var stamp = document.createElement('div');
+      stamp.className = 'dal-stamp-seal';
+      stamp.style.top = '18px';
+      stamp.style.right = '24px';
+      stamp.innerHTML = '🦤 DODO AIRLINES · ' + escHtml(route.gate) + '<br>准予登機 APPROVED';
+      dialogEl.appendChild(stamp);
+
+      setTimeout(function () {
+        global.location.href = destHref;
+      }, 920);
+    }
+
+    function renderBottomDialog() {
+      if (!dialogEl) return;
+      var termId = state.selectedTerm || '11501';
+      var termObj = info(termId) || { id: termId, name: termId, short: termId };
+      var route = FLIGHT_ROUTES[termId] || FLIGHT_ROUTES['11501'];
+      var otherTermId = termId === '11501' ? '11502' : '11501';
+      var otherRoute = FLIGHT_ROUTES[otherTermId];
+
+      var islandsBadges = route.islands.map(function (isl) {
+        return '<span class="inline-flex items-center gap-1 bg-amber-50 border border-amber-300 text-amber-950 text-xs font-black px-2.5 py-1 rounded-xl shadow-sm" title="' + escHtml(isl.sub) + '">'
+          + '<span>' + isl.icon + '</span>'
+          + '<span>' + escHtml(isl.name) + '</span>'
+          + '</span>';
+      }).join('');
+
+      var speechText = state.boarding
+        ? ('叮咚！已為您蓋上「' + route.flightNo + '」登機章！窗外的水上飛機螺旋槳已全速運轉，正在起飛前往【' + route.archipelago + '】——祝您探險愉快！')
+        : route.orvillePitch;
+
+      var speakerBg = termId === '11501'
+        ? 'background:linear-gradient(90deg,#0284c7,#0369a1)'
+        : 'background:linear-gradient(90deg,#059669,#047857)';
+
+      dialogEl.innerHTML = ''
+        + '<div class="ac-dialog-speaker" style="' + speakerBg + '">'
+        +   escHtml(route.counterNo + ' · ' + route.gate + ' (' + route.flightNo + ') · ' + route.staffName)
+        + '</div>'
+        + '<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">'
+        +   '<div class="min-w-0 flex-1 text-left">'
+        +     '<div class="flex items-center gap-2 flex-wrap">'
+        +       '<h3 class="text-base sm:text-lg font-black text-amber-950">🏝️ ' + escHtml(termObj.name + '（' + (termObj.short || termObj.id) + '）· ' + route.archipelago) + '</h3>'
+        +       '<span class="text-xs font-extrabold text-sky-800 bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-full">' + escHtml(route.weather) + '</span>'
+        +     '</div>'
+        +     '<p class="text-xs sm:text-sm text-stone-700 font-bold mt-1 leading-relaxed">' + escHtml(speechText) + '</p>'
+        +     '<div class="flex items-center gap-1.5 flex-wrap mt-2">'
+        +       '<span class="text-[11px] font-black text-stone-500 mr-1">🗺️ 停靠 4 座小島：</span>'
+        +       islandsBadges
+        +     '</div>'
+        +   '</div>'
+        +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
+        +     '<button type="button" data-switch-other="' + escHtml(otherTermId) + '" class="ac-btn-secondary text-xs sm:text-sm cursor-pointer">'
+        +       '🚶 走向' + escHtml(otherRoute.counterNo) + ' (' + escHtml(otherTermId === '11501' ? '上學期' : '下學期') + ')'
+        +     '</button>'
+        +     '<button type="button" data-board-now="' + escHtml(termId) + '" class="px-5 py-2.5 rounded-2xl font-black text-xs sm:text-sm cursor-pointer transition transform active:scale-95 ' + route.btnClass + '">'
+        +       (state.boarding ? '✈️ 水上飛機起飛中…' : ('✈️ 辦理登機・飛往 ' + escHtml(termObj.short || termObj.id) + ' 群島 →'))
+        +     '</button>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    renderBottomDialog();
 
     var closeBtn = hostEl.querySelector('[data-dal-close]');
     if (closeBtn) {
       closeBtn.addEventListener('click', function () {
+        if (hostEl._dalCleanup) hostEl._dalCleanup();
         if (typeof opts.onClose === 'function') opts.onClose();
       });
     }
 
-    var boardBtns = hostEl.querySelectorAll('[data-board-term]');
-    for (var b = 0; b < boardBtns.length; b++) {
-      boardBtns[b].addEventListener('click', function (e) {
-        var btn = e.currentTarget;
-        var chosenTerm = btn.getAttribute('data-board-term');
-        var destUrl = btn.getAttribute('data-board-href');
-        if (!chosenTerm || hostEl.dataset.boardingLocked) return;
-        hostEl.dataset.boardingLocked = '1';
+    hostEl.addEventListener('click', function (e) {
+      var gotoBtn = e.target.closest('[data-goto-counter]');
+      if (gotoBtn) {
+        selectCounter(gotoBtn.getAttribute('data-goto-counter'), true);
+        return;
+      }
+      var pinEl = e.target.closest('[data-counter-pin]');
+      if (pinEl) {
+        selectCounter(pinEl.getAttribute('data-counter-pin'), true);
+        return;
+      }
+      var swBtn = e.target.closest('[data-switch-other]');
+      if (swBtn) {
+        selectCounter(swBtn.getAttribute('data-switch-other'), true);
+        return;
+      }
+      var boardBtn = e.target.closest('[data-board-now]');
+      if (boardBtn) {
+        triggerBoarding(boardBtn.getAttribute('data-board-now'));
+      }
+    });
 
-        if (valid(chosenTerm)) write(chosenTerm);
-
-        var passCard = btn.closest('.dal-boarding-pass');
-        if (passCard) {
-          var stamp = document.createElement('div');
-          stamp.className = 'dal-stamp-seal';
-          stamp.innerHTML = '🦤 DODO AIRLINES<br>准予登機 APPROVED';
-          passCard.appendChild(stamp);
-        }
-
-        var routeInfo = FLIGHT_ROUTES[chosenTerm] || {};
-        if (speechEl) {
-          speechEl.textContent = '叮咚！已為您蓋上「' + (routeInfo.flightNo || chosenTerm) + '」登機章！羅德里機長已啟動螺旋槳，正在起飛前往【' + (routeInfo.archipelago || chosenTerm) + '】——祝您探險愉快！';
-        }
-        btn.textContent = '✈️ 水上飛機起飛中…';
-        if (planeActor) {
-          planeActor.classList.add('is-taking-off');
-        }
-
-        setTimeout(function () {
-          global.location.href = destUrl;
-        }, 780);
+    if (camBtn) {
+      camBtn.addEventListener('click', function () {
+        state.camMode = state.camMode === 'overview' ? 'counter' : 'overview';
+        state.yawOffset = 0;
+        camBtn.textContent = state.camMode === 'overview'
+          ? '🎥 視角：登機室全景'
+          : '🎥 視角：櫃台跟隨特寫';
       });
     }
+
+    var cleanupThree = null;
+    ensureThreeLoaded().then(function (THREE) {
+      if (state.destroyed || !canvasEl.isConnected) return;
+
+      var renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
+      renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+      if (THREE.ACESFilmicToneMapping) {
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.08;
+      }
+
+      var scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x7dd3fc);
+      scene.fog = new THREE.FogExp2(0xbae6fd, 0.0085);
+
+      var camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.5, 180);
+
+      var hemiLight = new THREE.HemisphereLight(0xffffff, 0xfef3c7, 0.85);
+      hemiLight.position.set(0, 40, 0);
+      scene.add(hemiLight);
+
+      var dirLight = new THREE.DirectionalLight(0xfffbeb, 1.05);
+      dirLight.position.set(16, 34, 24);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      var sd = 24;
+      dirLight.shadow.camera.left = -sd;
+      dirLight.shadow.camera.right = sd;
+      dirLight.shadow.camera.top = sd;
+      dirLight.shadow.camera.bottom = -sd;
+      dirLight.shadow.bias = -0.0005;
+      scene.add(dirLight);
+
+      var worldGroup = new THREE.Group();
+      scene.add(worldGroup);
+
+      // ── 1. 窗外碧海、遠方雙學期群島與水上飛機停機坪 ──
+      var seaMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(160, 100),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.25, metalness: 0.1 })
+      );
+      seaMesh.rotation.x = -Math.PI / 2;
+      seaMesh.position.set(0, -0.65, -35);
+      worldGroup.add(seaMesh);
+
+      // 左遠方：115-1 初階群島山巒
+      var islLeft = new THREE.Mesh(
+        new THREE.ConeGeometry(8.5, 6.2, 12),
+        new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 })
+      );
+      islLeft.position.set(-16, 2.2, -26);
+      worldGroup.add(islLeft);
+
+      // 右遠方：115-2 進階群島山巒
+      var islRight = new THREE.Mesh(
+        new THREE.ConeGeometry(9.2, 6.8, 12),
+        new THREE.MeshStandardMaterial({ color: 0x0d9488, roughness: 0.7 })
+      );
+      islRight.position.set(16, 2.5, -26);
+      worldGroup.add(islRight);
+
+      // 戶外木造登機碼頭
+      var pierWood = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.65 });
+      var pierDeck = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.35, 8.5), pierWood);
+      pierDeck.position.set(0, -0.1, -10.5);
+      worldGroup.add(pierDeck);
+
+      // 3D Dodo 水上飛機（停泊於觀景窗正後方海面）
+      var planeGroup = new THREE.Group();
+      planeGroup.position.set(0, 0.55, -15.2);
+      var yellowBodyMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.32 });
+      var blueTrimMat   = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.35 });
+      var darkMetalMat  = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.6 });
+
+      // 雙浮筒
+      [-1.35, 1.35].forEach(function (fz) {
+        var pontoon = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.55, 0.68), blueTrimMat);
+        pontoon.position.set(0, -0.85, fz);
+        planeGroup.add(pontoon);
+        var strut = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.1, 8), darkMetalMat);
+        strut.position.set(0, -0.3, fz * 0.7);
+        planeGroup.add(strut);
+      });
+      // 機身、機翼、尾翼与螺旋槳
+      var fuselage = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.65, 1.75), yellowBodyMat);
+      fuselage.position.y = 0.45;
+      planeGroup.add(fuselage);
+      var stripe = new THREE.Mesh(new THREE.BoxGeometry(5.65, 0.35, 1.8), blueTrimMat);
+      stripe.position.y = 0.35;
+      planeGroup.add(stripe);
+      var topWing = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.2, 9.2), blueTrimMat);
+      topWing.position.set(0.2, 1.45, 0);
+      planeGroup.add(topWing);
+      var tailFin = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.45, 0.24), blueTrimMat);
+      tailFin.position.set(-2.35, 1.35, 0);
+      planeGroup.add(tailFin);
+      var propSpinner = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.6, 12), new THREE.MeshStandardMaterial({ color: 0xdc2626 }));
+      propSpinner.rotation.z = -Math.PI / 2;
+      propSpinner.position.set(3.05, 0.45, 0);
+      planeGroup.add(propSpinner);
+      var propBlade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.26), darkMetalMat);
+      propBlade.position.set(3.15, 0.45, 0);
+      planeGroup.add(propBlade);
+      worldGroup.add(planeGroup);
+
+      // ── 2. 3D 登機室室內木質地板、迎賓分流跑道地毯與全景落地窗牆 ──
+      var floorTex = makeFloorParquetTex(THREE);
+      var floorMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(28.5, 0.4, 17.5),
+        new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.55 })
+      );
+      floorMesh.position.set(0, -0.2, 1.5);
+      floorMesh.receiveShadow = true;
+      worldGroup.add(floorMesh);
+
+      // 中央入境迎賓主地毯（由南門 z=9.2 通往中央羅盤 z=3.2）
+      var mainCarpet = new THREE.Mesh(
+        new THREE.BoxGeometry(4.2, 0.04, 6.4),
+        new THREE.MeshStandardMaterial({ color: 0x0369a1, roughness: 0.75 })
+      );
+      mainCarpet.position.set(0, 0.02, 6.2);
+      mainCarpet.receiveShadow = true;
+      worldGroup.add(mainCarpet);
+
+      // 中央黃金羅盤圓章
+      var compassDisc = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.1, 2.1, 0.05, 32),
+        new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4, metalness: 0.3 })
+      );
+      compassDisc.position.set(0, 0.03, 3.2);
+      worldGroup.add(compassDisc);
+      var compassInner = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.75, 1.75, 0.06, 28),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 })
+      );
+      compassInner.position.set(0, 0.035, 3.2);
+      worldGroup.add(compassInner);
+
+      // 左分流地毯（通往 1號櫃台 115-1 上學期）
+      var leftRunner = new THREE.Mesh(
+        new THREE.BoxGeometry(7.8, 0.04, 2.1),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.75 })
+      );
+      leftRunner.position.set(-3.6, 0.02, 2.0);
+      leftRunner.rotation.y = -0.26;
+      worldGroup.add(leftRunner);
+
+      // 右分流地毯（通往 2號櫃台 115-2 下學期）
+      var rightRunner = new THREE.Mesh(
+        new THREE.BoxGeometry(7.8, 0.04, 2.1),
+        new THREE.MeshStandardMaterial({ color: 0x059669, roughness: 0.75 })
+      );
+      rightRunner.position.set(3.6, 0.02, 2.0);
+      rightRunner.rotation.y = 0.26;
+      worldGroup.add(rightRunner);
+
+      // 北側全景落地窗框與中央大型航班看板
+      var frameWood = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.6 });
+      var wallCream = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.65 });
+      var glassMat = new THREE.MeshStandardMaterial({
+        color: 0xe0f2fe,
+        transparent: true,
+        opacity: 0.24,
+        roughness: 0.1,
+        metalness: 0.2
+      });
+
+      // 後牆矮牆基座與頂樑
+      var backLowWall = new THREE.Mesh(new THREE.BoxGeometry(28.5, 1.1, 0.45), wallCream);
+      backLowWall.position.set(0, 0.55, -6.8);
+      worldGroup.add(backLowWall);
+
+      var topBeam = new THREE.Mesh(new THREE.BoxGeometry(28.5, 0.65, 0.65), frameWood);
+      topBeam.position.set(0, 7.1, -6.8);
+      worldGroup.add(topBeam);
+
+      // 全景透明玻璃窗
+      var bigGlass = new THREE.Mesh(new THREE.PlaneGeometry(27.6, 5.8), glassMat);
+      bigGlass.position.set(0, 4.0, -6.8);
+      worldGroup.add(bigGlass);
+
+      [-13.8, -3.5, 3.5, 13.8].forEach(function (px) {
+        var col = new THREE.Mesh(new THREE.BoxGeometry(0.55, 7.2, 0.55), frameWood);
+        col.position.set(px, 3.6, -6.8);
+        worldGroup.add(col);
+      });
+
+      // 中央巨型 3D 翻頁航班資訊看板
+      var mainBoardTex = makeMainBoardTex(THREE, schoolTitle);
+      var boardBack = new THREE.Mesh(new THREE.BoxGeometry(7.2, 2.5, 0.35), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+      boardBack.position.set(0, 5.25, -6.45);
+      worldGroup.add(boardBack);
+      var boardFace = new THREE.Mesh(
+        new THREE.PlaneGeometry(6.95, 2.3),
+        new THREE.MeshBasicMaterial({ map: mainBoardTex })
+      );
+      boardFace.position.set(0, 5.25, -6.26);
+      worldGroup.add(boardFace);
+
+      // ── 3. 建立左、右兩座 3D 登機櫃台 (1號櫃台 11501 / 2號櫃台 11502) ──
+      var interactiveMeshes = [];
+      ['11501', '11502'].forEach(function (tid, idx) {
+        var r = FLIGHT_ROUTES[tid];
+        var cGroup = buildCheckInCounter3D(THREE, tid, r, idx === 0);
+        cGroup.position.set(r.wx, 0, r.wz);
+        worldGroup.add(cGroup);
+        counterGroups[tid] = cGroup;
+        interactiveMeshes.push(cGroup);
+      });
+
+      // ── 4. 登機室候機排椅與熱帶觀葉盆栽 ──
+      [-10.8, 10.8].forEach(function (bx, idx) {
+        var benchGroup = new THREE.Group();
+        var seatCol = idx === 0 ? 0x0284c7 : 0x059669;
+        var seatMat = new THREE.MeshStandardMaterial({ color: seatCol, roughness: 0.45 });
+        var seatBase = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.38, 1.1), seatMat);
+        seatBase.position.y = 0.52;
+        benchGroup.add(seatBase);
+        var seatBack = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.72, 0.25), seatMat);
+        seatBack.position.set(0, 0.98, 0.45);
+        benchGroup.add(seatBack);
+        benchGroup.position.set(bx, 0, 5.4);
+        benchGroup.rotation.y = idx === 0 ? 0.35 : -0.35;
+        worldGroup.add(benchGroup);
+      });
+
+      // 室內四角椰子樹盆栽
+      [[-12.5, -5.2], [12.5, -5.2], [-12.5, 7.6], [12.5, 7.6]].forEach(function (pt) {
+        var potGroup = new THREE.Group();
+        var pot = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.55, 0.42, 0.85, 12),
+          new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.6 })
+        );
+        pot.position.y = 0.42;
+        potGroup.add(pot);
+        var trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.24, 2.4, 10),
+          new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 })
+        );
+        trunk.position.y = 1.6;
+        potGroup.add(trunk);
+        var crown = new THREE.Mesh(
+          new THREE.SphereGeometry(1.05, 12, 10),
+          new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.55 })
+        );
+        crown.scale.set(1.25, 0.7, 1.25);
+        crown.position.y = 2.95;
+        potGroup.add(crown);
+        potGroup.position.set(pt[0], 0, pt[1]);
+        worldGroup.add(potGroup);
+      });
+
+      // ── 5. 3D 島民旅客角色 ──
+      var playerMesh = buildLoungePlayer3D(THREE);
+      playerMesh.position.set(state.px, 0, state.pz);
+      playerMesh.rotation.y = state.heading;
+      worldGroup.add(playerMesh);
+
+      // ── 6. 滑鼠點擊與鍵盤控制 ──
+      var raycaster = new THREE.Raycaster();
+      var mouseNDC = new THREE.Vector2();
+      var dragState = { active: false, moved: false, startX: 0, startYaw: 0 };
+
+      function onPointerDown(e) {
+        if (e.target.closest('#dal-3d-dialog') || e.target.closest('.ac-node')) return;
+        dragState.active = true;
+        dragState.moved = false;
+        dragState.startX = e.clientX;
+        dragState.startYaw = state.yawOffset;
+      }
+
+      function onPointerMove(e) {
+        if (!dragState.active) return;
+        var dx = e.clientX - dragState.startX;
+        if (Math.abs(dx) > 6) {
+          dragState.moved = true;
+          state.yawOffset = Math.max(-0.45, Math.min(0.45, dragState.startYaw - dx * 0.004));
+        }
+      }
+
+      function onPointerUp(e) {
+        if (!dragState.active) return;
+        dragState.active = false;
+        if (dragState.moved || state.boarding) return;
+
+        var rect = canvasEl.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouseNDC, camera);
+
+        var hits = raycaster.intersectObjects(interactiveMeshes, true);
+        if (hits.length > 0) {
+          var obj = hits[0].object;
+          while (obj && obj.parent && !obj.userData.termId) {
+            obj = obj.parent;
+          }
+          if (obj && obj.userData.termId) {
+            selectCounter(obj.userData.termId, true);
+            return;
+          }
+        }
+
+        // 點擊地板時走向該位置
+        var floorHits = raycaster.intersectObject(floorMesh, false);
+        if (floorHits.length > 0) {
+          var pt = floorHits[0].point;
+          state.tx = Math.max(-11.5, Math.min(11.5, pt.x));
+          state.tz = Math.max(0.2, Math.min(8.2, pt.z));
+        }
+      }
+
+      function onKeyDown(e) {
+        var tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
+          state.keys[e.code] = true;
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
+        } else if (e.code === 'Enter' || e.code === 'Space') {
+          e.preventDefault();
+          triggerBoarding(state.selectedTerm);
+        }
+      }
+
+      function onKeyUp(e) { delete state.keys[e.code]; }
+
+      function resizeRenderer() {
+        if (!stageEl) return;
+        var w = stageEl.clientWidth || 960;
+        var h = stageEl.clientHeight || 570;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      resizeRenderer();
+      global.addEventListener('resize', resizeRenderer);
+      canvasEl.addEventListener('pointerdown', onPointerDown);
+      global.addEventListener('pointermove', onPointerMove);
+      global.addEventListener('pointerup', onPointerUp);
+      global.addEventListener('keydown', onKeyDown);
+      global.addEventListener('keyup', onKeyUp);
+
+      var projVec = new THREE.Vector3();
+      function projectToScreen(wx, wy, wz) {
+        projVec.set(wx, wy, wz);
+        projVec.project(camera);
+        var w = stageEl.clientWidth || 960;
+        var h = stageEl.clientHeight || 570;
+        return {
+          x: (projVec.x * 0.5 + 0.5) * w,
+          y: (-projVec.y * 0.5 + 0.5) * h
+        };
+      }
+
+      var camPos = new THREE.Vector3(0, 12.5, 19.5);
+      var camLook = new THREE.Vector3(0, 2.0, -1.5);
+
+      function animate(now) {
+        if (state.destroyed) return;
+        var tSec = now * 0.001;
+
+        var vx = 0, vz = 0;
+        if (!state.boarding) {
+          if (state.keys.ArrowLeft  || state.keys.KeyA) vx -= 1;
+          if (state.keys.ArrowRight || state.keys.KeyD) vx += 1;
+          if (state.keys.ArrowUp    || state.keys.KeyW) vz -= 1;
+          if (state.keys.ArrowDown  || state.keys.KeyS) vz += 1;
+        }
+
+        var speed = 0.16;
+        if (vx !== 0 || vz !== 0) {
+          state.tx = null;
+          state.tz = null;
+          var len = Math.sqrt(vx * vx + vz * vz);
+          var nx = vx / len, nz = vz / len;
+          state.px += nx * speed;
+          state.pz += nz * speed;
+          state.heading = Math.atan2(nx, nz);
+          state.walking = true;
+        } else if (state.tx !== null && state.tz !== null) {
+          var dx = state.tx - state.px;
+          var dz = state.tz - state.pz;
+          var dist = Math.sqrt(dx * dx + dz * dz);
+          if (dist < 0.22) {
+            state.px = state.tx;
+            state.pz = state.tz;
+            state.tx = null;
+            state.tz = null;
+            state.walking = false;
+            state.heading = Math.PI; // 面向北側櫃台
+          } else {
+            state.px += (dx / dist) * speed;
+            state.pz += (dz / dist) * speed;
+            state.heading = Math.atan2(dx, dz);
+            state.walking = true;
+          }
+        } else {
+          state.walking = false;
+        }
+
+        // 室內邊界與櫃台碰撞約束（不能穿過櫃台與北牆）
+        state.px = Math.max(-11.8, Math.min(11.8, state.px));
+        state.pz = Math.max(0.25, Math.min(8.4, state.pz));
+
+        // 依角色位置自動切換最靠近的櫃台
+        if (!state.boarding) {
+          var d1 = Math.hypot(state.px - FLIGHT_ROUTES['11501'].standWx, state.pz - FLIGHT_ROUTES['11501'].standWz);
+          var d2 = Math.hypot(state.px - FLIGHT_ROUTES['11502'].standWx, state.pz - FLIGHT_ROUTES['11502'].standWz);
+          if (d1 < 3.4 && state.selectedTerm !== '11501') {
+            selectCounter('11501', false);
+          } else if (d2 < 3.4 && state.selectedTerm !== '11502') {
+            selectCounter('11502', false);
+          }
+        }
+
+        var hop = state.walking ? Math.abs(Math.sin(tSec * 9.5)) * 0.16 : 0;
+        playerMesh.position.set(state.px, hop, state.pz);
+
+        var diffRot = state.heading - playerMesh.rotation.y;
+        while (diffRot > Math.PI) diffRot -= Math.PI * 2;
+        while (diffRot < -Math.PI) diffRot += Math.PI * 2;
+        playerMesh.rotation.y += diffRot * 0.2;
+
+        var limbs = playerMesh.userData.limbs;
+        if (limbs) {
+          var sw = state.walking ? Math.sin(tSec * 9.5) * 0.5 : 0;
+          limbs.leftLeg.rotation.x = sw;
+          limbs.rightLeg.rotation.x = -sw;
+          limbs.leftArm.rotation.x = -sw * 0.8;
+          limbs.rightArm.rotation.x = sw * 0.8;
+        }
+
+        // Dodo 櫃台地勤揮手與跳躍動畫
+        ['11501', '11502'].forEach(function (tid, idx) {
+          var cg = counterGroups[tid];
+          if (!cg || !cg.userData.dodoStaff) return;
+          var staff = cg.userData.dodoStaff;
+          if (staff.userData.rightWingPivot) {
+            staff.userData.rightWingPivot.rotation.z = Math.sin(tSec * 5.5 + idx) * 0.35;
+          }
+          var jumpY = 0;
+          if (staff.userData.jumpTime > 0) {
+            var jAge = (now - staff.userData.jumpTime) / 480;
+            if (jAge < 1) jumpY = Math.sin(jAge * Math.PI) * 0.75;
+            else staff.userData.jumpTime = 0;
+          }
+          staff.position.y = Math.abs(Math.sin(tSec * 2.5 + idx)) * 0.06 + jumpY;
+        });
+
+        // 窗外水上飛機動畫（待命波浪搖晃 vs 登機起飛衝刺）
+        if (state.boarding && state.takeoffStart > 0) {
+          var tkSec = (now - state.takeoffStart) * 0.001;
+          propBlade.rotation.x = tSec * 42;
+          planeGroup.position.x = tkSec * 22;
+          planeGroup.position.y = 0.55 + Math.pow(tkSec, 1.8) * 6.5;
+          planeGroup.rotation.z = Math.min(0.28, tkSec * 0.35);
+        } else {
+          propBlade.rotation.x = tSec * 14;
+          planeGroup.position.x = 0;
+          planeGroup.position.y = 0.55 + Math.sin(tSec * 2.4) * 0.14;
+          planeGroup.rotation.z = Math.sin(tSec * 1.8) * 0.04;
+        }
+
+        // 鏡頭平滑控制
+        var activeRoute = FLIGHT_ROUTES[state.selectedTerm] || FLIGHT_ROUTES['11501'];
+        var targetCamX, targetCamY, targetCamZ, targetLookX, targetLookY, targetLookZ;
+        if (state.boarding) {
+          targetCamX = activeRoute.wx * 0.4;
+          targetCamY = 6.5;
+          targetCamZ = 6.5;
+          targetLookX = planeGroup.position.x * 0.5;
+          targetLookY = planeGroup.position.y + 1.5;
+          targetLookZ = -14.0;
+        } else if (state.camMode === 'counter') {
+          targetCamX = activeRoute.wx * 0.85 + Math.sin(state.yawOffset) * 12;
+          targetCamY = 7.2;
+          targetCamZ = 9.8;
+          targetLookX = activeRoute.wx;
+          targetLookY = 2.1;
+          targetLookZ = activeRoute.wz;
+        } else {
+          targetCamX = state.px * 0.28 + Math.sin(state.yawOffset) * 18.5;
+          targetCamY = 11.2;
+          targetCamZ = 16.8;
+          targetLookX = state.px * 0.22;
+          targetLookY = 2.1;
+          targetLookZ = -1.6;
+        }
+
+        camPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.08);
+        camLook.lerp(new THREE.Vector3(targetLookX, targetLookY, targetLookZ), 0.1);
+        camera.position.copy(camPos);
+        camera.lookAt(camLook);
+
+        // 更新 3D 櫃台上方投影木牌與玩家名牌座標
+        ['11501', '11502'].forEach(function (tid) {
+          var pin = hostEl.querySelector('[data-counter-pin="' + tid + '"]');
+          var r = FLIGHT_ROUTES[tid];
+          if (pin && r) {
+            var sp = projectToScreen(r.wx, 5.25, r.wz - 0.3);
+            pin.style.left = Math.round(sp.x) + 'px';
+            pin.style.top  = Math.round(sp.y) + 'px';
+          }
+        });
+
+        if (playerTag) {
+          var pScr = projectToScreen(state.px, playerMesh.position.y + 3.35, state.pz);
+          playerTag.style.left = Math.round(pScr.x) + 'px';
+          playerTag.style.top  = Math.round(pScr.y) + 'px';
+        }
+
+        renderer.render(scene, camera);
+        state.rafId = requestAnimationFrame(animate);
+      }
+
+      selectCounter(state.selectedTerm, false);
+      state.rafId = requestAnimationFrame(animate);
+
+      cleanupThree = function () {
+        state.destroyed = true;
+        if (state.rafId) cancelAnimationFrame(state.rafId);
+        global.removeEventListener('resize', resizeRenderer);
+        canvasEl.removeEventListener('pointerdown', onPointerDown);
+        global.removeEventListener('pointermove', onPointerMove);
+        global.removeEventListener('pointerup', onPointerUp);
+        global.removeEventListener('keydown', onKeyDown);
+        global.removeEventListener('keyup', onKeyUp);
+        renderer.dispose();
+      };
+      hostEl._dalCleanup = cleanupThree;
+    }).catch(function (err) {
+      console.error('Dodo Airlines 3D 入境登機室載入失敗:', err);
+    });
   }
 
   /**
-   * 在任何頁面彈出「🦤 Dodo Airlines 水上機場・上下學期航線切換櫃台」浮動場景視窗
+   * 在任何頁面彈出「🦤 Dodo Airlines 3D 入境登機室（雙櫃台）」浮動場景視窗
    */
   function openAirportModal(opts) {
     opts = opts || {};
@@ -386,15 +1435,16 @@
     backdrop.id = 'dal-airport-modal';
     backdrop.className = 'ac-float-backdrop';
     backdrop.style.zIndex = '95';
-    backdrop.style.padding = '24px 12px';
+    backdrop.style.padding = '16px 12px';
     backdrop.style.overflowY = 'auto';
 
     var mountBox = document.createElement('div');
-    mountBox.className = 'w-full max-w-5xl my-auto pop';
+    mountBox.className = 'w-full max-w-[1400px] my-auto pop';
     backdrop.appendChild(mountBox);
     document.body.appendChild(backdrop);
 
     function closeModal() {
+      if (mountBox._dalCleanup) mountBox._dalCleanup();
       backdrop.remove();
     }
 

@@ -27,6 +27,7 @@
   if (SITE.SCHOOL && (!SITE.SCHOOL.NAME || SITE.SCHOOL.NAME === '○○國中')) {
     SITE.SCHOOL.NAME = '高雄市立前峰國中';
   }
+  (SITE.TERMS || []).forEach(function (t) { if (t && t.id === '11501') t.short = '116-1'; if (t && t.id === '11502') t.short = '116-2'; });
   var LIST = (SITE.TERMS || []).filter(function (t) { return t && /^[\w-]{1,20}$/.test(String(t.id || '')); });
   var KEY = 'cs-term';
 
@@ -127,7 +128,7 @@
   var FLIGHT_ROUTES = {
     '11501': {
       counterNo: '1號櫃台',
-      flightNo: 'DAL-1151',
+      flightNo: 'DAL-1161',
       gate: 'GATE A1',
       staffName: '🦤 地勤 莫里 (Orville)',
       archipelago: '初階科技探險群島（上學期之島）',
@@ -140,7 +141,7 @@
       wz: -2.0,
       standWx: -6.8,
       standWz: 0.85,
-      orvillePitch: '歡迎來到「1號櫃台（GATE A1）」！歐拉～我是莫里！「DAL-1151 上學期航線」直飛『初階科技探險群島』，島上有資訊倫理果園、運算思維遊樂園、流程圖與 Scratch 蒸氣島、以及 5016B 智慧家居燈塔！',
+      orvillePitch: '歡迎來到「1號櫃台（GATE A1）」！歐拉～我是莫里！「DAL-1161 上學期航線」直飛『初階科技探險群島』，島上有資訊倫理果園、運算思維遊樂園、流程圖與 Scratch 蒸氣島、以及 5016B 智慧家居燈塔！',
       islands: [
         { icon: '⚖️', name: '資訊倫理果園島', sub: '網路禮儀、PAPA、著作權與資安（10 章節）' },
         { icon: '🧠', name: '運算思維遊樂園島', sub: '跳格子、任意門、滑梯公園等 10 座遊樂設施' },
@@ -150,7 +151,7 @@
     },
     '11502': {
       counterNo: '2號櫃台',
-      flightNo: 'DAL-1152',
+      flightNo: 'DAL-1162',
       gate: 'GATE B2',
       staffName: '🦤 機長 羅德里 (Wilbur)',
       archipelago: '進階創客探險群島（下學期之島）',
@@ -163,7 +164,7 @@
       wz: -2.0,
       standWx: 6.8,
       standWz: 0.85,
-      orvillePitch: '歡迎來到「2號櫃台（GATE B2）」！羅傑～我是羅德里機長！「DAL-1152 下學期航線」直飛『進階創客探險群島』，包含媒體與社會議題果園、二期思維樂園、Scratch 排序搜尋演算法島、與 Arduino 專題島！',
+      orvillePitch: '歡迎來到「2號櫃台（GATE B2）」！羅傑～我是羅德里機長！「DAL-1162 下學期航線」直飛『進階創客探險群島』，包含媒體與社會議題果園、二期思維樂園、Scratch 排序搜尋演算法島、與 Arduino 專題島！',
       islands: [
         { icon: '📡', name: '媒體與社會議題果園島', sub: '媒體素養、資訊失序、言論自由與演算法（10 章）' },
         { icon: '🧠', name: '運算思維二期樂園島', sub: '智慧選卡、必勝棋局、變數謎題等 10 座進階謎題' },
@@ -279,7 +280,7 @@
     ctx.fillStyle = '#38bdf8';
     ctx.font = '900 26px "Noto Sans TC", monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('⬅ 1號櫃台 GATE A1 | DAL-1151 | 115-1 上學期群島', 40, 131);
+    ctx.fillText('⬅ 1號櫃台 GATE A1 | DAL-1161 | 116-1 上學期群島', 40, 131);
     ctx.fillStyle = '#4ade80';
     ctx.textAlign = 'right';
     ctx.fillText('BOARDING 準點', 726, 131);
@@ -290,7 +291,7 @@
     ctx.fillStyle = '#34d399';
     ctx.font = '900 26px "Noto Sans TC", monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('➡ 2號櫃台 GATE B2 | DAL-1152 | 115-2 下學期群島', 40, 209);
+    ctx.fillText('➡ 2號櫃台 GATE B2 | DAL-1162 | 116-2 下學期群島', 40, 209);
     ctx.fillStyle = '#4ade80';
     ctx.textAlign = 'right';
     ctx.fillText('BOARDING 準點', 726, 209);
@@ -696,8 +697,8 @@
       +       '<span class="text-xs sm:text-sm font-black text-sky-300 tracking-wide">' + escHtml(schoolTitle) + ' · 3D 入境登機室大廳（雙學期櫃台）</span>'
       +     '</div>'
       +     '<div class="flex items-center gap-2 flex-wrap">'
-      +       '<button type="button" data-goto-counter="11501" class="px-3 py-1.5 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition cursor-pointer shadow">⬅ 1號櫃台（115-1 上學期）</button>'
-      +       '<button type="button" data-goto-counter="11502" class="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer shadow">➡ 2號櫃台（115-2 下學期）</button>'
+      +       '<button type="button" data-goto-counter="11501" class="px-3 py-1.5 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition cursor-pointer shadow">⬅ 1號櫃台（116-1 上學期）</button>'
+      +       '<button type="button" data-goto-counter="11502" class="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer shadow">➡ 2號櫃台（116-2 下學期）</button>'
       +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer">🎥 視角：登機室全景</button>'
       +       teacherBtnHtml
       +       closeBtnHtml

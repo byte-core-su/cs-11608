@@ -25,7 +25,7 @@ service cloud.firestore {
     //   ⚠️ 要和根目錄 config.js 對得上（一律用小寫）
     function TEACHER_EMAIL() { return 'teacher@example.com'; }                     // = SCHOOL.TEACHER_EMAIL
     function DOMAIN()        { return '@students.your_project.firebaseapp.com'; }  // = '@students.' + FIREBASE.projectId + '.firebaseapp.com'
-    function TERMS()         { return ['11501', '11502']; }                        // = TERMS 的每一個 id
+    function TERMS()         { return ['11501', '11502', '11601', '11602']; }      // = TERMS 的每一個 id
 
     /** 集合名稱是不是「某一個學期 ＋ 這個字尾」：inTerm('11502-progress', '-progress') */
     function inTerm(col, suffix) {

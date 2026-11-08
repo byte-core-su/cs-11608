@@ -12,7 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['"Noto Sans TC"','system-ui','sans-serif'] } } } };</script>
     <script src="../config.js"></script>
-    <script src="../shared/term.js"></script>
+    <script src="../shared/term.js?v=20261108r1"></script>
     <!-- 登入（學生在闖關基地登入過，這裡沿用同一個身分） -->
     <script src="../shared/auth.js"></script>
     <!-- 計分規則（和闖關基地、教師端共用同一份） -->
@@ -55,7 +55,7 @@
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
   <link rel="stylesheet" href="../shared/island.css?v=20261101v7">
   <script src="../shared/guard.js"></script>
-  <script src="../shared/island.js?v=20261107v6"></script>
+  <script src="../shared/island.js?v=20261108r1"></script>
 </head>
 <body class="ac-theme-bg min-h-screen">
     <div id="root" class="min-h-screen"></div>
@@ -1006,7 +1006,6 @@
                     <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 pt-3">
                         <div className="ac-hud">
                             <div className="flex items-center gap-2.5">
-                                <a href={(window.CONFIG && window.CONFIG.HUB_PAGE) || 'hub.html'} className="ac-pill ac-pill-btn">🏝️ 回探險島入口</a>
                                 <span className="text-2xl">🌲</span>
                                 <div>
                                     <div className="text-[11px] font-black text-emerald-700 tracking-wider">BEBRAS FOREST · 謎題神木林</div>

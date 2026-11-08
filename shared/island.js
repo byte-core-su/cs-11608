@@ -2845,9 +2845,13 @@
       ty: null,
       heading: 0,
       walking: false,
+      hasMoved: false,
       keys: {},
       nearId: null,
-      selectedId: cfg.initialSelectedId || (nodes[0] && nodes[0].id) || null,
+      selectedId: null,
+      menuIdx: 0,
+      npcGuideHint: '',
+      dialogDismissed: false,
       camMode: 'follow',
       timeMode: savedTimeMode,
       focusUntil: 0,
@@ -2867,7 +2871,7 @@
         : (n.badgeHtml || '');
       var isAirport = n.id === 'dodo-airport';
       var labelStyle = isAirport ? 'style="background:#e0f2fe;border-color:#0284c7;color:#0c4a6e"' : '';
-      return '<div class="' + cls + '" tabindex="0" role="button" data-node="' + esc(n.id) + '">'
+      return '<div class="' + cls + '" tabindex="-1" data-node="' + esc(n.id) + '">'
         + flag
         + stars
         + '<div class="ac-node-label" ' + labelStyle + '>'
@@ -2877,30 +2881,25 @@
         + '</div>';
     }).join('');
 
-    var backHubBtnHtml = isSubIsland
-      ? '<a href="' + esc(hubHref) + '" class="ac-cam-btn" style="background:#fef3c7;border-color:#f59e0b;color:#78350f;text-decoration:none;display:inline-flex;align-items:center;gap:4px">✈️ 返回主島入口</a>'
-      : '';
-
     container.innerHTML = ''
       + '<div class="ac-island-wrap pop">'
       +   '<div class="ac-island-stage" id="ac-stage">'
       +     '<canvas id="ac-webgl-canvas" class="ac-webgl-canvas"></canvas>'
       +     '<div class="ac-controls-bar">'
       +       '<div class="flex items-center gap-2 flex-wrap">'
-      +         backHubBtnHtml
       +         '<button type="button" id="ac-wardrobe-toggle" class="ac-cam-btn" style="background:#fdf2f8;border-color:#f472b6;color:#9d174d">🪞 更換造型</button>'
       +         '<button type="button" id="ac-time-toggle" class="ac-cam-btn" style="background:#eff6ff;border-color:#60a5fa;color:#1e3a8a">' + timeBtnLabelMap[state.timeMode] + '</button>'
       +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn">🎥 視角：動森跟隨（點擊切換全島鳥瞰）</button>'
       +       '</div>'
-      +       '<div class="ac-controls-hint hidden md:block">🎮 請用 WASD / 方向鍵走到建築門口進入關卡 · 滑鼠拖曳旋轉視角 / 滾輪縮放</div>'
+      +       '<div class="ac-controls-hint hidden md:block">🎮 請用 WASD / 方向鍵走近 NPC、機場或建築 · 對談選單用 ◀ ▶ 方向鍵選擇、Enter 確認、Esc 離開</div>'
       +     '</div>'
       +     '<div id="ac-wardrobe-panel" class="ac-wardrobe-panel hidden"></div>'
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
       +       nodesOverlayHtml
-      +       '<div id="ac-npc-tag" class="ac-npc-tag" title="點擊與島長對話">🦝 島長</div>'
+      +       '<div id="ac-npc-tag" class="ac-npc-tag">🦝 島長</div>'
       +       '<div id="ac-player-tag" class="ac-player-tag">🧑‍🌾 ' + esc(cfg.playerName || '島民') + '</div>'
       +     '</div>'
-      +     '<div id="ac-dialog" class="ac-dialog-bar"></div>'
+      +     '<div id="ac-dialog" class="ac-dialog-bar hidden"></div>'
       +   '</div>'
       + '</div>';
 
@@ -3121,37 +3120,121 @@
     var npcTipIndex = 0;
     var triggerMascotJumpFn = null;
 
+    function dismissDialog() {
+      state.dialogDismissed = true;
+      state.selectedId = null;
+      state.menuIdx = 0;
+      state.npcGuideHint = '';
+      if (dialogEl) dialogEl.classList.add('hidden');
+    }
+
     function guideToRecommendedNode() {
       var candidate = null;
       for (var i = 0; i < nodes.length; i++) {
         var n = nodes[i];
-        if (n.id === 'dodo-airport' || n.locked) continue;
+        if (n.id === 'dodo-airport' || n.kind === 'board' || n.locked) continue;
         if (!n.done && !n.pass) {
           candidate = n;
           break;
         }
       }
-      if (! candidate && nodes.length > 0) candidate = nodes[0];
+      if (!candidate && nodes.length > 0) candidate = nodes[0];
       if (!candidate) return;
-      state.dialogDismissed = false;
-      state.selectedId = candidate.id;
+      state.npcGuideHint = '🧭 推薦你接下來用 WASD / 方向鍵走去「' + (candidate.shortTitle || candidate.title) + '」挑戰喔！';
       renderDialog();
+    }
+
+    function getDialogMenuItems() {
+      if (!state.nearId || state.dialogDismissed) return [];
+      if (state.nearId === '__npc__') {
+        return [
+          {
+            label: '💬 繼續聊天（下一句）',
+            onSelect: function () {
+              npcTipIndex++;
+              state.npcGuideHint = '';
+              if (triggerMascotJumpFn) triggerMascotJumpFn();
+              renderDialog();
+            }
+          },
+          {
+            label: '🧭 詢問推薦關卡',
+            onSelect: function () {
+              if (triggerMascotJumpFn) triggerMascotJumpFn();
+              guideToRecommendedNode();
+            }
+          },
+          {
+            label: '✕ 結束對話 (Esc)',
+            isClose: true,
+            onSelect: function () { dismissDialog(); }
+          }
+        ];
+      }
+      var activeNode = findNode(state.nearId);
+      if (!activeNode) return [];
+      if (activeNode.locked) {
+        return [
+          {
+            label: '✕ 離開 (Esc)',
+            isClose: true,
+            onSelect: function () { dismissDialog(); }
+          }
+        ];
+      }
+      var items = (activeNode.actions || []).map(function (a, idx) {
+        return {
+          label: a.label || '進入 →',
+          onSelect: function () {
+            state.focusUntil = performance.now() + 1400;
+            triggerNodeAction(activeNode, idx);
+          }
+        };
+      });
+      items.push({
+        label: '✕ 暫不進入 (Esc)',
+        isClose: true,
+        onSelect: function () { dismissDialog(); }
+      });
+      return items;
+    }
+
+    function renderMenuChoicesHtml(items) {
+      if (!items || !items.length) return '';
+      if (state.menuIdx >= items.length) state.menuIdx = 0;
+      if (state.menuIdx < 0) state.menuIdx = 0;
+      var pills = items.map(function (item, idx) {
+        var isSel = idx === state.menuIdx;
+        var cls = isSel
+          ? (item.isClose
+              ? 'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full font-black text-xs sm:text-sm bg-amber-600 text-white border-2 border-amber-700 ring-4 ring-amber-300 shadow-md select-none pointer-events-none'
+              : 'ac-btn-primary ring-4 ring-amber-300 select-none pointer-events-none')
+          : 'inline-flex items-center gap-1 px-3 py-1.5 rounded-full font-extrabold text-xs bg-stone-200/85 text-stone-600 border-2 border-stone-300 opacity-80 select-none pointer-events-none';
+        return '<span class="' + cls + '" style="cursor:default">' + (isSel ? '▶ ' : '　') + esc(item.label) + '</span>';
+      }).join('');
+      return '<div class="flex flex-col items-end gap-1.5 shrink-0 pointer-events-none select-none">'
+        + '<div class="flex items-center gap-2 flex-wrap justify-end">' + pills + '</div>'
+        + '<div class="text-[11px] font-black text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-0.5 rounded-full">'
+        +   '⌨️ 方向鍵 ◀ ▶ 選擇 · Enter 確認 · Esc 離開（不支援滑鼠點選）'
+        + '</div>'
+        + '</div>';
     }
 
     function renderDialog() {
       if (!dialogEl) return;
-      if (state.dialogDismissed) {
+      if (state.dialogDismissed || !state.nearId) {
         dialogEl.classList.add('hidden');
         return;
       }
-      if (state.selectedId === '__npc__' || state.nearId === '__npc__') {
+      var menuItems = getDialogMenuItems();
+      if (state.nearId === '__npc__') {
         dialogEl.classList.remove('hidden');
         var tips = currentNpcInfo.tips;
-        var msg = tips[npcTipIndex % tips.length];
-        var idxLabel = '秘訣 ' + ((npcTipIndex % tips.length) + 1) + ' / ' + tips.length;
+        var msg = state.npcGuideHint || tips[npcTipIndex % tips.length];
+        var idxLabel = state.npcGuideHint ? '路線指引' : ('秘訣 ' + ((npcTipIndex % tips.length) + 1) + ' / ' + tips.length);
         dialogEl.innerHTML = ''
           + '<div class="ac-dialog-speaker" style="background:linear-gradient(90deg,#d97706,#b45309)">' + esc(currentNpcInfo.name + ' · ' + currentNpcInfo.role) + '</div>'
-          + '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">'
+          + '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 pointer-events-none select-none">'
           +   '<div class="min-w-0 flex-1">'
           +     '<div class="flex items-center gap-2 flex-wrap">'
           +       '<h3 class="text-base sm:text-lg font-black text-amber-950 truncate">💬 島長導覽對話</h3>'
@@ -3159,58 +3242,36 @@
           +     '</div>'
           +     '<p class="text-xs sm:text-sm text-stone-700 font-bold mt-0.5 leading-relaxed">' + esc(msg) + '</p>'
           +   '</div>'
-          +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
-          +     '<button type="button" data-ac-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起對話框 (Esc)">✕ 收起 (Esc)</button>'
-          +     '<button type="button" id="ac-npc-next-tip" class="ac-btn-primary">💬 繼續聊天（下一句）</button>'
-          +     '<button type="button" id="ac-npc-guide-me" class="ac-btn-secondary">🧭 帶我去推薦關卡</button>'
-          +   '</div>'
+          +   renderMenuChoicesHtml(menuItems)
           + '</div>';
         return;
       }
 
-      var activeNode = findNode(state.nearId) || findNode(state.selectedId);
+      var activeNode = findNode(state.nearId);
       if (!activeNode) {
         dialogEl.classList.add('hidden');
         return;
       }
       dialogEl.classList.remove('hidden');
 
-      var isStandingAtNode = state.nearId && String(state.nearId) === String(activeNode.id);
-      var btnsHtml = '';
-      if (activeNode.locked) {
-        btnsHtml = '<span class="text-xs font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-full">🔒 '
-          + esc(activeNode.lockReason || '尚未解鎖') + '</span>';
-      } else {
-        var walkHint = !isStandingAtNode
-          ? '<span class="hidden lg:inline-block text-xs font-extrabold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-full">🚶 可走近按 Enter 或點右側按鈕</span>'
-          : '';
-        var actions = activeNode.actions || [];
-        btnsHtml = walkHint + actions.map(function (a, i) {
-          var cls = a.primary !== false && i === 0 ? 'ac-btn-primary' : 'ac-btn-secondary';
-          var attrs = a.attrs || '';
-          if (a.href) {
-            return '<a href="' + esc(a.href) + '" ' + attrs + ' class="' + cls + '">' + esc(a.label || '進入 →') + '</a>';
-          }
-          return '<button type="button" data-ac-act="' + i + '" data-ac-node="' + esc(activeNode.id) + '" ' + attrs + ' class="' + cls + '">'
-            + esc(a.label || '進入 →') + '</button>';
-        }).join('');
-      }
+      var lockBadgeHtml = activeNode.locked
+        ? '<span class="text-xs font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full">🔒 '
+          + esc(activeNode.lockReason || '尚未解鎖') + '</span>'
+        : '';
 
       dialogEl.innerHTML = ''
         + '<div class="ac-dialog-speaker">' + esc(activeNode.speakerTag) + '</div>'
-        + '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">'
+        + '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 pointer-events-none select-none">'
         +   '<div class="min-w-0 flex-1">'
         +     '<div class="flex items-center gap-2 flex-wrap">'
         +       '<h3 class="text-base sm:text-lg font-black text-amber-950 truncate">' + esc(activeNode.title) + '</h3>'
         +       (activeNode.starsText ? '<span class="text-xs font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">' + esc(activeNode.starsText) + '</span>' : '')
         +       (activeNode.statusLabel ? '<span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">' + esc(activeNode.statusLabel) + '</span>' : '')
+        +       lockBadgeHtml
         +     '</div>'
         +     '<p class="text-xs sm:text-sm text-stone-600 font-medium mt-0.5 line-clamp-2">' + activeNode.descHtml + '</p>'
         +   '</div>'
-        +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
-        +     '<button type="button" data-ac-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起介紹框 (Esc)">✕ 收起 (Esc)</button>'
-        +     btnsHtml
-        +   '</div>'
+        +   renderMenuChoicesHtml(menuItems)
         + '</div>';
     }
 
@@ -3927,7 +3988,7 @@
       worldGroup.add(mascotMesh);
       interactiveMeshes.push(mascotMesh);
       if (npcTag) {
-        npcTag.textContent = currentNpcInfo.name + ' 💬（點我對話）';
+        npcTag.textContent = currentNpcInfo.name + ' 💬（走近對話）';
       }
 
       var foxCompanion = null;
@@ -3956,14 +4017,15 @@
       function triggerMascotGreeting(advanceTip) {
         if (advanceTip) npcTipIndex++;
         state.dialogDismissed = false;
-        state.selectedId = '__npc__';
+        state.nearId = '__npc__';
         if (triggerMascotJumpFn) triggerMascotJumpFn();
         renderDialog();
       }
       if (npcTag) {
         npcTag.addEventListener('click', function (e) {
           e.stopPropagation();
-          triggerMascotGreeting(state.selectedId === '__npc__');
+          var sp = projectToScreen(mascotWx, mascotWy + 3.8, mascotWz);
+          spawnFloatScreen(sp.x, sp.y, '🚶 請用方向鍵 / WASD 走近「' + currentNpcInfo.name + '」對話');
         });
       }
 
@@ -4327,7 +4389,8 @@
             return;
           }
           if (hitObj && hitObj.userData.isNPC) {
-            triggerMascotGreeting(state.selectedId === '__npc__');
+            var spNpc = projectToScreen(mascotWx, mascotWy + 3.8, mascotWz);
+            spawnFloatScreen(spNpc.x, spNpc.y, '🚶 請用方向鍵 / WASD 走近「' + currentNpcInfo.name + '」對話');
             return;
           }
           if (hitObj && hitObj.userData.propIndex != null) {
@@ -4353,7 +4416,7 @@
         state.zoomDist = Math.max(0.7, Math.min(1.45, state.zoomDist + (e.deltaY > 0 ? 0.08 : -0.08)));
       }
 
-      // 滑鼠點擊建築或木牌時僅預覽資訊，不直接進入關卡（需用 WASD / 方向鍵走到建築門口才能進入）
+      // 滑鼠點擊建築或木牌時僅提示「請用鍵盤走近」，不開啟對話選單亦不直接進入
       function handleNodePreviewOnly(nodeId) {
         var entry = null;
         for (var i = 0; i < nodeEntries.length; i++) {
@@ -4365,44 +4428,21 @@
         if (!entry) return;
         var node = entry.node;
         shake3DEntry(entry, false);
-        state.dialogDismissed = false;
-        state.selectedId = node.id;
-        renderDialog();
 
         var scr = projectToScreen(entry.wx, entry.wy + 4.5, entry.wz);
         if (node.locked) {
           spawnFloatScreen(scr.x, scr.y, '🔒 ' + (node.lockReason || '尚未開放'));
         } else {
-          spawnFloatScreen(scr.x, scr.y, '💬 已選取「' + node.shortTitle + '」，可走近或點下方按鈕進入');
+          spawnFloatScreen(scr.x, scr.y, '🚶 請用方向鍵 / WASD 走近「' + node.shortTitle + '」互動');
         }
       }
 
       function onStageDomClick(e) {
-        if (e.target.closest('[data-ac-close-dialog]')) {
+        if (e.target.closest('#ac-dialog')) {
           e.stopPropagation();
-          state.dialogDismissed = true;
-          state.selectedId = null;
-          if (dialogEl) dialogEl.classList.add('hidden');
-          return;
-        }
-        if (e.target.closest('#ac-npc-next-tip')) {
-          e.stopPropagation();
-          triggerMascotGreeting(true);
-          return;
-        }
-        if (e.target.closest('#ac-npc-guide-me')) {
-          e.stopPropagation();
-          if (triggerMascotJumpFn) triggerMascotJumpFn();
-          guideToRecommendedNode();
-          return;
-        }
-        var actBtn = e.target.closest('[data-ac-act]');
-        if (actBtn) {
-          e.stopPropagation();
-          var nId = actBtn.getAttribute('data-ac-node');
-          var aIdx = Number(actBtn.getAttribute('data-ac-act')) || 0;
-          state.focusUntil = performance.now() + 1400;
-          triggerNodeAction(findNode(nId), aIdx);
+          e.preventDefault();
+          var rect = stageEl.getBoundingClientRect();
+          spawnFloatScreen(rect.width * 0.5, rect.height - 95, '⌨️ 對談選單請用鍵盤 ◀ ▶ 選擇、Enter 確認、Esc 離開');
           return;
         }
         var nodePin = e.target.closest('.ac-node');
@@ -4422,6 +4462,8 @@
             : '🗺️ 視角：全島鳥瞰（點擊切換動森跟隨）';
         });
       }
+
+      var lastNearCandidateId = null;
 
       function onKeyDown(e) {
         var tag = (e.target && e.target.tagName) || '';
@@ -4460,32 +4502,59 @@
           }
           if (dialogEl && !dialogEl.classList.contains('hidden')) {
             e.preventDefault();
-            state.dialogDismissed = true;
-            state.selectedId = null;
-            dialogEl.classList.add('hidden');
+            dismissDialog();
             return;
           }
           return;
         }
 
-        if (document.querySelector('#week-mask, #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden)')) return;
+        if (document.querySelector('#week-mask, #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden), #dal-airport-modal')) return;
+
+        var isDialogActive = !!(dialogEl && !dialogEl.classList.contains('hidden') && state.nearId && !state.dialogDismissed);
+        if (isDialogActive) {
+          var menuItems = getDialogMenuItems();
+          if (menuItems.length > 0) {
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+              e.preventDefault();
+              state.keys = {};
+              state.menuIdx = (state.menuIdx - 1 + menuItems.length) % menuItems.length;
+              renderDialog();
+              return;
+            }
+            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Tab') {
+              e.preventDefault();
+              state.keys = {};
+              state.menuIdx = (state.menuIdx + 1) % menuItems.length;
+              renderDialog();
+              return;
+            }
+            if (e.code === 'Enter' || e.code === 'Space') {
+              e.preventDefault();
+              state.keys = {};
+              var chosen = menuItems[state.menuIdx] || menuItems[0];
+              if (chosen && typeof chosen.onSelect === 'function') {
+                chosen.onSelect();
+              }
+              return;
+            }
+          }
+        }
 
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
+          state.hasMoved = true;
           state.keys[e.code] = true;
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) {
             e.preventDefault();
           }
         } else if (e.code === 'Space' || e.code === 'Enter') {
-          if (state.nearId === '__npc__' || state.selectedId === '__npc__') {
+          if (lastNearCandidateId) {
             e.preventDefault();
-            triggerMascotGreeting(true);
-            return;
-          }
-          var targetNode = findNode(state.nearId);
-          if (targetNode && !targetNode.locked) {
-            e.preventDefault();
-            state.focusUntil = performance.now() + 1400;
-            triggerNodeAction(targetNode, 0);
+            state.hasMoved = true;
+            state.dialogDismissed = false;
+            state.nearId = lastNearCandidateId;
+            state.menuIdx = 0;
+            if (lastNearCandidateId === '__npc__' && triggerMascotJumpFn) triggerMascotJumpFn();
+            renderDialog();
           }
         }
       }
@@ -4820,11 +4889,11 @@
 
         // 檢測角色最靠近的關卡建築或島長 NPC，並將所有 3D 建築頭頂座標投影至 HTML 木牌
         var bestId = null;
-        var bestDist = 13.5;
+        var bestDist = 9.0;
         var npcDx = mascotPctX - state.px;
         var npcDy = (mascotPctY + 2.5) - state.py;
         var npcDist = Math.sqrt(npcDx * npcDx + npcDy * npcDy);
-        if (npcDist < 9.5) {
+        if (npcDist < 8.0) {
           bestDist = npcDist;
           bestId = '__npc__';
         }
@@ -4874,20 +4943,28 @@
             ne.domEl.style.left = Math.round(scrPos.x) + 'px';
             ne.domEl.style.top  = Math.round(scrPos.y) + 'px';
             ne.domEl.style.zIndex = String(Math.max(10, Math.min(35, Math.round((1 - scrPos.z) * 100))));
+            ne.domEl.classList.toggle('is-near', String(ne.node.id) === String(bestId));
           }
         }
 
-        if (bestId !== state.nearId) {
+        if (bestId !== lastNearCandidateId) {
+          lastNearCandidateId = bestId;
+          state.dialogDismissed = false;
+          state.menuIdx = 0;
+          state.npcGuideHint = '';
+          if (!bestId && state.nearId) {
+            state.nearId = null;
+            state.selectedId = null;
+            renderDialog();
+          }
+        }
+
+        // 當角色走近目標並在門口停下腳步（!state.walking）時，自動彈出該處的鍵盤對談選單
+        if (bestId && !state.walking && state.hasMoved && !state.dialogDismissed && state.nearId !== bestId) {
           state.nearId = bestId;
-          if (bestId) {
-            state.dialogDismissed = false;
-            state.selectedId = bestId;
-          }
-          for (var k = 0; k < nodeEntries.length; k++) {
-            if (nodeEntries[k].domEl) {
-              nodeEntries[k].domEl.classList.toggle('is-near', String(nodeEntries[k].node.id) === String(bestId));
-            }
-          }
+          state.selectedId = bestId;
+          state.menuIdx = 0;
+          if (bestId === '__npc__' && triggerMascotJumpFn) triggerMascotJumpFn();
           renderDialog();
         }
 

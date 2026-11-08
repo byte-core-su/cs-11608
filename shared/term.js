@@ -678,7 +678,7 @@
       var borderCol = idx === 0 ? '#0284c7' : '#059669';
       var bgCol = idx === 0 ? '#e0f2fe' : '#d1fae5';
       var txtCol = idx === 0 ? '#0c4a6e' : '#064e3b';
-      return '<div class="ac-node" tabindex="0" role="button" data-counter-pin="' + escHtml(t.id) + '">'
+      return '<div class="ac-node" tabindex="-1" data-counter-pin="' + escHtml(t.id) + '">'
         + (flagText ? '<div class="ac-node-flag ' + (isRec ? 'flag-next' : '') + '">' + escHtml(flagText) + '</div>' : '')
         + '<div class="ac-node-stars">' + escHtml(r.gate + ' · ' + r.flightNo) + '</div>'
         + '<div class="ac-node-label" style="background:' + bgCol + ';border-color:' + borderCol + ';color:' + txtCol + ';max-width:230px">'
@@ -697,8 +697,6 @@
       +       '<span class="text-xs sm:text-sm font-black text-sky-300 tracking-wide">' + escHtml(schoolTitle) + ' · 3D 入境登機室大廳（雙學期櫃台）</span>'
       +     '</div>'
       +     '<div class="flex items-center gap-2 flex-wrap">'
-      +       '<button type="button" data-goto-counter="11501" class="px-3 py-1.5 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition cursor-pointer shadow">⬅ 1號櫃台（116-1 上學期）</button>'
-      +       '<button type="button" data-goto-counter="11502" class="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer shadow">➡ 2號櫃台（116-2 下學期）</button>'
       +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer">🎥 視角：登機室全景</button>'
       +       teacherBtnHtml
       +       closeBtnHtml
@@ -707,7 +705,7 @@
       +   '<div class="ac-island-stage" id="dal-3d-stage" style="min-height:570px;max-height:80vh;background:linear-gradient(180deg,#38bdf8 0%,#bae6fd 50%,#fde68a 100%)">'
       +     '<canvas id="dal-3d-canvas" class="ac-webgl-canvas"></canvas>'
       +     '<div class="ac-controls-bar">'
-      +       '<div class="ac-controls-hint">🎮 請用 WASD / 方向鍵控制角色走向左、右兩座 3D 登機櫃台 · 點擊櫃台或按 Enter 立即蓋章起飛！</div>'
+      +       '<div class="ac-controls-hint">🎮 請用 WASD / 方向鍵走到左（1號）或右（2號）登機櫃台前 · 對談選單用 ◀ ▶ 選擇、Enter 確認、Esc 離開</div>'
       +     '</div>'
       +     '<div id="dal-3d-overlay" class="ac-overlay-layer">'
       +       pinsHtml
@@ -728,6 +726,7 @@
       selectedTerm: activeTermId,
       dialogOpen: false,
       dismissedTerm: null,
+      menuIdx: 0,
       px: 0,
       pz: 5.8,
       tx: null,
@@ -803,6 +802,47 @@
       }, 920);
     }
 
+    /* 櫃台對談選單：只能用鍵盤（◀ ▶ 選擇、Enter 確認、Esc 離開），不提供滑鼠點選 */
+    function getLoungeMenu() {
+      if (state.boarding || !state.dialogOpen) return [];
+      var termId = state.selectedTerm || '11501';
+      var termObj = info(termId) || { id: termId, name: termId, short: termId };
+      return [
+        { label: '✈️ 辦理登機・飛往 ' + (termObj.short || termObj.id) + ' 群島 →', onSelect: function () { triggerBoarding(termId); } },
+        { label: '✕ 暫不登機 (Esc)', isClose: true, onSelect: function () { closeLoungeDialog(); } }
+      ];
+    }
+
+    function closeLoungeDialog() {
+      state.dialogOpen = false;
+      state.dismissedTerm = state.selectedTerm;
+      state.menuIdx = 0;
+      renderBottomDialog();
+    }
+
+    function renderLoungeMenuHtml(items, otherRoute) {
+      if (state.boarding) {
+        return '<div class="shrink-0 text-xs font-black text-emerald-700 bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-full pointer-events-none select-none">✈️ 水上飛機起飛中…</div>';
+      }
+      if (!items.length) return '';
+      if (state.menuIdx >= items.length || state.menuIdx < 0) state.menuIdx = 0;
+      var pills = items.map(function (it, idx) {
+        var sel = idx === state.menuIdx;
+        var cls = sel
+          ? (it.isClose
+              ? 'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full font-black text-xs sm:text-sm bg-amber-600 text-white border-2 border-amber-700 ring-4 ring-amber-300 shadow-md'
+              : 'ac-btn-primary ring-4 ring-amber-300')
+          : 'inline-flex items-center gap-1 px-3 py-1.5 rounded-full font-extrabold text-xs bg-stone-200/85 text-stone-600 border-2 border-stone-300 opacity-80';
+        return '<span class="' + cls + ' select-none pointer-events-none" style="cursor:default">' + (sel ? '▶ ' : '　') + escHtml(it.label) + '</span>';
+      }).join('');
+      return '<div class="flex flex-col items-end gap-1.5 shrink-0 pointer-events-none select-none">'
+        + '<div class="flex items-center gap-2 flex-wrap justify-end">' + pills + '</div>'
+        + '<div class="text-[11px] font-black text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-0.5 rounded-full">'
+        +   '⌨️ ◀ ▶ 選擇 · Enter 確認 · Esc 離開（另一學期請按 Esc 後走向' + escHtml(otherRoute ? otherRoute.counterNo : '另一座櫃台') + '）'
+        + '</div>'
+        + '</div>';
+    }
+
     function renderBottomDialog() {
       if (!dialogEl) return;
       if (!state.dialogOpen && !state.boarding) {
@@ -843,15 +883,7 @@
         +       islandsBadges
         +     '</div>'
         +   '</div>'
-        +   '<div class="flex items-center gap-2 flex-wrap shrink-0">'
-        +     '<button type="button" data-close-dialog="1" class="px-2.5 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-700 font-black text-xs cursor-pointer transition" title="收起櫃台資訊，欣賞 3D 登機室 (Esc)">✕ 收起 (Esc)</button>'
-        +     '<button type="button" data-switch-other="' + escHtml(otherTermId) + '" class="ac-btn-secondary text-xs cursor-pointer">'
-        +       '🚶 走向' + escHtml(otherRoute.counterNo)
-        +     '</button>'
-        +     '<button type="button" data-board-now="' + escHtml(termId) + '" class="px-4 py-2 rounded-2xl font-black text-xs sm:text-sm cursor-pointer transition transform active:scale-95 ' + route.btnClass + '">'
-        +       (state.boarding ? '✈️ 水上飛機起飛中…' : ('✈️ 辦理登機・飛往 ' + escHtml(termObj.short || termObj.id) + ' 群島 →'))
-        +     '</button>'
-        +   '</div>'
+        +   renderLoungeMenuHtml(getLoungeMenu(), otherRoute)
         + '</div>';
     }
 
@@ -865,31 +897,26 @@
       });
     }
 
+    function flashLoungeHint(text) {
+      if (!stageEl) return;
+      var tip = document.createElement('div');
+      tip.className = 'ac-float-pop';
+      tip.style.left = Math.round(stageEl.clientWidth * 0.5) + 'px';
+      tip.style.top = Math.max(60, stageEl.clientHeight - 120) + 'px';
+      tip.textContent = text;
+      stageEl.appendChild(tip);
+      setTimeout(function () { tip.remove(); }, 950);
+    }
+
     hostEl.addEventListener('click', function (e) {
-      if (e.target.closest('[data-close-dialog]')) {
-        state.dialogOpen = false;
-        state.dismissedTerm = state.selectedTerm;
-        renderBottomDialog();
+      if (e.target.closest('#dal-3d-dialog')) {
+        e.preventDefault();
+        e.stopPropagation();
+        flashLoungeHint('⌨️ 對談選單請用鍵盤 ◀ ▶ 選擇、Enter 確認、Esc 離開');
         return;
       }
-      var gotoBtn = e.target.closest('[data-goto-counter]');
-      if (gotoBtn) {
-        selectCounter(gotoBtn.getAttribute('data-goto-counter'), true, true);
-        return;
-      }
-      var pinEl = e.target.closest('[data-counter-pin]');
-      if (pinEl) {
-        selectCounter(pinEl.getAttribute('data-counter-pin'), true, true);
-        return;
-      }
-      var swBtn = e.target.closest('[data-switch-other]');
-      if (swBtn) {
-        selectCounter(swBtn.getAttribute('data-switch-other'), true, true);
-        return;
-      }
-      var boardBtn = e.target.closest('[data-board-now]');
-      if (boardBtn) {
-        triggerBoarding(boardBtn.getAttribute('data-board-now'));
+      if (e.target.closest('[data-counter-pin]')) {
+        flashLoungeHint('🚶 請用方向鍵 / WASD 走到櫃台前');
       }
     });
 
@@ -1205,20 +1232,7 @@
             obj = obj.parent;
           }
           if (obj && obj.userData.termId) {
-            selectCounter(obj.userData.termId, true, true);
-            return;
-          }
-        }
-
-        // 點擊地板時走向該位置並自動收起櫃台解說框，避免擋住主畫面
-        var floorHits = raycaster.intersectObject(floorMesh, false);
-        if (floorHits.length > 0) {
-          var pt = floorHits[0].point;
-          state.tx = Math.max(-11.5, Math.min(11.5, pt.x));
-          state.tz = Math.max(0.2, Math.min(8.2, pt.z));
-          if (state.dialogOpen) {
-            state.dialogOpen = false;
-            renderBottomDialog();
+            flashLoungeHint('🚶 請用方向鍵 / WASD 走到櫃台前');
           }
         }
       }
@@ -1226,19 +1240,42 @@
       function onKeyDown(e) {
         var tag = (e.target && e.target.tagName) || '';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-        if (e.code === 'Escape' || e.key === 'Escape') { e.preventDefault(); if (state.dialogOpen) { state.dialogOpen = false; state.dismissedTerm = state.selectedTerm; renderBottomDialog(); } else if (opts.isModal && typeof opts.onClose === 'function') { if (hostEl._dalCleanup) hostEl._dalCleanup(); opts.onClose(); } return; }
+        if (e.code === 'Escape' || e.key === 'Escape') { e.preventDefault(); if (state.dialogOpen) { closeLoungeDialog(); } else if (opts.isModal && typeof opts.onClose === 'function') { if (hostEl._dalCleanup) hostEl._dalCleanup(); opts.onClose(); } return; }
         if (e.code === 'Escape' && state.dialogOpen) {
           state.dialogOpen = false;
           state.dismissedTerm = state.selectedTerm;
           renderBottomDialog();
           return;
         }
+        if (state.dialogOpen && !state.boarding) {
+          var lm = getLoungeMenu();
+          if (lm.length) {
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+              e.preventDefault(); state.keys = {};
+              state.menuIdx = (state.menuIdx - 1 + lm.length) % lm.length; renderBottomDialog(); return;
+            }
+            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Tab') {
+              e.preventDefault(); state.keys = {};
+              state.menuIdx = (state.menuIdx + 1) % lm.length; renderBottomDialog(); return;
+            }
+            if (e.code === 'Enter' || e.code === 'Space') {
+              e.preventDefault(); state.keys = {};
+              (lm[state.menuIdx] || lm[0]).onSelect(); return;
+            }
+          }
+        }
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
           state.keys[e.code] = true;
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
-        } else if ((e.code === 'Enter' || e.code === 'Space') && state.dialogOpen) {
-          e.preventDefault();
-          triggerBoarding(state.selectedTerm);
+        } else if ((e.code === 'Enter' || e.code === 'Space') && !state.dialogOpen && !state.boarding) {
+          var nd1 = Math.hypot(state.px - FLIGHT_ROUTES['11501'].standWx, state.pz - FLIGHT_ROUTES['11501'].standWz);
+          var nd2 = Math.hypot(state.px - FLIGHT_ROUTES['11502'].standWx, state.pz - FLIGHT_ROUTES['11502'].standWz);
+          if (nd1 < 2.4 || nd2 < 2.4) {
+            e.preventDefault();
+            state.dismissedTerm = null;
+            state.menuIdx = 0;
+            selectCounter(nd1 <= nd2 ? '11501' : '11502', false, true);
+          }
         }
       }
 

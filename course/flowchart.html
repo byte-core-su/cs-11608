@@ -87,7 +87,7 @@
   <!-- 全站共用設定（要在 guard 之前載入）-->
   <link rel="stylesheet" href="../shared/island.css?v=20261107">
   <script src="../config.js"></script>
-  <script src="../shared/term.js"></script>
+  <script src="../shared/term.js?v=20261108r1"></script>
   <!-- 別的學期沒有這一頁（這一頁是有逐關流程圖的學期才有的）⇒ 回闖關基地 -->
   <script>if (!CONFIG.FLOWCHART) location.replace('hub.html');</script>
 <!-- 登入邏輯單一來源 -->
@@ -95,7 +95,7 @@
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
   <script src="../shared/guard.js"></script>
   <script src="../shared/workup.js"></script>
-  <script src="../shared/island.js?v=20261107v6"></script>
+  <script src="../shared/island.js?v=20261108r1"></script>
 </head>
 <body class="min-h-screen ac-theme-bg">
   <div id="app"></div>
@@ -1496,7 +1496,6 @@
               ${mermaidPanel(u)}
               <div class="flex flex-wrap gap-2">
                 <button id="back-menu2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-2.5 rounded-lg transition">回關卡列表</button>
-                <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-lg transition inline-flex items-center">🏠 回闖關基地</a>
               </div>
             </div>
           </div>`;
@@ -1525,8 +1524,6 @@
               <div class="flex flex-wrap gap-2 justify-center">
                 <button id="to-program" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 py-2.5 rounded-lg transition">🐱 接著做程式設計 →</button>
                 <button id="back-menu2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-2.5 rounded-lg transition">回關卡列表</button>
-                <!-- 慶祝畫面的視線在正中央：出口放在他正在看的地方 -->
-                <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-lg transition inline-flex items-center">🏠 回闖關基地</a>
               </div>
             </div>
           </div>`;
@@ -1588,7 +1585,6 @@
                 </div>
                 <div class="p-3 border-t border-slate-100 flex flex-wrap gap-2 justify-center">
                   <button id="back-refresh2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition">← 回關卡列表</button>
-                  <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition inline-flex items-center">🏠 回闖關基地</a>
                 </div>
               </div>
             </div>` : `
@@ -1605,7 +1601,6 @@
                 </div>
                 <div class="p-3 border-t border-slate-100 flex flex-wrap gap-2 justify-center">
                   <button id="back-refresh2" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition">← 回關卡列表</button>
-                  <a href="hub.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition inline-flex items-center">🏠 回闖關基地</a>
                 </div>
               </div>
             </div>`}

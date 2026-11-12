@@ -662,6 +662,18 @@
     var byDateId = byDate();
     var activeTermId = current || byDateId || '11501';
 
+    /* ★ 直接登機（2026-11-12）：入口機場一進來，站在原地按 Enter 就飛往「本學期」，不必每次都走到櫃台。
+         · 本學期＝照開學日算的那一個（byDate），不是「上次選的」——
+           記住上次選的話，下學期一開學全班都會被帶回上學期。
+         · 只在入口用；主島碼頭開的機場視窗（isModal）是來「換學期」的，直接登機回原學期沒有意義。
+         · 要去另一個學期：照舊走到另一個櫃台。 */
+    var quickTermId = (!opts.isModal && FLIGHT_ROUTES[byDateId] && valid(byDateId)) ? byDateId : null;
+    var quickTermObj = quickTermId ? (info(quickTermId) || { id: quickTermId, name: quickTermId, short: quickTermId }) : null;
+    // 按鍵圖示（操作提示列用）：樣式在 island.css 的 .ac-key
+    var KEYI = function (t) { return '<span class="ac-key">' + t + '</span>'; };
+    var SEPI = '<span class="ac-hint-sep">·</span>';
+    var KEYCAP = 'display:inline-block;background:#fff;border:2px solid #b45309;border-bottom-width:4px;border-radius:8px;padding:1px 9px;margin-right:8px;font-size:13px;line-height:1.5';
+
     var closeBtnHtml = opts.isModal
       ? '<button type="button" data-dal-close class="px-3.5 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white border border-rose-400 text-xs font-black cursor-pointer transition shadow">✕ 留在目前島嶼 (Esc)</button>'
       : '';
@@ -697,7 +709,7 @@
       +       '<span class="text-xs sm:text-sm font-black text-sky-300 tracking-wide">' + escHtml(schoolTitle) + ' · 3D 入境登機室大廳（雙學期櫃台）</span>'
       +     '</div>'
       +     '<div class="flex items-center gap-2 flex-wrap">'
-      +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer">🎥 視角：登機室全景</button>'
+      +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer">🎥 視角：登機室全景（V 切換）</button>'
       +       teacherBtnHtml
       +       closeBtnHtml
       +     '</div>'
@@ -705,13 +717,22 @@
       +   '<div class="ac-island-stage" id="dal-3d-stage" style="min-height:570px;max-height:80vh;background:linear-gradient(180deg,#38bdf8 0%,#bae6fd 50%,#fde68a 100%)">'
       +     '<canvas id="dal-3d-canvas" class="ac-webgl-canvas"></canvas>'
       +     '<div class="ac-controls-bar">'
-      +       '<div class="ac-controls-hint">🎮 請用 WASD / 方向鍵走到左（1號）或右（2號）登機櫃台前 · 對談選單用 ◀ ▶ 選擇、Enter 確認、Esc 離開</div>'
+      +       '<div class="ac-controls-hint">' + (quickTermId
+                ? '🎮 ' + KEYI('Enter') + ' 直接登機（本學期）' + SEPI + KEYI('WASD') + KEYI('方向鍵') + ' 走到另一個櫃台換學期' + SEPI + KEYI('◀ ▶') + ' 選擇' + SEPI + KEYI('Esc') + ' 離開' + SEPI + KEYI('V') + ' 視角'
+                : '🎮 ' + KEYI('WASD') + KEYI('方向鍵') + ' 走到左（1號）或右（2號）櫃台' + SEPI + KEYI('◀ ▶') + ' 選擇' + SEPI + KEYI('Enter') + ' 確認' + SEPI + KEYI('Esc') + ' 離開' + SEPI + KEYI('V') + ' 視角') + '</div>'
       +     '</div>'
       +     '<div id="dal-3d-overlay" class="ac-overlay-layer">'
       +       pinsHtml
       +       '<div id="dal-player-tag" class="ac-player-tag">🧑‍🌾 島民旅客</div>'
       +     '</div>'
       +     '<div id="dal-3d-dialog" class="ac-dialog-bar hidden"></div>'
+      +     (quickTermId
+              ? '<div id="dal-quick-board" style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:44;pointer-events:none;white-space:nowrap;'
+                + 'background:rgba(255,251,235,.97);border:3px solid #f59e0b;border-radius:999px;padding:9px 22px;font-weight:900;font-size:15px;color:#78350f;box-shadow:0 6px 16px rgba(0,0,0,.22)">'
+                + '<span style="' + KEYCAP + '">Enter</span>直接登機 ✈️ ' + escHtml(quickTermObj.name + '（' + (quickTermObj.short || quickTermObj.id) + '）')
+                + '<span style="font-size:12px;font-weight:800;color:#92400e;margin-left:12px">要去另一個學期：走到另一個櫃台</span>'
+                + '</div>'
+              : '')
       +   '</div>'
       + '</div>';
 
@@ -720,6 +741,14 @@
     var dialogEl  = hostEl.querySelector('#dal-3d-dialog');
     var playerTag = hostEl.querySelector('#dal-player-tag');
     var camBtn    = hostEl.querySelector('#dal-cam-btn');
+    var quickEl   = hostEl.querySelector('#dal-quick-board');
+    var quickShown = true;
+    /* 「直接登機」那一條只在「站在大廳中間、沒有對話」時出現：走近櫃台就讓位給櫃台自己的對話 */
+    function updateQuickBoard(nearCounter) {
+      if (!quickEl) return;
+      var show = !state.dialogOpen && !state.boarding && !nearCounter;
+      if (show !== quickShown) { quickShown = show; quickEl.style.display = show ? '' : 'none'; }
+    }
     var teacherLink = hostEl.querySelector('#dal-teacher-link');
 
     var state = {
@@ -925,8 +954,8 @@
         state.camMode = state.camMode === 'overview' ? 'counter' : 'overview';
         state.yawOffset = 0;
         camBtn.textContent = state.camMode === 'overview'
-          ? '🎥 視角：登機室全景'
-          : '🎥 視角：櫃台跟隨特寫';
+          ? '🎥 視角：登機室全景（V 切換）'
+          : '🎥 視角：櫃台跟隨特寫（V 切換）';
       });
     }
 
@@ -1247,6 +1276,10 @@
           renderBottomDialog();
           return;
         }
+        // 快捷鍵 V：切換視角（和上方那顆按鈕一樣）
+        if (e.code === 'KeyV' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat && camBtn && !state.boarding) {
+          e.preventDefault(); camBtn.click(); return;
+        }
         if (state.dialogOpen && !state.boarding) {
           var lm = getLoungeMenu();
           if (lm.length) {
@@ -1275,6 +1308,12 @@
             state.dismissedTerm = null;
             state.menuIdx = 0;
             selectCounter(nd1 <= nd2 ? '11501' : '11502', false, true);
+          } else if (quickTermId && e.code === 'Enter' && !e.repeat) {
+            // 站在大廳、不在任何櫃台前：Enter 直接登機到本學期（空白鍵不算，免得誤觸）
+            e.preventDefault();
+            state.keys = {};
+            updateQuickBoard(true);
+            triggerBoarding(quickTermId);
           }
         }
       }
@@ -1312,9 +1351,37 @@
       var camPos = new THREE.Vector3(0, 12.5, 19.5);
       var camLook = new THREE.Vector3(0, 2.0, -1.5);
 
+      /* ★ 走路速度跟「時間」走，不跟畫面更新率走（2026-11-12，和 island.js 同一個做法）。
+           原本每畫一格走 0.16 ＝ 60 格時每秒 9.6；電腦慢就走得慢、144Hz 螢幕走得快。
+         ★ 跑不動時關陰影、解析度降回 1 倍；和島嶼共用 sessionStorage 的 ac_lowq，降過就一路用低畫質。 */
+      var WALK_SPEED = 9.6;
+      var lastAnimNow = performance.now(), animStartedAt = 0, avgFrameSec = 0.016, slowSec = 0;
+      var lowQuality = false;
+      try { lowQuality = sessionStorage.getItem('ac_lowq') === '1'; } catch (e) {}
+      function applyLowQuality() {
+        lowQuality = true;
+        dirLight.castShadow = false;
+        renderer.setPixelRatio(1);
+        try { sessionStorage.setItem('ac_lowq', '1'); } catch (e) {}
+      }
+      if (lowQuality) applyLowQuality();
+
       function animate(now) {
         if (state.destroyed) return;
         var tSec = now * 0.001;
+        var rawDt = Math.min(0.25, Math.max(0.001, (now - lastAnimNow) * 0.001));   // 上限 0.25 秒：切走分頁再回來不會暴衝
+        lastAnimNow = now;
+        if (!animStartedAt) animStartedAt = now;
+        if (!lowQuality && now - animStartedAt > 3000) {
+          avgFrameSec = avgFrameSec * 0.9 + rawDt * 0.1;
+          slowSec = avgFrameSec > 0.04 ? slowSec + rawDt : 0;
+          if (slowSec > 2) {
+            applyLowQuality();
+            console.info('[Dodo Airlines] 這台電腦畫面更新偏慢（平均每格 ' + Math.round(avgFrameSec * 1000) + ' 毫秒），已自動關閉陰影並降低解析度。');
+          }
+        }
+        var f60 = rawDt * 60;
+        var ease = function (f) { return 1 - Math.pow(1 - f, f60); };
 
         var vx = 0, vz = 0;
         if (!state.boarding) {
@@ -1324,7 +1391,7 @@
           if (state.keys.ArrowDown  || state.keys.KeyS) vz += 1;
         }
 
-        var speed = 0.16;
+        var speed = WALK_SPEED * rawDt;   // 這一格該走的距離
         if (vx !== 0 || vz !== 0) {
           state.tx = null;
           state.tz = null;
@@ -1338,7 +1405,7 @@
           var dx = state.tx - state.px;
           var dz = state.tz - state.pz;
           var dist = Math.sqrt(dx * dx + dz * dz);
-          if (dist < 0.22) {
+          if (dist < Math.max(0.22, speed)) {   // 一步就會超過目的地也算到了，不然會在目的地前後來回抖
             state.px = state.tx;
             state.pz = state.tz;
             state.tx = null;
@@ -1363,6 +1430,7 @@
         if (!state.boarding) {
           var d1 = Math.hypot(state.px - FLIGHT_ROUTES['11501'].standWx, state.pz - FLIGHT_ROUTES['11501'].standWz);
           var d2 = Math.hypot(state.px - FLIGHT_ROUTES['11502'].standWx, state.pz - FLIGHT_ROUTES['11502'].standWz);
+          updateQuickBoard(d1 < 2.4 || d2 < 2.4);
           if (d1 < 2.4) {
             if (state.dismissedTerm !== '11501' && (!state.dialogOpen || state.selectedTerm !== '11501')) {
               selectCounter('11501', false, true);
@@ -1386,7 +1454,7 @@
         var diffRot = state.heading - playerMesh.rotation.y;
         while (diffRot > Math.PI) diffRot -= Math.PI * 2;
         while (diffRot < -Math.PI) diffRot += Math.PI * 2;
-        playerMesh.rotation.y += diffRot * 0.2;
+        playerMesh.rotation.y += diffRot * ease(0.2);
 
         var limbs = playerMesh.userData.limbs;
         if (limbs) {
@@ -1454,8 +1522,8 @@
           targetLookZ = -1.6;
         }
 
-        camPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.08);
-        camLook.lerp(new THREE.Vector3(targetLookX, targetLookY, targetLookZ), 0.1);
+        camPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), ease(0.08));
+        camLook.lerp(new THREE.Vector3(targetLookX, targetLookY, targetLookZ), ease(0.1));
         camera.position.copy(camPos);
         camera.lookAt(camLook);
 

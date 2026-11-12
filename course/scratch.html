@@ -23,7 +23,7 @@
 </style>
 
 <script src="../config.js"></script>
-<script src="../shared/term.js?v=20261108r1"></script>
+<script src="../shared/term.js?v=20261112r3"></script>
 <!-- 別的學期沒有這一頁（Scratch 十關是下學期的）⇒ 回闖關基地 -->
 <script>if (!CONFIG.BLOCKS) location.replace('hub.html');</script>
 <script src="../shared/auth.js"></script>
@@ -32,8 +32,8 @@
 <!-- 關卡資料（卡片上的說明＝每一關的 task） -->
 <script>if (CONFIG.BLOCKS) TERMSEL.include(CONFIG.BLOCKS.CONTENT);</script>
 <link rel="stylesheet" href="../shared/theme.css">
-<link rel="stylesheet" href="../shared/island.css?v=20261107">
-<script src="../shared/island.js?v=20261108r1"></script>
+<link rel="stylesheet" href="../shared/island.css?v=20261112c1">
+<script src="../shared/island.js?v=20261112r4"></script>
 </head>
 
 <body class="ac-theme-bg text-slate-800 min-h-screen pb-24">
@@ -74,7 +74,10 @@
         <div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">
           <button type="button" data-sc-view="island" class="sc-view-btn px-3 py-1 rounded-full text-xs font-black transition bg-emerald-500 text-white shadow">🏝️ 島嶼探險</button>
           <button type="button" data-sc-view="list" class="sc-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 卡片清單</button>
+          <span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>
         </div>
+        <!-- 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） -->
+        <a id="sc-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" style="display:none">✈️ 回主島</a>
       </div>
     </div>
   </div>
@@ -217,6 +220,9 @@ function mountScratchIsland(){
       + (on ? 'bg-emerald-500 text-white shadow' : 'text-stone-600 hover:text-stone-900');
   });
 
+  const hubLink = document.getElementById('sc-hub-link');
+  if (hubLink) hubLink.style.display = (scViewMode === 'list' || !window.AC_ISLAND) ? '' : 'none';
+
   if (scViewMode === 'list' || !window.AC_ISLAND) {
     mountEl.classList.add('hidden');
     listEl.classList.remove('hidden');
@@ -308,7 +314,7 @@ function mountScratchIsland(){
     title: '📋 Scratch 學習目標＆計分規則看板',
     shortTitle: '學習目標看板',
     speaker: '🦫 齒輪海狸師傅 · 島民佈告欄',
-    desc: '10 關全部開放，順序自己決定！用自訂積木、參數、條件與變數做出遊戲，並比較兩種排序法與兩種搜尋法。點擊查看完整學習目標與計分規則！',
+    desc: '10 關全部開放，順序自己決定！用自訂積木、參數、條件與變數做出遊戲，並比較兩種排序法與兩種搜尋法。按 Enter 查看完整學習目標與計分規則！',
     pass: false,
     starsText: '闖關指南',
     statusLabel: '看板提示',

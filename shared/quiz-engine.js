@@ -210,7 +210,10 @@
     +           '<div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">'
     +             '<button type="button" data-qz-view="island" class="qz-view-btn px-3 py-1 rounded-full text-xs font-black transition bg-emerald-500 text-white shadow">🏝️ 島嶼探險</button>'
     +             '<button type="button" data-qz-view="list" class="qz-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 章節清單</button>'
+    +             '<span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>'
     +           '</div>'
+    /* 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） */
+    +           '<a id="qz-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" style="display:none">✈️ 回主島</a>'
     +         '</div>'
     +       '</div>'
     +     '</div>'
@@ -426,6 +429,9 @@
         + (on ? 'bg-emerald-500 text-white shadow' : 'text-stone-600 hover:text-stone-900');
     });
 
+    var hubLink = $('qz-hub-link');
+    if (hubLink) hubLink.style.display = (qzViewMode === 'list' || !window.AC_ISLAND) ? '' : 'none';
+
     if (qzViewMode === 'list' || !window.AC_ISLAND) {
       mountEl.classList.add('hidden');
       listEl.classList.remove('hidden');
@@ -435,28 +441,31 @@
     listEl.classList.add('hidden');
 
     // 上下學期章節在島上的座標與「豐收果園 × 玻璃溫室」主題 3D 模型
+    // ★ 小節（1-1、5-2…）的招牌不寫在這裡：一律用題庫裡的章節標題（NODES[id].title），
+    //   寫死的話題庫一改、或當初寫錯，招牌就和打開的內容對不上（2026-11-12 修：上學期 7 個小節錯了 6 個）。
+    //   只有「整章／總複習」這幾棟主題建築才另外取名（shortTitle）。
     var layout = {
       // 11501 上學期（資訊倫理與安全）
-      '1-1':        { x: 22, y: 66, kind: 'orchard-apple',       icon: '🍎', shortTitle: '1-1 網路禮儀' },
-      '1-2':        { x: 36, y: 55, kind: 'orchard-peach',       icon: '🍑', shortTitle: '1-2 資訊倫理' },
-      '1-3':        { x: 24, y: 40, kind: 'orchard-orange',      icon: '🍊', shortTitle: '1-3 著作權法' },
-      '1-4':        { x: 40, y: 34, kind: 'orchard-pear',        icon: '🍐', shortTitle: '1-4 個資保護' },
+      '1-1':        { x: 22, y: 66, kind: 'orchard-apple',       icon: '🍎' },
+      '1-2':        { x: 36, y: 55, kind: 'orchard-peach',       icon: '🍑' },
+      '1-3':        { x: 24, y: 40, kind: 'orchard-orange',      icon: '🍊' },
+      '1-4':        { x: 40, y: 34, kind: 'orchard-pear',        icon: '🍐' },
       'ch1-all':    { x: 32, y: 20, kind: 'orchard-barn',        icon: '🏡', shortTitle: '第1章 豐收穀倉' },
-      '3-1':        { x: 64, y: 56, kind: 'orchard-cherry',      icon: '🍒', shortTitle: '3-1 資訊安全' },
-      '3-2':        { x: 78, y: 64, kind: 'orchard-apple',       icon: '🍎', shortTitle: '3-2 網路犯罪' },
-      '3-3':        { x: 76, y: 39, kind: 'orchard-peach',       icon: '🍑', shortTitle: '3-3 媒體素養' },
+      '3-1':        { x: 64, y: 56, kind: 'orchard-cherry',      icon: '🍒' },
+      '3-2':        { x: 78, y: 64, kind: 'orchard-apple',       icon: '🍎' },
+      '3-3':        { x: 76, y: 39, kind: 'orchard-peach',       icon: '🍑' },
       'ch3-all':    { x: 68, y: 20, kind: 'orchard-mill',        icon: '🧃', shortTitle: '第3章 風車果坊' },
       'review-all': { x: 50, y: 18, kind: 'orchard-golden-tree', icon: '🌟', shortTitle: '黃金神木總測驗' },
       // 11502 下學期（媒體與社會議題・基本演算法）
-      '5-1':        { x: 20, y: 66, kind: 'orchard-apple',       icon: '🍎', shortTitle: '5-1 媒體與科技' },
-      '5-2':        { x: 35, y: 56, kind: 'orchard-peach',       icon: '🍑', shortTitle: '5-2 資訊失序' },
-      '5-3':        { x: 22, y: 42, kind: 'orchard-orange',      icon: '🍊', shortTitle: '5-3 言論自由' },
-      '5-4':        { x: 38, y: 36, kind: 'orchard-pear',        icon: '🍐', shortTitle: '5-4 網路霸凌' },
-      '5-5':        { x: 26, y: 24, kind: 'orchard-cherry',      icon: '🍒', shortTitle: '5-5 網路成癮' },
+      '5-1':        { x: 20, y: 66, kind: 'orchard-apple',       icon: '🍎' },
+      '5-2':        { x: 35, y: 56, kind: 'orchard-peach',       icon: '🍑' },
+      '5-3':        { x: 22, y: 42, kind: 'orchard-orange',      icon: '🍊' },
+      '5-4':        { x: 38, y: 36, kind: 'orchard-pear',        icon: '🍐' },
+      '5-5':        { x: 26, y: 24, kind: 'orchard-cherry',      icon: '🍒' },
       '5-all':      { x: 42, y: 20, kind: 'orchard-barn',        icon: '🏡', shortTitle: '第5章 豐收穀倉' },
-      '6-1':        { x: 64, y: 56, kind: 'orchard-apple',       icon: '🍎', shortTitle: '6-1 演算法概念' },
-      '6-2':        { x: 78, y: 64, kind: 'orchard-peach',       icon: '🍑', shortTitle: '6-2 排序原理' },
-      '6-3':        { x: 76, y: 39, kind: 'orchard-orange',      icon: '🍊', shortTitle: '6-3 搜尋原理' },
+      '6-1':        { x: 64, y: 56, kind: 'orchard-apple',       icon: '🍎' },
+      '6-2':        { x: 78, y: 64, kind: 'orchard-peach',       icon: '🍑' },
+      '6-3':        { x: 76, y: 39, kind: 'orchard-orange',      icon: '🍊' },
       '6-all':      { x: 68, y: 20, kind: 'orchard-mill',        icon: '🧃', shortTitle: '第6章 風車果坊' }
     };
 
@@ -475,8 +484,8 @@
         icon: lay.icon,
         tag: id === 'review-all' ? '傳說黃金果樹' : (id.indexOf('all') >= 0 ? '整章豐收驗收' : '果園章節果樹'),
         title: n.title,
-        shortTitle: lay.shortTitle,
-        desc: star > 0 ? ('已採收通關獲得 ' + '★'.repeat(star) + '（最高分 ' + (u.score || 100) + '%）・點擊可檢視證書或再次挑戰') : '走近搖晃果樹！先讀章節重點，再進行連對 ' + TARGET + ' 題採收挑戰！',
+        shortTitle: lay.shortTitle || n.title,
+        desc: star > 0 ? ('已採收通關獲得 ' + '★'.repeat(star) + '（最高分 ' + (u.score || 100) + '%）・按 Enter 可檢視證書或再次挑戰') : '走近搖晃果樹！先讀章節重點，再進行連對 ' + TARGET + ' 題採收挑戰！',
         pass: star > 0,
         starsText: star > 0 ? '★'.repeat(star) : '',
         statusLabel: star > 0 ? '已通關' : '待挑戰',
@@ -532,10 +541,10 @@
       tag: '果園說明看板',
       title: '📋 果園闖關規則＆教材看板',
       shortTitle: '闖關規則看板',
-      desc: '💡 點擊島上「果樹」可先讀小節重點整理，再進行連對 10 題挑戰；點擊「大穀倉／風車果坊」則可一次挑戰整章綜合測驗！也可與廣場上的「🐿️ 蘋蘋松鼠園長」對話聽取攻略。',
+      desc: '💡 走到島上「果樹」前按 Enter，可先讀小節重點整理，再進行連對 10 題挑戰；走到「大穀倉／風車果坊」前按 Enter，則可一次挑戰整章綜合測驗！也可與廣場上的「🐿️ 蘋蘋松鼠園長」對話聽取攻略。',
       pass: true,
       starsText: '果園指南',
-      statusLabel: '點擊查看',
+      statusLabel: 'Enter 查看',
       locked: false,
       actions: boardActions
     });

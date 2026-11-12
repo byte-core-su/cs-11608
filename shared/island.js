@@ -4,7 +4,7 @@
    畫質與互動全面升級版 (Three.js WebGL PBR + ACES Filmic Tone Mapping)：
      1. 高解析度程序化 PBR 貼圖：動森魚鱗屋瓦、三葉草花朵草皮、木紋、立體石磚
      2. 精準雙層 3D 地形高度與懸崖碰撞：角色永遠穩站在地表與石階上，絕不穿模消失
-     3. 內建「✈️ Dodo 機場碼頭」互動地標：在任何子單元島嶼點擊水上飛機或走到碼頭即可返回主島入口
+     3. 內建「✈️ Dodo 機場碼頭」互動地標：在任何子單元島嶼走到碼頭、按 Enter 即可返回主島入口
      4. 精緻 3D 動森建築（屋簷、窗框、花圃、煙囪炊煙粒子、街燈）與 3D 蝴蝶飛舞
      5. 支援外部 GLTF/GLB 模型擴充 (可選傳入 node.modelUrl)
    ===================================================================== */
@@ -361,6 +361,10 @@
       plazaShape: 'hexagon'
     }
   };
+
+  /* 按鍵圖示（操作提示列用）：樣式在 island.css 的 .ac-key */
+  function KEY(t) { return '<span class="ac-key">' + t + '</span>'; }
+  var HINT_SEP = '<span class="ac-hint-sep">·</span>';
 
   function getTerrainProfile(variantKey) {
     return TERRAIN_PROFILES[variantKey || currentVariantKey] || TERRAIN_PROFILES.hub;
@@ -2507,7 +2511,7 @@
         name: '🦝 狸克島務長',
         fur: 0xb45309, belly: 0xfde68a, shirt: 0x22c55e, earType: 'round',
         hat: 'leaf',
-        tips: ['歡迎來到科技探險群島！點擊任一學習館就能出發囉！', '試試右上角的「🌅 晝夜切換」，夜晚的島嶼超美喔！', '搖搖島上的果樹，說不定會掉下驚喜果實！']
+        tips: ['歡迎來到科技探險群島！用方向鍵或 WASD 走到任一學習館門口，按 Enter 就能出發囉！', '試試右上角的「🌅 晝夜切換」，夜晚的島嶼超美喔！', '搖搖島上的果樹，說不定會掉下驚喜果實！']
       },
       ethics: {
         name: '🐿️ 蘋蘋松鼠園長',
@@ -2537,7 +2541,7 @@
         name: '🤖 諾克號創客機',
         fur: 0x38bdf8, belly: 0xe0f2fe, shirt: 0x0284c7, earType: 'antenna',
         hat: 'halo',
-        tips: ['嗶嗶！歡迎光臨未來科技創客實驗島！', '點擊任一智慧家居實驗艙，就能在浮動視窗裡操作 3D 感測模擬器！', '切換到星夜模式，整座科技島的光電迴路都會發光喔！']
+        tips: ['嗶嗶！歡迎光臨未來科技創客實驗島！', '走到任一智慧家居實驗艙門口按 Enter，就能在浮動視窗裡操作 3D 感測模擬器！', '切換到星夜模式，整座科技島的光電迴路都會發光喔！']
       }
     };
     var info = cfgMap[variantKey] || cfgMap.hub;
@@ -2833,9 +2837,9 @@
     if (['day', 'sunset', 'night'].indexOf(savedTimeMode) < 0) savedTimeMode = 'day';
 
     var timeBtnLabelMap = {
-      day:    '☀️ 時段：晴朗白天',
-      sunset: '🌇 時段：魔幻夕陽',
-      night:  '🌙 時段：璀璨星夜'
+      day:    '☀️ 時段：晴朗白天（T 切換）',
+      sunset: '🌇 時段：魔幻夕陽（T 切換）',
+      night:  '🌙 時段：璀璨星夜（T 切換）'
     };
 
     var state = {
@@ -2889,9 +2893,10 @@
       +       '<div class="flex items-center gap-2 flex-wrap">'
       +         '<button type="button" id="ac-wardrobe-toggle" class="ac-cam-btn" style="background:#fdf2f8;border-color:#f472b6;color:#9d174d">🪞 更換造型</button>'
       +         '<button type="button" id="ac-time-toggle" class="ac-cam-btn" style="background:#eff6ff;border-color:#60a5fa;color:#1e3a8a">' + timeBtnLabelMap[state.timeMode] + '</button>'
-      +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn">🎥 視角：動森跟隨（點擊切換全島鳥瞰）</button>'
+      +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn">🎥 視角：動森跟隨（V 切換全島鳥瞰）</button>'
       +       '</div>'
-      +       '<div class="ac-controls-hint hidden md:block">🎮 請用 WASD / 方向鍵走近 NPC、機場或建築 · 對談選單用 ◀ ▶ 方向鍵選擇、Enter 確認、Esc 離開</div>'
+      +       '<div class="ac-controls-hint hidden md:block">🎮 ' + KEY('WASD') + KEY('方向鍵') + ' 移動' + HINT_SEP + KEY('◀ ▶') + ' 選擇' + HINT_SEP + KEY('Enter') + ' 確認' + HINT_SEP + KEY('Esc') + ' 離開'
+                + HINT_SEP + KEY('V') + ' 視角' + HINT_SEP + KEY('T') + ' 時段' + HINT_SEP + KEY('M') + ' 清單</div>'
       +     '</div>'
       +     '<div id="ac-wardrobe-panel" class="ac-wardrobe-panel hidden"></div>'
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
@@ -2904,6 +2909,22 @@
       + '</div>';
 
     var stageEl   = container.querySelector('#ac-stage');
+
+    /* ★ 第一次進島（這個分頁第一次）：把操作說明放大顯示在畫面上方約 8 秒，之後自己淡掉。
+         右上角那一列小的一直都在；這個是給投影、後排看的。記在 sessionStorage，換島不會每次都跳。 */
+    try {
+      if (stageEl && sessionStorage.getItem('ac_hint_intro') !== '1') {
+        sessionStorage.setItem('ac_hint_intro', '1');
+        var introEl = document.createElement('div');
+        introEl.className = 'ac-hint-intro';
+        introEl.innerHTML = '<span>' + KEY('W') + KEY('A') + KEY('S') + KEY('D') + ' 或 ' + KEY('↑') + KEY('↓') + KEY('←') + KEY('→') + ' 走路</span>'
+          + '<span>走到建築門口按 ' + KEY('Enter') + ' 進入</span>'
+          + '<span>' + KEY('Esc') + ' 離開</span>';
+        stageEl.appendChild(introEl);
+        introEl.addEventListener('animationend', function () { introEl.remove(); });
+        setTimeout(function () { if (introEl.parentNode) introEl.remove(); }, 9000);   // 動畫被關掉（省電、減少動態）時的保險
+      }
+    } catch (e) { /* 讀不到 sessionStorage 就不顯示大提示，小的那一列還在 */ }
     var canvasEl  = container.querySelector('#ac-webgl-canvas');
     var overlayEl = container.querySelector('#ac-overlay');
     var playerTag = container.querySelector('#ac-player-tag');
@@ -3041,11 +3062,11 @@
         name: '🦝 狸克島務長',
         role: '群島總導覽員',
         tips: [
-          '歡迎來到「科技探險群島」！我是島務長狸克，點選島上的每座主題館就能搭機前往各系列島嶼喔！',
+          '歡迎來到「科技探險群島」！我是島務長狸克，用方向鍵或 WASD 走到任一座主題館門口、按 Enter，就能前往那個系列的島嶼喔！',
           '看到左上角的「☀️ 時段」按鈕了嗎？點一下可以切換「晴朗白天、魔幻夕陽、璀璨星夜」三種光影！',
           '想換穿不同帽子、衣服或背上精靈翅膀？點左上角「🪞 更換造型」隨時都能打扮自己！',
           '走近島上的蘋果樹、橘子樹或椰子樹並點一下，樹上的果實就會掉下來喔！',
-          '不知道先去哪一座島嗎？點右邊的「🧭 帶我去推薦關卡」，我直接幫你帶路！'
+          '不知道先去哪一座島嗎？和我對話時用 ◀ ▶ 選「🧭 帶我去推薦關卡」再按 Enter，我直接幫你帶路！'
         ]
       },
       ethics: {
@@ -3053,7 +3074,7 @@
         role: '豐收果園守護者',
         tips: [
           '歡迎來到「豐收果園與陽光溫室島」！這裡的每一棵果樹都代表一個資訊倫理與資安章節喔！',
-          '點擊果樹會先開啟「重點整理」浮動視窗，讀完再按「開始挑戰」，連續答對就能摘下黃金果實！',
+          '走到果樹前按 Enter，會先開啟「重點整理」浮動視窗，讀完再按「開始挑戰」，連續答對就能摘下黃金果實！',
           '只要通過一個章節，那棵果樹或穀倉的屋頂就會升起「3D 旋轉黃金榮譽星」與慶祝花叢！',
           '走上北邊的石階斜坡，高台上還有「金蘋果傳說神木」與「陽光玻璃大溫室」總複習等你挑戰！',
           '把 10 個章節全部通關後，就能解鎖主島上的「🏆 排行賽露營地」跟全校高手過招喔！'
@@ -3064,7 +3085,7 @@
         role: '森林遊樂園園長',
         tips: [
           '歡迎光臨「森林奇幻遊樂園」！島上的 10 座遊樂設施分別對應 10 道國際運算思維謎題！',
-          '不管是滑梯公園、電流急急棒還是小籠包攤位，順序完全自由，想玩哪一座就直接點進去！',
+          '不管是滑梯公園、電流急急棒還是小籠包攤位，順序完全自由，想玩哪一座就走過去按 Enter！',
           '在挑戰視窗過關後，記得按 Windows + Alt + PrintScreen 擷取視窗畫面！',
           '截好圖之後，走去廣場西側的「🎠 旋轉木馬通關回報亭」上傳截圖，就能領取通關證書囉！',
           '試試切換成「🌙 璀璨星夜」模式，夜晚的摩天輪與遊樂園超浪漫喔！'
@@ -3076,8 +3097,8 @@
         tips: [
           '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
           '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
-          '點擊任一工坊後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
-          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以點工坊再傳一次 Scratch 作品！',
+          '走進任一工坊（走到門口按 Enter）後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
+          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以回到那座工坊再傳一次 Scratch 作品！',
           '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
         ]
       },
@@ -3087,8 +3108,8 @@
         tips: [
           '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
           '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
-          '點擊任一工坊後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
-          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以點工坊再傳一次 Scratch 作品！',
+          '走進任一工坊（走到門口按 Enter）後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
+          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以回到那座工坊再傳一次 Scratch 作品！',
           '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
         ]
       },
@@ -3098,7 +3119,7 @@
         tips: [
           '嗶嗶！歡迎登陸「未來科技創客實驗島」！我是你的 AI 領航員諾克號！',
           '島上的 5 座科技實驗艙分別展示智慧門閘、人體感應燈廊、風力能源塔、光控圓頂與研發總部！',
-          '點擊任一實驗艙，就能在科技浮動視窗裡親手操作「3D 互動硬體模擬器」與檢視積木程式邏輯！',
+          '走到任一實驗艙門口按 Enter，就能在科技浮動視窗裡親手操作「3D 互動硬體模擬器」與檢視積木程式邏輯！',
           '在浮動視窗開啟時，背景的 3D 攝影機會自動推進特寫該座科技建築喔！',
           '切換到「🌙 璀璨星夜」模式，整座科技島的光電迴路與霓虹圓頂都會閃閃發光！'
         ]
@@ -3107,9 +3128,9 @@
         name: '🦫 齒輪海狸師傅',
         role: '下學期 Scratch 演算法工坊總導師',
         tips: [
-          '歡迎來到下學期的「Scratch 演算法蒸氣工坊」！先去廣場旁的「🤖 暖身訓練塔」完成積木暖身，或點「📋 學習目標＆計分看板」查看規則吧！',
+          '歡迎來到下學期的「Scratch 演算法蒸氣工坊」！先去廣場旁的「🤖 暖身訓練塔」完成積木暖身，或走到「📋 學習目標＆計分看板」前按 Enter 查看規則吧！',
           '這個模組你會學到：📦 函式與模組化（把重複動作包成自訂積木）、🔧 參數傳遞（加輸入孔控制方向與次數）、🔍 排序與搜尋演算法！',
-          '島上 10 座工坊全部開放、不限順序！點擊任一工坊可下載範本並查看提示，做好後把 .sb3 檔上傳批改。',
+          '島上 10 座工坊全部開放、不限順序！走到任一工坊門口按 Enter，可下載範本並查看提示，做好後把 .sb3 檔上傳批改。',
           '每一關有兩顆星：⭐ 作品星（上傳 .sb3 並通過結構檢查）＋ 💡 觀念星（回答作品裡的一道延伸問題，答錯不扣作品星）！',
           '十關全部完成後，別忘了前往北邊高台的「🏛️ 黃金齒輪神殿」挑戰隱藏魔王關喔！'
         ]
@@ -3318,7 +3339,8 @@
 
       var scene = new THREE.Scene();
       scene.background = new THREE.Color(0x88def8);
-      scene.fog = new THREE.FogExp2(0x9be7fa, 0.0058);
+      var FOG_DENSITY = 0.0058;
+      scene.fog = new THREE.FogExp2(0x9be7fa, FOG_DENSITY);
 
       var camera = new THREE.PerspectiveCamera(37, 16 / 10, 0.5, 260);
 
@@ -4458,8 +4480,8 @@
           state.camMode = state.camMode === 'follow' ? 'overview' : 'follow';
           state.yawOffset = 0;
           camBtn.textContent = state.camMode === 'follow'
-            ? '🎥 視角：動森跟隨（點擊切換全島鳥瞰）'
-            : '🗺️ 視角：全島鳥瞰（點擊切換動森跟隨）';
+            ? '🎥 視角：動森跟隨（V 切換全島鳥瞰）'
+            : '🗺️ 視角：全島鳥瞰（V 切換動森跟隨）';
         });
       }
 
@@ -4468,6 +4490,16 @@
       function onKeyDown(e) {
         var tag = (e.target && e.target.tagName) || '';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+        /* ★ 快捷鍵（2026-11-12）：V 切換視角、T 切換時段 —— 和上方那兩顆按鈕一樣，手不必離開鍵盤去拿滑鼠。
+             有視窗蓋著、或島嶼被收起來（清單模式）時不作用。M（島嶼／清單）在檔案最下面，清單模式也要能按。 */
+        if ((e.code === 'KeyV' || e.code === 'KeyT') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          if (!e.repeat && canvasEl.getClientRects().length && !document.querySelector(HOTKEY_BLOCKERS)) {
+            var hotBtn = e.code === 'KeyV' ? camBtn : timeBtn;
+            if (hotBtn) { e.preventDefault(); hotBtn.click(); }
+          }
+          return;
+        }
 
         if (e.code === 'Escape' || e.key === 'Escape') {
           if (document.getElementById('dal-airport-modal')) return;
@@ -4588,12 +4620,116 @@
       var currentPy = getExactSurfaceY(initWx, initWz);
       var lastAnimNow = performance.now();
 
+      /* ★ 走路速度（世界單位／秒）。原本是「每畫一格走 0.21」，等於速度跟著畫面更新率跑：
+           電腦慢（每秒 20 格）走三分之一速、144Hz 螢幕走 2.4 倍速。
+           改成跟「時間」走：0.21 × 60 ＝ 12.6，在 60 格的電腦上和原本一模一樣。（2026-11-12）*/
+      var WALK_SPEED = 12.6;
+
+      /* ★ 全島鳥瞰要真的看得到全島（2026-11-12）
+           原本鳥瞰鏡頭的距離是寫死的（46.5），島比較大、或畫面比較扁的時候，邊上的建築和招牌會跑到畫面外。
+           改成算出來的：把鏡頭沿著原本的方向往後拉，拉到「海岸線一圈＋每一棟建築的招牌＋NPC＋碼頭」全部進到畫面裡為止。
+           · 招牌是畫在建築上方的 HTML 方塊，所以建築那幾個點要多留邊（左右各半個招牌寬、上面留招牌高＋工具列）。
+           · 只在畫面大小或左右轉動的角度變了才重算；滾輪縮放（zoomDist）照舊乘在外面。 */
+      var ovFitCam = new THREE.PerspectiveCamera(37, 16 / 10, 0.5, 600);
+      var ovFitVec = new THREE.Vector3();
+      var ovFitKey = '', ovFitK = 1;
+      function overviewFitPoints() {
+        var pts = [], i;
+        var rx = 37.2 * prof.scaleX, rz = 37.2 * prof.scaleZ;
+        for (i = 0; i < 16; i++) {                      // 海岸線一圈
+          var a = i / 16 * Math.PI * 2;
+          pts.push([Math.cos(a) * rx, 0, Math.sin(a) * rz, 16, 60, 16]);
+        }
+        pts.push([0, 0, 25.5, 16, 60, 16]);               // 南邊碼頭尾端
+        if (variantKey === 'ethics') {                  // 豐收果園島東西兩側的半島
+          [-1, 1].forEach(function (sg) {
+            pts.push([sg * 41.5, 0, 2.5, 16, 60, 16], [sg * 32, 0, 12, 16, 60, 16], [sg * 32, 0, -7, 16, 60, 16]);
+          });
+        }
+        for (i = 0; i < nodeEntries.length; i++) {      // 每一棟建築的招牌
+          var ne = nodeEntries[i];
+          pts.push([ne.wx, ne.wy + (ne.mesh.userData.labelHeight || 5.2), ne.wz, 104, 128, 16]);
+        }
+        pts.push([pctToWorldX(mascotPctX), 4.2, pctToWorldZ(mascotPctY), 90, 110, 16]);   // NPC 的名牌
+        return pts;                                      // [x, y, z, 左右留邊, 上方留邊, 下方留邊]（像素）
+      }
+      function overviewFitScale(yaw) {
+        var w = stageEl.clientWidth || 960, h = stageEl.clientHeight || 600;
+        var key = w + 'x' + h + '@' + yaw.toFixed(2) + '#' + nodeEntries.length;
+        if (key === ovFitKey) return ovFitK;
+        var pts = overviewFitPoints();
+        ovFitCam.aspect = w / h; ovFitCam.updateProjectionMatrix();
+        function fits(k) {
+          ovFitCam.position.set(Math.sin(yaw) * 46.5 * k, 34.0 * k, Math.cos(yaw) * 46.5 * k + 4.0);
+          ovFitCam.lookAt(0, 0.8, -1.5);
+          ovFitCam.updateMatrixWorld(true);
+          for (var i = 0; i < pts.length; i++) {
+            var p = pts[i];
+            ovFitVec.set(p[0], p[1], p[2]).project(ovFitCam);
+            var sx = (ovFitVec.x * 0.5 + 0.5) * w, sy = (-ovFitVec.y * 0.5 + 0.5) * h;
+            if (ovFitVec.z > 1 || sx < p[3] || sx > w - p[3] || sy < p[4] || sy > h - p[5]) return false;
+          }
+          return true;
+        }
+        var lo = 0.7, hi = 4.0;                          // 4 倍還塞不下（畫面極窄）就用 4 倍
+        if (fits(lo)) hi = lo;
+        else for (var it = 0; it < 14; it++) { var mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+        ovFitKey = key; ovFitK = hi;
+        return ovFitK;
+      }
+      var WALK_SUBSTEP = 0.21;       // 一小步最多走這麼遠（＝原本的一格），碰撞判定才不會被一大步跨過去
+
+      /* ★ 省電與降畫質（2026-11-12）
+           coveredSince：島被視窗蓋住／被收起來的起始時間，見 animate 開頭。
+           lowQuality  ：這台電腦跑不動時關掉陰影、解析度降回 1 倍。只降不升；
+                         記在 sessionStorage，換到下一座島就直接用低畫質，不必每一頁再卡兩秒。 */
+      var coveredSince = 0;
+      var animStartedAt = 0, avgFrameSec = 0.016, slowSec = 0;
+      var lowQuality = false;
+      try { lowQuality = sessionStorage.getItem('ac_lowq') === '1'; } catch (e) {}
+      function applyLowQuality() {
+        lowQuality = true;
+        sunLight.castShadow = false;          // 陰影那一趟不畫了（最花力氣的一段）
+        renderer.setPixelRatio(1);
+        try { sessionStorage.setItem('ac_lowq', '1'); } catch (e) {}
+      }
+      if (lowQuality) applyLowQuality();
+
       function animate(now) {
         if (state.destroyed) return;
-        var dt = Math.min(0.05, Math.max(0.001, (now - lastAnimNow) * 0.001));
+        var rawDt = Math.max(0.001, (now - lastAnimNow) * 0.001);   // 這一格真正經過的秒數
+        var dt = Math.min(0.05, rawDt);
         lastAnimNow = now;
         var tSec = now * 0.001;
         var isModalOpen = !!document.querySelector('.ac-float-backdrop:not(.hidden)');
+
+        /* ★ 有視窗蓋在島上（關卡視窗、機場視窗、週成績卡），或島嶼畫面被收起來（卡片清單）時，島停下來：
+             不重算、不重畫，把電腦的力氣留給學生正在看的那個視窗。
+             先留 0.7 秒讓「建築特寫」鏡頭走完、畫面定格在對的地方；視窗一關，下一格就恢復。
+             ⚠️ 判斷「被收起來」用 getClientRects —— offsetParent 對 position:fixed 的祖先會誤判。 */
+        var covered = isModalOpen || canvasEl.getClientRects().length === 0
+                   || !!document.querySelector('#week-mask, #modal.flex, #action-modal.flex');
+        if (!covered) coveredSince = 0;
+        else if (!coveredSince) coveredSince = now;
+        else if (now - coveredSince > 700) {
+          state.keys = {};                    // 蓋住的期間不留「按著的方向鍵」，免得視窗一關角色自己走掉
+          state.rafId = requestAnimationFrame(animate);
+          return;
+        }
+
+        /* ★ 跑不動就自動降畫質：開始 3 秒後，連續 2 秒平均不到 25 格 → 關陰影、降解析度（只做一次） */
+        if (!animStartedAt) animStartedAt = now;
+        if (!lowQuality && !covered && now - animStartedAt > 3000) {
+          avgFrameSec = avgFrameSec * 0.9 + Math.min(0.25, rawDt) * 0.1;
+          slowSec = avgFrameSec > 0.04 ? slowSec + Math.min(0.25, rawDt) : 0;
+          if (slowSec > 2) {
+            applyLowQuality();
+            console.info('[AC_ISLAND] 這台電腦畫面更新偏慢（平均每格 ' + Math.round(avgFrameSec * 1000) + ' 毫秒），已自動關閉陰影並降低解析度。');
+          }
+        }
+        // 平滑係數換算：原本「每格靠近 f」是以 60 格為準，格數不同時換算成一樣的手感
+        var f60 = Math.min(0.25, rawDt) * 60;
+        var ease = function (f) { return 1 - Math.pow(1 - f, f60); };
 
         if (!isModalOpen) {
           for (var mi = 0; mi < activeGlbMixers.length; mi++) {
@@ -4607,114 +4743,122 @@
         if (state.keys.ArrowUp    || state.keys.KeyW) vy -= 1;
         if (state.keys.ArrowDown  || state.keys.KeyS) vy += 1;
 
-        var oldWx = pctToWorldX(state.px);
-        var oldWz = pctToWorldZ(state.py);
-        var nextWx = oldWx;
-        var nextWz = oldWz;
-        var wSpeed = 0.21; // 悠閒漫步世界速度
+        /* ★ 這一格該走多遠＝速度 × 經過的時間；太遠就切成幾小步，每一小步都照原本的規則做碰撞。
+             上限 0.25 秒：切到別的分頁再回來，不會一口氣衝出去。 */
+        var moveDist = WALK_SPEED * Math.min(0.25, rawDt);
+        var subSteps = Math.max(1, Math.ceil(moveDist / WALK_SUBSTEP));
+        var wSpeed = moveDist / subSteps;   // 每一小步的距離
+        var oldWx, oldWz, nextWx, nextWz, pWx, pWz;
+        for (var subI = 0; subI < subSteps; subI++) {
+          oldWx = pctToWorldX(state.px);
+          oldWz = pctToWorldZ(state.py);
+          nextWx = oldWx;
+          nextWz = oldWz;
 
-        if (vx !== 0 || vy !== 0) {
-          state.tx = null;
-          state.ty = null;
-          var len = Math.sqrt(vx * vx + vy * vy);
-          var nx = vx / len, nz = vy / len;
-          nextWx = oldWx + nx * wSpeed;
-          nextWz = oldWz + nz * wSpeed;
-          state.heading = Math.atan2(nx, nz);
-          state.walking = true;
-        } else if (state.tx !== null && state.ty !== null) {
-          var safeGoal = pushOutsideObstacles(pctToWorldX(state.tx), pctToWorldZ(state.ty), 0.22);
-          var goalWx = safeGoal.wx;
-          var goalWz = safeGoal.wz;
-
-          // 若起點與終點分別在北側懸崖上下兩層，且角色尚未走到石階斜坡走廊，自動先導引至石階斜坡口！
-          var subWx = goalWx;
-          var subWz = goalWz;
-          var crossUp   = (oldWz > CLIFF_Z_EDGE && goalWz <= CLIFF_Z_EDGE);
-          var crossDown = (oldWz <= CLIFF_Z_EDGE && goalWz > CLIFF_Z_EDGE);
-          if ((crossUp || crossDown) && (oldWx < RAMP_X_MIN + 0.5 || oldWx > RAMP_X_MAX - 0.5)) {
-            subWx = -6.0;
-            subWz = crossUp ? (RAMP_Z_SOUTH + 0.4) : (CLIFF_Z_EDGE - 0.4);
-          }
-
-          var gdx = subWx - oldWx;
-          var gdz = subWz - oldWz;
-          var gDist = Math.sqrt(gdx * gdx + gdz * gdz);
-
-          if (gDist <= 0.34 && subWx === goalWx && subWz === goalWz) {
-            nextWx = goalWx;
-            nextWz = goalWz;
+          if (vx !== 0 || vy !== 0) {
             state.tx = null;
             state.ty = null;
-            state.walking = false;
-            savePos();
-          } else {
-            var dirX = gdx / (gDist || 1);
-            var dirZ = gdz / (gDist || 1);
+            var len = Math.sqrt(vx * vx + vy * vy);
+            var nx = vx / len, nz = vy / len;
+            nextWx = oldWx + nx * wSpeed;
+            nextWz = oldWz + nz * wSpeed;
+            state.heading = Math.atan2(nx, nz);
+            state.walking = true;
+          } else if (state.tx !== null && state.ty !== null) {
+            var safeGoal = pushOutsideObstacles(pctToWorldX(state.tx), pctToWorldZ(state.ty), 0.22);
+            var goalWx = safeGoal.wx;
+            var goalWz = safeGoal.wz;
 
-            // ★ 智慧繞行系統：若前方路徑上有 3D 建築物或樹木阻擋，自動計算切線方向優雅繞過建築外牆！
-            var lookDist = Math.min(gDist, 4.6);
-            for (var oi = 0; oi < solidObstacles.length; oi++) {
-              var ob = solidObstacles[oi];
-              var toObX = ob.x - oldWx;
-              var toObZ = ob.z - oldWz;
-              var proj = toObX * dirX + toObZ * dirZ;
-              var distToOb = Math.sqrt(toObX * toObX + toObZ * toObZ);
-              var avoidR = ob.r + 0.55;
-              if ((proj > -0.25 && proj < lookDist) || distToOb < avoidR) {
-                var perpX = toObX - proj * dirX;
-                var perpZ = toObZ - proj * dirZ;
-                var perpDist = Math.sqrt(perpX * perpX + perpZ * perpZ);
-                if (perpDist < avoidR) {
-                  var rnx = -toObX / (distToOb || 1);
-                  var rnz = -toObZ / (distToOb || 1);
-                  var t1x = -rnz, t1z = rnx;
-                  var t2x = rnz,  t2z = -rnx;
-                  var obToGoalX = subWx - ob.x;
-                  var obToGoalZ = subWz - ob.z;
-                  var dot1 = t1x * obToGoalX + t1z * obToGoalZ;
-                  var dot2 = t2x * obToGoalX + t2z * obToGoalZ;
-                  var tx = dot1 >= dot2 ? t1x : t2x;
-                  var tz = dot1 >= dot2 ? t1z : t2z;
-                  var blend = Math.min(1.0, ((avoidR - perpDist) / avoidR) * 1.35);
-                  dirX = dirX * (1 - blend) + (tx * 0.88 + rnx * 0.25) * blend;
-                  dirZ = dirZ * (1 - blend) + (tz * 0.88 + rnz * 0.25) * blend;
-                  var dLen = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1;
-                  dirX /= dLen;
-                  dirZ /= dLen;
-                }
-              }
+            // 若起點與終點分別在北側懸崖上下兩層，且角色尚未走到石階斜坡走廊，自動先導引至石階斜坡口！
+            var subWx = goalWx;
+            var subWz = goalWz;
+            var crossUp   = (oldWz > CLIFF_Z_EDGE && goalWz <= CLIFF_Z_EDGE);
+            var crossDown = (oldWz <= CLIFF_Z_EDGE && goalWz > CLIFF_Z_EDGE);
+            if ((crossUp || crossDown) && (oldWx < RAMP_X_MIN + 0.5 || oldWx > RAMP_X_MAX - 0.5)) {
+              subWx = -6.0;
+              subWz = crossUp ? (RAMP_Z_SOUTH + 0.4) : (CLIFF_Z_EDGE - 0.4);
             }
 
-            nextWx = oldWx + dirX * (wSpeed * 1.15);
-            nextWz = oldWz + dirZ * (wSpeed * 1.15);
-            state.heading = Math.atan2(dirX, dirZ);
-            state.walking = true;
+            var gdx = subWx - oldWx;
+            var gdz = subWz - oldWz;
+            var gDist = Math.sqrt(gdx * gdx + gdz * gdz);
+
+            if (gDist <= 0.34 && subWx === goalWx && subWz === goalWz) {
+              nextWx = goalWx;
+              nextWz = goalWz;
+              state.tx = null;
+              state.ty = null;
+              state.walking = false;
+              savePos();
+            } else {
+              var dirX = gdx / (gDist || 1);
+              var dirZ = gdz / (gDist || 1);
+
+              // ★ 智慧繞行系統：若前方路徑上有 3D 建築物或樹木阻擋，自動計算切線方向優雅繞過建築外牆！
+              var lookDist = Math.min(gDist, 4.6);
+              for (var oi = 0; oi < solidObstacles.length; oi++) {
+                var ob = solidObstacles[oi];
+                var toObX = ob.x - oldWx;
+                var toObZ = ob.z - oldWz;
+                var proj = toObX * dirX + toObZ * dirZ;
+                var distToOb = Math.sqrt(toObX * toObX + toObZ * toObZ);
+                var avoidR = ob.r + 0.55;
+                if ((proj > -0.25 && proj < lookDist) || distToOb < avoidR) {
+                  var perpX = toObX - proj * dirX;
+                  var perpZ = toObZ - proj * dirZ;
+                  var perpDist = Math.sqrt(perpX * perpX + perpZ * perpZ);
+                  if (perpDist < avoidR) {
+                    var rnx = -toObX / (distToOb || 1);
+                    var rnz = -toObZ / (distToOb || 1);
+                    var t1x = -rnz, t1z = rnx;
+                    var t2x = rnz,  t2z = -rnx;
+                    var obToGoalX = subWx - ob.x;
+                    var obToGoalZ = subWz - ob.z;
+                    var dot1 = t1x * obToGoalX + t1z * obToGoalZ;
+                    var dot2 = t2x * obToGoalX + t2z * obToGoalZ;
+                    var tx = dot1 >= dot2 ? t1x : t2x;
+                    var tz = dot1 >= dot2 ? t1z : t2z;
+                    var blend = Math.min(1.0, ((avoidR - perpDist) / avoidR) * 1.35);
+                    dirX = dirX * (1 - blend) + (tx * 0.88 + rnx * 0.25) * blend;
+                    dirZ = dirZ * (1 - blend) + (tz * 0.88 + rnz * 0.25) * blend;
+                    var dLen = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1;
+                    dirX /= dLen;
+                    dirZ /= dLen;
+                  }
+                }
+              }
+
+              nextWx = oldWx + dirX * (wSpeed * 1.15);
+              nextWz = oldWz + dirZ * (wSpeed * 1.15);
+              state.heading = Math.atan2(dirX, dirZ);
+              state.walking = true;
+            }
+          } else {
+            state.walking = false;
           }
-        } else {
-          state.walking = false;
+
+          // ★ 實體物理碰撞約束：1. 島嶼海岸線與北側懸崖邊界約束 → 2. 建築樹木剛體排斥 → 3. 再次確認邊界（防止被建築往外推落懸崖）
+          var preClamped = clampToIslandBounds(oldWx, oldWz, nextWx, nextWz);
+          var colResolved = pushOutsideObstacles(preClamped.wx, preClamped.wz, 0);
+          var postClamped = clampToIslandBounds(oldWx, oldWz, colResolved.wx, colResolved.wz);
+          pWx = postClamped.wx;
+          pWz = postClamped.wz;
+
+          state.px = worldToPctX(pWx);
+          state.py = worldToPctY(pWz);
+          if (!state.walking) break;   // 站著不動（或剛走到目的地）就不必再算下一小步
         }
-
-        // ★ 實體物理碰撞約束：1. 島嶼海岸線與北側懸崖邊界約束 → 2. 建築樹木剛體排斥 → 3. 再次確認邊界（防止被建築往外推落懸崖）
-        var preClamped = clampToIslandBounds(oldWx, oldWz, nextWx, nextWz);
-        var colResolved = pushOutsideObstacles(preClamped.wx, preClamped.wz, 0);
-        var postClamped = clampToIslandBounds(oldWx, oldWz, colResolved.wx, colResolved.wz);
-        var pWx = postClamped.wx;
-        var pWz = postClamped.wz;
-
-        state.px = worldToPctX(pWx);
-        state.py = worldToPctY(pWz);
 
         // 精準取得角色所在位置的地表高度，並平滑插值（上下石階或躍上高台時自然過渡，絕不陷入地下！）
         var targetSurfY = getExactSurfaceY(pWx, pWz);
-        currentPy += (targetSurfY - currentPy) * 0.28;
+        currentPy += (targetSurfY - currentPy) * ease(0.28);
         var walkHop = state.walking ? Math.abs(Math.sin(tSec * 8.5)) * 0.18 : 0;
         playerMesh.position.set(pWx, currentPy + walkHop, pWz);
 
         var diffRot = state.heading - playerMesh.rotation.y;
         while (diffRot > Math.PI) diffRot -= Math.PI * 2;
         while (diffRot < -Math.PI) diffRot += Math.PI * 2;
-        playerMesh.rotation.y += diffRot * 0.18;
+        playerMesh.rotation.y += diffRot * ease(0.18);
 
         var limbs = playerMesh.userData.limbs;
         if (limbs) {
@@ -4755,17 +4899,21 @@
           targetLookY = currentPy + 1.5;
           targetLookZ = pWz - 2.0;
         } else {
-          var ovDist = 46.5 * state.zoomDist;
+          var ovK = overviewFitScale(state.yawOffset) * state.zoomDist;   // 拉到整座島都進畫面，再乘上滾輪縮放
+          var ovDist = 46.5 * ovK;
           targetCamX = Math.sin(state.yawOffset) * ovDist;
-          targetCamY = 34.0 * state.zoomDist;
+          targetCamY = 34.0 * ovK;
           targetCamZ = Math.cos(state.yawOffset) * ovDist + 4.0;
           targetLookX = 0;
           targetLookY = 0.8;
           targetLookZ = -1.5;
         }
+        /* 鳥瞰時鏡頭拉得比較遠，霧照原本的濃度會把整座島洗白；濃度跟著距離等比例調淡，看起來和拉遠之前一樣清楚 */
+        var fogWant = (state.camMode !== 'follow' && !focusEntry) ? FOG_DENSITY / Math.max(1, overviewFitScale(state.yawOffset) * state.zoomDist) : FOG_DENSITY;
+        if (scene.fog && scene.fog.density !== undefined) scene.fog.density += (fogWant - scene.fog.density) * ease(0.08);
 
-        camPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.08);
-        camLook.lerp(new THREE.Vector3(targetLookX, targetLookY, targetLookZ), 0.10);
+        camPos.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), ease(0.08));
+        camLook.lerp(new THREE.Vector3(targetLookX, targetLookY, targetLookZ), ease(0.10));
         camera.position.copy(camPos);
         camera.lookAt(camLook);
 
@@ -5010,6 +5158,29 @@
     };
     return activeInstance;
   }
+
+  /* ★ 快捷鍵 M：島嶼探險 ⇄ 清單（2026-11-12）
+       不掛在島嶼本身，因為清單模式下島嶼可能已經收起來甚至卸載，那時也要能按 M 切回來。
+       · 單顆切換鈕的頁面（運算思維、智慧家居、Arduino）：按鈕標 data-ac-view-toggle
+       · 兩顆並排的頁面（主島、測驗、流程圖、Scratch）：看現在島嶼有沒有在畫面上，按另一顆
+       打字中、有視窗蓋著、切換鈕不在畫面上（例如作答中）都不作用。 */
+  var HOTKEY_BLOCKERS = '.ac-float-backdrop:not(.hidden), #dal-airport-modal, #week-mask, #modal.flex, #action-modal.flex';
+  function onScreen(el) { return !!el && el.getClientRects().length > 0; }
+  function toggleIslandListView() {
+    var single = document.querySelector('[data-ac-view-toggle]');
+    if (onScreen(single)) { single.click(); return true; }
+    var want = onScreen(document.getElementById('ac-webgl-canvas')) ? 'list' : 'island';
+    var btn = document.querySelector('[data-view="' + want + '"], [data-qz-view="' + want + '"], [data-fc-view="' + want + '"], [data-sc-view="' + want + '"]');
+    if (onScreen(btn)) { btn.click(); return true; }
+    return false;
+  }
+  global.addEventListener('keydown', function (e) {
+    if (e.code !== 'KeyM' || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+    var t = e.target, tag = (t && t.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (document.querySelector(HOTKEY_BLOCKERS)) return;
+    if (toggleIslandListView()) e.preventDefault();
+  });
 
   global.AC_ISLAND = {
     mount: mount,

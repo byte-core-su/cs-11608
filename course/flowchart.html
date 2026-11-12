@@ -85,9 +85,9 @@
 .hl-b{background:linear-gradient(transparent 52%, rgba(147,197,253,.7) 52%);font-weight:800;padding:0 1px;border-radius:2px}
 </style>
   <!-- 全站共用設定（要在 guard 之前載入）-->
-  <link rel="stylesheet" href="../shared/island.css?v=20261107">
+  <link rel="stylesheet" href="../shared/island.css?v=20261112c1">
   <script src="../config.js"></script>
-  <script src="../shared/term.js?v=20261108r1"></script>
+  <script src="../shared/term.js?v=20261112r3"></script>
   <!-- 別的學期沒有這一頁（這一頁是有逐關流程圖的學期才有的）⇒ 回闖關基地 -->
   <script>if (!CONFIG.FLOWCHART) location.replace('hub.html');</script>
 <!-- 登入邏輯單一來源 -->
@@ -95,7 +95,7 @@
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
   <script src="../shared/guard.js"></script>
   <script src="../shared/workup.js"></script>
-  <script src="../shared/island.js?v=20261108r1"></script>
+  <script src="../shared/island.js?v=20261112r4"></script>
 </head>
 <body class="min-h-screen ac-theme-bg">
   <div id="app"></div>
@@ -1127,7 +1127,9 @@
                   <div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">
                     <button type="button" data-fc-view="island" class="fc-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode!=='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">🏝️ 島嶼探險</button>
                     <button type="button" data-fc-view="list" class="fc-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode==='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">📋 關卡清單</button>
+                    <span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>
                   </div>
+                  ${state.viewMode==='list' ? '<a href="hub.html" class="ac-pill ac-pill-btn text-xs">✈️ 回主島</a>' : '' /* 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） */}
                 </div>
               </div>
             </header>

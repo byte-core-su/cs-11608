@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資訊科技 闖關基地</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="../shared/island.css?v=20261107v2">
+  <link rel="stylesheet" href="../shared/island.css?v=20261112c1">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body{
@@ -28,14 +28,14 @@
 
   <!-- 全站共用計分規則（單一來源，與各關卡頁、教師端同一份） -->
   <script src="../config.js"></script>
-  <script src="../shared/term.js?v=20261108r1"></script>
+  <script src="../shared/term.js?v=20261112r3"></script>
 <!-- 登入：學號＋六位數驗證碼（單一來源，見 shared/auth.js）-->
 <script src="../shared/auth.js"></script>
   <script src="../shared/grading.js"></script>
   <!-- 課表與「這週有沒有上課日」的判定（教師端同一支）-->
   <script src="../shared/schedule.js"></script>
   <!-- 🏝️ 動物森友會島嶼探險引擎 -->
-  <script src="../shared/island.js?v=20261108r1"></script>
+  <script src="../shared/island.js?v=20261112r4"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signOut,
@@ -405,6 +405,10 @@
       const best = Object.values(weeks).reduce((a,b)=>Math.max(a,b), 0);
       return {
         curWeekNo: curIdx+1,
+        /* ★ 還沒開學（今天在這學期開學日之前）時 curIdx 是負的，直接顯示會變成「第 -12 週」。
+             畫面上一律用 weekLabel；curWeekNo 只拿來和長條圖的週次比對。（2026-11-12）*/
+        beforeStart: curIdx < 0,
+        weekLabel: curIdx < 0 ? '尚未開學' : `第 ${curIdx+1} 週`,
         thisWeekStars,
         thisWeekScore: window.SCHEDULE
           ? SCHEDULE.weekScore(thisWeekStars, hereThisWeek, WK_BASE, WK_PER)
@@ -577,6 +581,7 @@
                    : wk.thisWeekStars >= 6 ? '穩定推進，保持這個節奏！'
                    : wk.thisWeekStars >= 3 ? '有進度了，再加把勁！'
                    : wk.thisWeekStars > 0 ? '起步了！這週再多闖一關吧。'
+                   : wk.beforeStart ? '這學期還沒開學，開學後才會開始算每週成績。'
                    : '這週還沒有新星星，挑一關開始吧！';
       const weekCard = state.showWeek ? `
         <div id="week-mask" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -586,18 +591,18 @@
               <button id="close-week" class="absolute top-3 right-4 text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
 
               <div class="p-6 text-center border-b-2 border-dashed border-amber-200">
-                <div class="text-xs font-black text-amber-600 tracking-widest">第 ${wk.curWeekNo} 週 · 本週成績卡</div>
+                <div class="text-xs font-black text-amber-600 tracking-widest">${wk.weekLabel} · 本週成績卡</div>
                 <div class="text-6xl my-2">${medal}</div>
                 <div class="text-5xl font-black ${wk.thisWeekStars>0?'text-amber-500':'text-slate-300'} tracking-wider">⭐ ${wk.thisWeekStars}</div>
                 <div class="mt-2 inline-block ${wk.thisWeekScore>0?'bg-amber-500 text-white':'bg-slate-200 text-slate-500'} font-black text-2xl px-5 py-1.5 rounded-full shadow">${wk.thisWeekScore} 分</div>
                 <!-- ★ 0 星的兩種情況要分開講：
                      人有來、也登入了 → 給基本分；整週沒出現 → 0 分。
                      ⚠️ 不講清楚的話，兩個 0 星的同學看到不同分數會以為系統壞了。 -->
-                ${wk.thisWeekStars>0 ? '' : (wk.hereThisWeek
+                ${(wk.thisWeekStars>0 || wk.beforeStart) ? '' : (wk.hereThisWeek
                   ? `<div class="text-xs text-slate-500 mt-1">這週有來上課（基本分）—— 拿到星星就會往上加</div>`
                   : `<div class="text-xs text-slate-400 mt-1">這週還沒有登入紀錄</div>`)}
                 <p class="text-sm font-bold text-slate-600 mt-3">${praise}</p>
-                <p class="text-[11px] text-slate-400 mt-1">${wk.thisWeekStars>0 ? '分數 ＝ 60 ＋ 星數 × 4（滿分 100）' : '本週還沒有星星，先完成一個小關卡就會開始計分'}</p>
+                <p class="text-[11px] text-slate-400 mt-1">${wk.thisWeekStars>0 ? '分數 ＝ 60 ＋ 星數 × 4（滿分 100）' : wk.beforeStart ? '' : '本週還沒有星星，先完成一個小關卡就會開始計分'}</p>
               </div>
 
               <div class="p-5">
@@ -654,6 +659,7 @@
                 <div class="inline-flex rounded-full bg-amber-100/70 p-1 border-2 border-amber-200">
                   <button type="button" data-view="island" class="ac-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode!=='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">🏝️ 島嶼探險</button>
                   <button type="button" data-view="list" class="ac-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode==='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">📋 卡片清單</button>
+                  <span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>
                 </div>
                 <button id="logout" class="ac-pill ac-pill-btn text-xs">${isDemo?'✈️ 返回登入':'✈️ 登出'}</button>
               </div>
@@ -727,9 +733,9 @@
           kind: 'board',
           icon: '📋',
           tag: '島民服務處',
-          title: `第 ${wk.curWeekNo} 週 · 島民成績佈告欄`,
+          title: `${wk.weekLabel} · 島民成績佈告欄`,
           shortTitle: '本週成績佈告欄',
-          desc: `本週獲得 ⭐ ${wk.thisWeekStars}（${wk.thisWeekScore} 分）· 點擊查看近八週星星統計與明細！`,
+          desc: `本週獲得 ⭐ ${wk.thisWeekStars}（${wk.thisWeekScore} 分）· 按 Enter 查看近八週星星統計與明細！`,
           pass: wk.thisWeekStars > 0,
           starsText: `本週 ${wk.thisWeekScore}分`,
           statusLabel: '成績查詢',

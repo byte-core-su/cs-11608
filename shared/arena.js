@@ -28,12 +28,31 @@
 
   /* ── 樣式與畫面 ─────────────────────────────── */
   var st = document.createElement('style');
-  st.textContent = `  body { font-family: 'Noto Sans TC', system-ui, sans-serif; background: #f1f5f9; }
+  st.textContent = `  body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
+  /* ── 島嶼風格（2026-11-12）：背景用 island.css 的 ac-theme-bg；這裡把原本白底藍紫的元件換成奶油色＋綠色。
+     ⚠️ 只換顏色和外框，版面、id、流程都沒動。選擇器前面加 body.ac-arena，才壓得過 Tailwind 的同名 class。 */
+  body.ac-arena { color: #4a3b2c; }
+  body.ac-arena .bg-white.rounded-2xl { background: #fffdf5; border: 3px solid #d6c7ae; border-radius: 24px;
+        box-shadow: 0 6px 0 #c9b89c, 0 10px 22px rgba(74,59,44,.10); }
+  body.ac-arena .text-slate-500, body.ac-arena .text-slate-600 { color: #6b5a47; }
+  body.ac-arena .text-slate-400 { color: #9a8a74; }
+  body.ac-arena .text-indigo-500 { color: #b45309; }
+  body.ac-arena .text-indigo-600 { color: #15803d; }
+  body.ac-arena .bg-slate-200 { background: #eadfca; }
+  body.ac-arena .bg-indigo-500 { background: #22c55e; }
+  body.ac-arena button.bg-indigo-600, body.ac-arena button.bg-slate-800 { background: #22c55e; color: #fff;
+        border: 2px solid #16a34a; border-radius: 999px; box-shadow: 0 4px 0 #15803d; transition: all .15s ease; }
+  body.ac-arena button.bg-indigo-600:hover:not(:disabled), body.ac-arena button.bg-slate-800:hover { background: #16a34a; transform: translateY(-1px); }
+  body.ac-arena button.bg-indigo-600:active:not(:disabled), body.ac-arena button.bg-slate-800:active { transform: translateY(2px); box-shadow: 0 1px 0 #15803d; }
+  body.ac-arena .opt { background: #fff; border-color: #dfcfb4; border-radius: 18px; }
+  body.ac-arena .opt:hover { border-color: #f59e0b; }
+  body.ac-arena .opt.sel { border-color: #f59e0b; background: #fef3c7; }
+  body.ac-arena thead tr { border-color: #e6dcc8; }
   .rung { transition: all .25s; }
   .rung.on { transform: scale(1.06); box-shadow: 0 0 0 3px #f59e0b; }
   .pop { animation: pop .35s ease-out; }
   @keyframes pop { 0% { transform: scale(.85); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
-  .opt.sel { border-color: #4f46e5; background: #eef2ff; }
+  .opt.sel { border-color: #f59e0b; background: #fef3c7; }
   /* ── 等待動畫（出題中…讓使用者知道還在進行）──
      五顆星輪流跳（呼應 ★1～★5 階梯）＋會動的「…」。
      ⚠️ 第一次出題要讀全班的答題紀錄來分級，可能要好幾秒 —— 沒有動靜的話，
@@ -55,13 +74,15 @@
           gap: .75rem; text-align: center; padding: 1.5rem; cursor: pointer; }
 `;
   document.head.appendChild(st);
-  document.body.className = 'min-h-screen text-slate-800';
+  document.body.className = 'min-h-screen text-slate-800 ac-theme-bg ac-arena';
   document.body.insertAdjacentHTML('afterbegin', `
 <a id="back-to-hub" href="hub.html" style="display:none"
   class="hidden"
   ></a>
 
-<main class="max-w-3xl mx-auto px-4 pt-20 pb-16">
+<main class="max-w-3xl mx-auto px-4 pt-6 pb-16">
+  <!-- 回主島：這一頁沒有島嶼、也就沒有機場碼頭，不補這顆就沒有出口。作答中會藏起來（show() 控制），免得誤按離開。 -->
+  <div id="arena-top" class="flex justify-end mb-4"><a href="hub.html" class="ac-pill ac-pill-btn text-xs">✈️ 回主島</a></div>
 
   <!-- ① 開始畫面 -->
   <section id="s-start">
@@ -170,7 +191,8 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var show = function (id) { ['s-start', 's-quiz', 's-result'].forEach(function (s) {
-    $(s).classList.toggle('hidden', s !== id); }); };
+    $(s).classList.toggle('hidden', s !== id); });
+    var top = $('arena-top'); if (top) top.style.visibility = (id === 's-quiz') ? 'hidden' : ''; };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var fmtSec = function (s) { s = Math.round(Number(s) || 0);

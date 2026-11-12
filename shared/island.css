@@ -789,5 +789,61 @@ body.ac-sky-bg {
   pointer-events: none;
 }
 
+/* ── 按鍵圖示（操作提示列、第一次進島的大提示共用）── */
+.ac-key {
+  display: inline-block;
+  min-width: 1.55em;
+  text-align: center;
+  background: #ffffff;
+  border: 1.5px solid #bfae90;
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  padding: 0 5px;
+  margin: 0 1.5px;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.5;
+  color: #4a3b2c;
+  white-space: nowrap;
+}
+.ac-hint-sep { opacity: 0.4; margin: 0 6px; }
+.ac-controls-hint { white-space: nowrap; }
 
-
+/* ── 第一次進島：操作說明放大顯示在畫面上方幾秒，之後自己淡掉（右上角那一列小的一直都在）──
+   ⚠️ 投影時後排看不清楚右上角那一列小字，所以第一次要大大地講一次。 */
+.ac-hint-intro {
+  position: absolute;
+  left: 50%;
+  top: 74px;
+  transform: translateX(-50%);
+  z-index: 46;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  white-space: nowrap;
+  background: rgba(255, 253, 245, 0.97);
+  border: 3px solid #f59e0b;
+  border-radius: 22px;
+  padding: 14px 28px;
+  box-shadow: 0 7px 0 rgba(180, 83, 9, 0.25), 0 14px 28px rgba(0, 0, 0, 0.18);
+  font-size: 18px;
+  font-weight: 900;
+  color: #4a3b2c;
+  animation: ac-hint-intro 8s ease forwards;
+}
+.ac-hint-intro .ac-key {
+  font-size: 17px;
+  padding: 2px 10px;
+  margin: 0 3px;
+  border-width: 2px;
+  border-bottom-width: 5px;
+  border-radius: 9px;
+}
+@keyframes ac-hint-intro {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  6%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  90%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+}
+@media (max-width: 900px) { .ac-hint-intro { display: none; } }

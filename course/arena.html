@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>闖關排行賽</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 和其他頁同一套島嶼風格（背景、奶油色卡片、綠色圓角按鈕）；排行賽自己的樣式在 shared/arena.js -->
+  <link rel="stylesheet" href="../shared/island.css?v=20261112c1">
   <!-- 載入順序固定：config → guard（沒從闖關基地登入就導回去） -->
   <script src="../config.js"></script>
-  <script src="../shared/term.js?v=20261108r1"></script>
+  <script src="../shared/term.js?v=20261112r3"></script>
   <script src="../shared/guard.js"></script>
   <script src="../shared/auth.js"></script>
 </head>
@@ -29,7 +31,7 @@
     };
   </script>
   <!-- 共用引擎（一定要在 body 裡：它會把畫面畫進 body） -->
-  <script src="../shared/arena.js"></script>
+  <script src="../shared/arena.js?v=20261112a1"></script>
 
   <!-- 登入狀態：學生在闖關基地登入過，這裡只是拿同一個身分的 idToken 給 Apps Script 確認 -->
   <script type="module">

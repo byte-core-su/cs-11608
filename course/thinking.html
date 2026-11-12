@@ -12,7 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['"Noto Sans TC"','system-ui','sans-serif'] } } } };</script>
     <script src="../config.js"></script>
-    <script src="../shared/term.js?v=20261108r1"></script>
+    <script src="../shared/term.js?v=20261112r3"></script>
     <!-- 登入（學生在闖關基地登入過，這裡沿用同一個身分） -->
     <script src="../shared/auth.js"></script>
     <!-- 計分規則（和闖關基地、教師端共用同一份） -->
@@ -53,9 +53,9 @@
 .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
 </style>
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
-  <link rel="stylesheet" href="../shared/island.css?v=20261101v7">
+  <link rel="stylesheet" href="../shared/island.css?v=20261112c1">
   <script src="../shared/guard.js"></script>
-  <script src="../shared/island.js?v=20261108r1"></script>
+  <script src="../shared/island.js?v=20261112r4"></script>
 </head>
 <body class="ac-theme-bg min-h-screen">
     <div id="root" class="min-h-screen"></div>
@@ -889,7 +889,7 @@
                         sub: passed ? '✅ 已通關 · ' + ch.difficulty : '難度 ' + ch.difficulty,
                         speaker: '🎪 遊樂園關主・第 ' + ch.id + ' 關',
                         dialog: passed
-                            ? '「' + ch.title + '」遊樂設施你已經拿到證書囉！（難度 ' + ch.difficulty + '）點選可查看本班通關人數。'
+                            ? '「' + ch.title + '」遊樂設施你已經拿到證書囉！（難度 ' + ch.difficulty + '）按 Enter 可查看本班通關人數。'
                             : '歡迎來到「' + ch.title + '」主題遊樂設施（難度 ' + ch.difficulty + '）：解開機關後記得截圖，去摩天輪印製通關證書喔！',
                         actionLabel: passed ? '👥 查看本班通關人數' : '🚀 啟動遊樂設施挑戰',
                         badgeHtml: passed
@@ -1033,12 +1033,16 @@
                                     📊 班級進度
                                 </button>
                                 <button
+                                    data-ac-view-toggle=""
+                                    title="按 M 鍵也可以切換"
                                     onClick={() => setViewMode(viewMode === 'island' ? 'list' : 'island')}
                                     className="ac-pill hover:bg-amber-100 transition cursor-pointer"
                                     style={{ background: '#fef3c7', borderColor: '#f59e0b' }}
                                 >
-                                    {viewMode === 'island' ? '📋 切換挑戰清單' : '🏝️ 切換島嶼探險'}
+                                    {viewMode === 'island' ? '📋 切換挑戰清單（M）' : '🏝️ 切換島嶼探險（M）'}
                                 </button>
+                                {/* 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） */}
+                                {viewMode !== 'island' && <a href="hub.html" className="ac-pill ac-pill-btn text-xs">✈️ 回主島</a>}
                             </div>
                         </div>
                     </div>

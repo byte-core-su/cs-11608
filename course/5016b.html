@@ -27,8 +27,8 @@
     <!-- 螢光筆（.hl 黃＝結論／.hl-b 藍＝數量）的定義只在 shared/theme.css，
          這一頁不要再寫一份 —— 兩份顏色遲早會不一樣。 -->
     <link rel="stylesheet" href="../shared/theme.css">
-    <link rel="stylesheet" href="../shared/island.css?v=20261101v7">
-    <script src="../shared/island.js?v=20261108r1"></script>
+    <link rel="stylesheet" href="../shared/island.css?v=20261112c1">
+    <script src="../shared/island.js?v=20261112r4"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
         body {
@@ -105,7 +105,7 @@
   <!-- 身分守門：未從闖關基地登入者導回入口 -->
   <!-- config.js 要排在 guard 之前（guard 會讀 CONFIG.TERM） -->
   <script src="../config.js"></script>
-  <script src="../shared/term.js?v=20261108r1"></script>
+  <script src="../shared/term.js?v=20261112r3"></script>
   <!-- 別的學期沒有這一頁（這一學期的專題不是這一頁）⇒ 回闖關基地 -->
   <script>if (!(CONFIG.MODULES || []).some(function (m) { return m.href === '5016b.html'; })) location.replace('hub.html');</script>
 <script src="../shared/guard.js"></script>
@@ -252,9 +252,11 @@
             </div>
             <div class="flex items-center gap-2 flex-wrap">
                 <span class="ac-pill">🔌 超音波 · 可變電阻 · 直流馬達 · RGB燈條</span>
-                <button id="arduino-view-toggle" type="button" onclick="toggleArduinoViewMode()" class="ac-pill hover:bg-amber-100 transition cursor-pointer" style="background:#fef3c7;border-color:#f59e0b">
-                    📋 切換課綱卡片
+                <button id="arduino-view-toggle" type="button" data-ac-view-toggle title="按 M 鍵也可以切換" onclick="toggleArduinoViewMode()" class="ac-pill hover:bg-amber-100 transition cursor-pointer" style="background:#fef3c7;border-color:#f59e0b">
+                    📋 切換課綱卡片（M）
                 </button>
+                <!-- 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） -->
+                <a id="arduino-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" style="display:none">✈️ 回主島</a>
             </div>
         </div>
     </div>
@@ -1895,14 +1897,16 @@
             const islandSec = document.getElementById('arduino-island-section');
             const cardView = document.getElementById('arduino-card-view');
             const btn = document.getElementById('arduino-view-toggle');
+            const hubLink = document.getElementById('arduino-hub-link');
+            if (hubLink) hubLink.style.display = arduinoViewMode === 'island' ? 'none' : '';
             if (arduinoViewMode === 'island') {
                 if (islandSec) islandSec.classList.remove('hidden');
                 if (cardView) cardView.classList.add('hidden');
-                if (btn) btn.textContent = '📋 切換課綱卡片';
+                if (btn) btn.textContent = '📋 切換課綱卡片（M）';
             } else {
                 if (islandSec) islandSec.classList.add('hidden');
                 if (cardView) cardView.classList.remove('hidden');
-                if (btn) btn.textContent = '🏝️ 切換島嶼探險';
+                if (btn) btn.textContent = '🏝️ 切換島嶼探險（M）';
             }
         }
 
@@ -1967,7 +1971,7 @@
                         id: 'ar-board', x: 50, y: 69, kind: 'board', num: '📋',
                         label: '專題指南看板', sub: '五節課學習地圖',
                         speaker: '📋 未來科技島 · 專題指南看板',
-                        dialog: '💡 島上共有 5 座科技實驗艙（自動閘門 → 接近亮燈 → 無段風扇 → 三原色光球 → 創客研發總部），點擊建築即可開啟 3D 硬體模擬器；也可找廣場上的「🤖 諾克號創客機」對話聽取導覽！',
+                        dialog: '💡 島上共有 5 座科技實驗艙（自動閘門 → 接近亮燈 → 無段風扇 → 三原色光球 → 創客研發總部），走到建築門口按 Enter 即可開啟 3D 硬體模擬器；也可找廣場上的「🤖 諾克號創客機」對話聽取導覽！',
                         actionLabel: '📋 展開完整課綱卡片檢視'
                     }
                 ],

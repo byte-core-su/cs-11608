@@ -1270,12 +1270,9 @@
             actions: [{ label: state.leadOpen ? '收合前導教材' : '打開清單學習機 🔰', primary: true, onClick: () => { state.leadOpen = !state.leadOpen; render(); } }]
           });
 
-          // 📋 島民闖關規則＆參考說明看板（開啟浮動視窗，不離開 3D 島嶼）
+          // 📋 島民闖關規則＆參考說明看板（純檢視規則與參考說明，不直接跳關，保留 3D 島嶼探索互動性）
           function openFlowchartBoardModal() {
-            if (!window.AC_ISLAND || typeof window.AC_ISLAND.openBoardModal !== 'function') {
-              location.href = 'reference.html';
-              return;
-            }
+            if (!window.AC_ISLAND || typeof window.AC_ISLAND.openBoardModal !== 'function') return;
             const unitsAccordionHtml = UNITS.map(u => {
               const done = !!state.done[u.id];
               const st = Number((state.progStars||{})[u.id]||0);
@@ -1298,10 +1295,6 @@
                   <div class="px-4 pb-3.5 pt-2 border-t border-amber-100 bg-amber-50/30 space-y-2.5">
                     <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">${mark(u.desc)}</p>
                     <ol class="space-y-1.5">${detailsHtml}</ol>
-                    <div class="flex flex-wrap gap-2 pt-1">
-                      <button type="button" data-board-flow="${u.no}" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-black cursor-pointer transition">🧩 排這關流程圖 →</button>
-                      ${done ? `<button type="button" data-board-prog="${u.no}" class="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-black cursor-pointer transition">🐱 進這關程式設計 →</button>` : ''}
-                    </div>
                   </div>
                 </details>`;
             }).join('');
@@ -1312,7 +1305,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs sm:text-sm text-slate-700">
                   <div class="bg-purple-50/80 border border-purple-200 rounded-xl p-3">
                     <div class="font-black text-purple-800 mb-0.5">① 排流程圖（+${STARS_PER_UNIT}⭐）</div>
-                    <div>讀完題目 → 挑出需要的元件 → 依序排出正確流程圖即可過關。</div>
+                    <div>走向工坊按 Space → 讀完題目 → 挑出元件 → 排出正確流程圖過關。</div>
                   </div>
                   <div class="bg-orange-50/80 border border-orange-200 rounded-xl p-3">
                     <div class="font-black text-orange-800 mb-0.5">② 寫 Scratch（${WORK ? '最多 3⭐' : '交作品'}）</div>
@@ -1324,44 +1317,19 @@
                   </div>
                 </div>
               </div>
-              <div class="text-xs font-black text-amber-900 mb-2">📖 十關參考說明書（點選展開各關步驟，或直接進入關卡）：</div>
+              <div class="text-xs font-black text-amber-900 mb-2">📖 十關參考說明書（點選可展開閱讀步驟；要闖關請按 Esc 返回島嶼走向該座工坊）：</div>
               <div class="space-y-2 max-h-[46vh] overflow-y-auto pr-1">${unitsAccordionHtml}</div>
             `;
 
-            const bd = window.AC_ISLAND.openBoardModal({
+            window.AC_ISLAND.openBoardModal({
               badge: '⚙️ 蒸氣齒輪木工村 · 島民闖關規則＆參考說明書',
               icon: '📋',
               title: '流程圖＆程式設計 闖關指南',
               theme: 'theme-craft',
               maxWidth: 'max-w-3xl',
               bodyHtml: bodyHtml,
-              footerHint: '💡 按 Esc 或右上角按鈕返回 3D 島嶼',
-              footerAction: {
-                label: '📖 開啟完整獨立參考頁',
-                onClick: () => { location.href = 'reference.html'; }
-              }
+              footerHint: '💡 看完說明後請按 Esc 返回 3D 島嶼，操作角色走向工坊按 Space 開始闖關'
             });
-            if (bd) {
-              bd.querySelectorAll('[data-board-flow]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                  const no = Number(btn.getAttribute('data-board-flow'));
-                  window.AC_ISLAND.closeBoardModal();
-                  if (UNITS[no - 1]) startUnit(UNITS[no - 1]);
-                });
-              });
-              bd.querySelectorAll('[data-board-prog]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                  const no = Number(btn.getAttribute('data-board-prog'));
-                  window.AC_ISLAND.closeBoardModal();
-                  if (UNITS[no - 1]) {
-                    clearTimers();
-                    state.unit = UNITS[no - 1];
-                    state.refOpen = false;
-                    startProgram();
-                  }
-                });
-              });
-            }
           }
 
           islandNodes.push({

@@ -297,16 +297,15 @@ function mountScratchIsland(){
     }
     const rulesEl = document.getElementById('rules');
     const rulesTxt = rulesEl ? rulesEl.innerHTML : '';
-    const unitQuickHtml = UNITS.map(u => {
+    const unitStatusHtml = UNITS.map(u => {
       const s = unitStars[u.id] || 0;
       const q = (window.GRADING && window.GRADING.quizStars) ? window.GRADING.quizStars(quizDone, u.id) : 0;
       const needUp = GATE.needsUpload(u.id);
       const done = needUp ? (WORK ? s >= 2 : q > 0) : !!playDone[u.id];
-      const href = 'level.html?unit=' + encodeURIComponent(u.id);
-      return `<a href="${href}" class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border-2 ${done ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950' : 'bg-white border-amber-200 text-stone-800'} hover:border-amber-400 transition text-left">
+      return `<div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border-2 select-none ${done ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950' : 'bg-white border-amber-200 text-stone-800'} text-left">
         <span class="text-xs font-black truncate"><span class="text-amber-700 mr-1">${String(u.no).padStart(2,'0')}.</span>${u.name}</span>
-        <span class="text-[11px] font-extrabold ${done ? 'text-emerald-700' : 'text-amber-700'} shrink-0">${done ? '✅ 已完成' : '進入 →'}</span>
-      </a>`;
+        <span class="text-[11px] font-extrabold ${done ? 'text-emerald-700' : 'text-stone-400'} shrink-0">${done ? '✅ 已完成' : '⏳ 待挑戰'}</span>
+      </div>`;
     }).join('');
 
     const bodyHtml = `
@@ -324,8 +323,8 @@ function mountScratchIsland(){
         <div>${rulesTxt}</div>
       </div>
       <div>
-        <div class="text-xs font-black text-amber-900 mb-2">🗺️ 十座工坊快速前往（也可直接在 3D 島嶼走向工坊按 Space）：</div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${unitQuickHtml}</div>
+        <div class="text-xs font-black text-amber-900 mb-2">📊 十座工坊目前進度一覽（請按 Esc 返回島嶼，親自走向工坊按 Space 進入）：</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${unitStatusHtml}</div>
       </div>
     `;
 
@@ -336,11 +335,7 @@ function mountScratchIsland(){
       theme: 'theme-craft',
       maxWidth: 'max-w-2xl',
       bodyHtml: bodyHtml,
-      footerHint: '💡 按 Esc 或右上角按鈕返回 3D 島嶼',
-      footerAction: {
-        label: '📋 切換為卡片清單模式',
-        onClick: () => { scViewMode = 'list'; mountScratchIsland(); }
-      }
+      footerHint: '💡 看完規則後請按 Esc 返回 3D 島嶼，操作角色走向工坊按 Space 開始闖關'
     });
   }
 

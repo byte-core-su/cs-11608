@@ -1115,39 +1115,26 @@
             if (!window.AC_ISLAND || !window.AC_ISLAND.openBoardModal) return;
             const lessons = [1, 2, 3, 4, 5].map(function (i) {
                 const d = courseData[i];
-                return '<button type="button" data-board-unit="' + i + '" class="text-left bg-white hover:bg-sky-50 border-2 border-sky-200 hover:border-sky-400 rounded-2xl p-3.5 transition cursor-pointer shadow-sm">' +
+                return '<div class="text-left bg-white border-2 border-sky-200 rounded-2xl p-3.5 shadow-sm select-none">' +
                     '<div class="flex items-center justify-between gap-2 mb-1">' +
                         '<span class="text-xs font-black text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full">' + d.badge + '</span>' +
-                        '<span class="text-xs font-bold text-sky-600">進入實驗艙 →</span>' +
+                        '<span class="text-[11px] font-bold text-slate-400">📍 島上第 ' + i + ' 座實驗艙</span>' +
                     '</div>' +
                     '<div class="font-black text-sm text-slate-800">' + d.title + '</div>' +
-                '</button>';
+                '</div>';
             }).join('');
             const bodyHtml =
                 '<div class="bg-sky-50/90 border-2 border-sky-200 rounded-2xl p-4 mb-4 text-xs sm:text-sm text-slate-700 leading-relaxed">' +
                     '<b class="text-sky-900">🤖 專題五節課學習指南：</b>從生活裡挑一個「這東西應該要會自己動」的問題，拆成<b>感測 → 判斷 → 驅動</b>，挑出需要的元件並調好門檻，第五節會自動合成你的專屬作品卡！' +
                 '</div>' +
+                '<div class="text-xs font-black text-sky-900 mb-2">🗺️ 島上五座實驗艙介紹（請按 Esc 返回島嶼，親自走向各座實驗艙按 Space 進入）：</div>' +
                 '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">' + lessons + '</div>';
             window.AC_ISLAND.openBoardModal({
                 theme: 'theme-tech',
-                badge: '🤖 未來科技創客實驗島 · 專題學習地圖',
+                badge: '🤖 未來科技創客實驗島 · 專題學習指南',
                 title: '📋 專題指南看板（五節課學習地圖）',
                 bodyHtml: bodyHtml,
-                footerAction: {
-                    label: '📋 切換完整課綱卡片模式 (M)',
-                    onClick: function () {
-                        if (arduinoViewMode === 'island') toggleArduinoViewMode();
-                    }
-                },
-                onMount: function (modalEl) {
-                    modalEl.querySelectorAll('[data-board-unit]').forEach(function (btn) {
-                        btn.addEventListener('click', function () {
-                            const u = Number(btn.getAttribute('data-board-unit'));
-                            window.AC_ISLAND.closeBoardModal();
-                            openCourseDetail(u);
-                        });
-                    });
-                }
+                footerHint: '💡 看完指南後請按 Esc 返回 3D 島嶼，操作角色走向實驗艙按 Space 進入'
             });
         }
 

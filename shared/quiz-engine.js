@@ -513,14 +513,16 @@
 
     function openQuizBoardModal() {
       if (!window.AC_ISLAND || !window.AC_ISLAND.openBoardModal) return;
-      var quickChips = ORDER.map(function (id) {
+      var statusCards = ORDER.map(function (id) {
         var n = NODES[id] || { id: id, title: id };
         var u = lastUnitsMap[id] || {};
         var star = Number(u.star) || 0;
-        var badge = star > 0 ? (' ✅' + '★'.repeat(star)) : '';
-        return '<button type="button" data-board-ch="' + id + '" class="text-left px-3 py-2 rounded-xl border-2 text-xs font-black transition cursor-pointer ' +
-          (star > 0 ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100' : 'bg-white border-amber-200 text-stone-700 hover:border-amber-400 hover:bg-amber-50') + '">' +
-          n.title + badge + '</button>';
+        var badge = star > 0 ? ('✅ ' + '★'.repeat(star)) : '⏳ 待挑戰';
+        return '<div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border-2 text-xs font-black select-none ' +
+          (star > 0 ? 'bg-emerald-50/90 border-emerald-300 text-emerald-900' : 'bg-white border-amber-200 text-stone-700') + '">' +
+          '<span class="truncate">' + n.title + '</span>' +
+          '<span class="shrink-0 text-[11px] ' + (star > 0 ? 'text-emerald-700' : 'text-stone-400') + '">' + badge + '</span>' +
+        '</div>';
       }).join('');
       var bodyHtml =
         '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">' +
@@ -530,38 +532,23 @@
           '</div>' +
           '<div class="bg-white rounded-2xl border-2 border-amber-200 p-3.5 shadow-sm">' +
             '<div class="text-sm font-black text-amber-900 mb-1">🏡 穀倉＆風車果坊</div>' +
-            '<p class="text-xs text-stone-600 font-bold leading-relaxed">位在北側高台的整章綜合驗收測驗，挑戰全章混合題庫！</p>' +
+            '<p class="text-xs text-stone-600 font-bold leading-relaxed">位在北側高台的整章綜合驗收測驗，走近按 <span class="ac-key">Space</span> 挑戰全章混合題庫！</p>' +
           '</div>' +
           '<div class="bg-white rounded-2xl border-2 border-amber-200 p-3.5 shadow-sm">' +
             '<div class="text-sm font-black text-amber-900 mb-1">🌱 記憶補給溫室</div>' +
-            '<p class="text-xs text-stone-600 font-bold leading-relaxed">通關任一章後開放，抽選 10 題複習（答錯題優先、當場公布正解、不計分）。</p>' +
+            '<p class="text-xs text-stone-600 font-bold leading-relaxed">通關任一章後開放，走近溫室按 <span class="ac-key">Space</span> 抽選 10 題複習（不計分）。</p>' +
           '</div>' +
         '</div>' +
         '<div class="bg-amber-50/80 rounded-2xl border-2 border-amber-200 p-4">' +
-          '<div class="text-xs font-black text-amber-900 mb-2">🗺️ 快速前往章節（點選直接開啟重點與測驗）：</div>' +
-          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[34vh] overflow-y-auto pr-1">' + quickChips + '</div>' +
+          '<div class="text-xs font-black text-amber-900 mb-2">📊 各章節目前進度一覽（請按 Esc 返回島嶼，親自走向果樹或穀倉按 Space 進入）：</div>' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[34vh] overflow-y-auto pr-1">' + statusCards + '</div>' +
         '</div>';
       window.AC_ISLAND.openBoardModal({
         theme: 'theme-orchard',
-        badge: '🍎 豐收果園 · 闖關規則與章節總覽',
+        badge: '🍎 豐收果園 · 闖關規則與進度看板',
         title: '📋 果園闖關規則看板',
         bodyHtml: bodyHtml,
-        footerAction: {
-          label: '📋 切換章節清單模式 (M)',
-          onClick: function () {
-            var listBtn = document.querySelector('[data-qz-view="list"]');
-            if (listBtn) listBtn.click();
-          }
-        },
-        onMount: function (modalEl) {
-          modalEl.querySelectorAll('[data-board-ch]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              var chId = btn.getAttribute('data-board-ch');
-              window.AC_ISLAND.closeBoardModal();
-              openChapter(chId);
-            });
-          });
-        }
+        footerHint: '💡 看完規則後請按 Esc 返回 3D 島嶼，操作角色走向果樹按 Space 開始闖關'
       });
     }
 

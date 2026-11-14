@@ -12,14 +12,7 @@
 
 <style>
   html, body, button, input, select, textarea { font-family:'Noto Sans TC', system-ui, sans-serif; }
-  .tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);
-        width:76px;height:26px;border-radius:2px;background:rgba(250,204,21,.3);
-        box-shadow:0 1px 2px rgba(0,0,0,.08);z-index:5}
-  .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
-  .hl  {background:linear-gradient(transparent 52%, rgba(250,204,21,.65) 52%);font-weight:800}
-  .hl-b{background:linear-gradient(transparent 52%, rgba(147,197,253,.7) 52%);font-weight:800}
-  @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-  .pop{animation:pop .35s ease-out both}
+  /* 共用樣式（.tape, .underline-doodle, .hl, .hl-b, .pop）已統一收斂至 shared/theme.css 與 shared/island.css */
 </style>
 
 <script src="../config.js"></script>
@@ -70,8 +63,8 @@
           <button type="button" data-sc-view="list" class="sc-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 卡片清單</button>
           <span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>
         </div>
-        <!-- 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） -->
-        <a id="sc-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" style="display:none">✈️ 回主島</a>
+        <!-- 回主島（雙模式常駐，按 Esc 鍵亦可返回主島） -->
+        <a id="sc-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" title="按 Esc 鍵也可返回主島">✈️ 回主島</a>
       </div>
     </div>
   </div>
@@ -215,9 +208,6 @@ function mountScratchIsland(){
       + (on ? 'bg-emerald-500 text-white shadow' : 'text-stone-600 hover:text-stone-900');
   });
 
-  const hubLink = document.getElementById('sc-hub-link');
-  if (hubLink) hubLink.style.display = (scViewMode === 'list' || !window.AC_ISLAND) ? '' : 'none';
-
   if (scViewMode === 'list' || !window.AC_ISLAND) {
     mountEl.classList.add('hidden');
     listEl.classList.remove('hidden');
@@ -299,6 +289,62 @@ function mountScratchIsland(){
     actions: [{ label: '進入新手訓練 🔰', href: 'warmup.html', primary: true }]
   });
 
+  function openScratchBoardModal() {
+    if (!window.AC_ISLAND || typeof window.AC_ISLAND.openBoardModal !== 'function') {
+      const m = document.getElementById('sc-board-modal');
+      if (m) m.classList.remove('hidden');
+      return;
+    }
+    const rulesEl = document.getElementById('rules');
+    const rulesTxt = rulesEl ? rulesEl.innerHTML : '';
+    const unitQuickHtml = UNITS.map(u => {
+      const s = unitStars[u.id] || 0;
+      const q = (window.GRADING && window.GRADING.quizStars) ? window.GRADING.quizStars(quizDone, u.id) : 0;
+      const needUp = GATE.needsUpload(u.id);
+      const done = needUp ? (WORK ? s >= 2 : q > 0) : !!playDone[u.id];
+      const href = 'level.html?unit=' + encodeURIComponent(u.id);
+      return `<a href="${href}" class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border-2 ${done ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950' : 'bg-white border-amber-200 text-stone-800'} hover:border-amber-400 transition text-left">
+        <span class="text-xs font-black truncate"><span class="text-amber-700 mr-1">${String(u.no).padStart(2,'0')}.</span>${u.name}</span>
+        <span class="text-[11px] font-extrabold ${done ? 'text-emerald-700' : 'text-amber-700'} shrink-0">${done ? '✅ 已完成' : '進入 →'}</span>
+      </a>`;
+    }).join('');
+
+    const bodyHtml = `
+      <div class="bg-white rounded-2xl border border-amber-200 p-4 mb-3.5 shadow-sm">
+        <div class="font-black text-amber-900 text-sm mb-2">🎯 這個模組你會學到：</div>
+        <ul class="space-y-1.5 text-slate-700 text-xs sm:text-sm">
+          <li>• 用<span class="hl">自訂積木</span>把一段會重複用到的程式包起來，像食譜裡的「基本高湯」</li>
+          <li>• 用<span class="hl">參數</span>讓同一個積木做出不一樣的結果</li>
+          <li>• 用<span class="hl">如果…那麼</span>和<span class="hl">變數</span>做出會判斷的遊戲</li>
+          <li>• 兩種<span class="hl">排序法</span>、兩種<span class="hl">搜尋法</span>，最後比一比哪一種比較快</li>
+        </ul>
+      </div>
+      <div class="bg-amber-50/90 rounded-2xl border-2 border-amber-300 p-4 mb-3.5 text-slate-700 text-xs sm:text-sm leading-relaxed">
+        <div class="font-black text-amber-900 mb-1">🦫 齒輪海狸師傅的計分提醒：</div>
+        <div>${rulesTxt}</div>
+      </div>
+      <div>
+        <div class="text-xs font-black text-amber-900 mb-2">🗺️ 十座工坊快速前往（也可直接在 3D 島嶼走向工坊按 Space）：</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${unitQuickHtml}</div>
+      </div>
+    `;
+
+    window.AC_ISLAND.openBoardModal({
+      badge: '📋 演算法積木島 · 島民學習目標＆計分看板',
+      icon: '📋',
+      title: '學習目標＆計分規則看板',
+      theme: 'theme-craft',
+      maxWidth: 'max-w-2xl',
+      bodyHtml: bodyHtml,
+      footerHint: '💡 按 Esc 或右上角按鈕返回 3D 島嶼',
+      footerAction: {
+        label: '📋 切換為卡片清單模式',
+        onClick: () => { scViewMode = 'list'; mountScratchIsland(); }
+      }
+    });
+  }
+
+  window._openScratchBoardModal = openScratchBoardModal;
   islandNodes.push({
     id: 'sc-board-node',
     x: 52,
@@ -314,10 +360,7 @@ function mountScratchIsland(){
     starsText: '闖關指南',
     statusLabel: '看板提示',
     locked: false,
-    actions: [{ label: '📖 查看學習目標＆計分規則', primary: true, onClick: () => {
-      const m = document.getElementById('sc-board-modal');
-      if (m) m.classList.remove('hidden');
-    }}]
+    actions: [{ label: '📖 查看學習目標＆計分規則', primary: true, onClick: openScratchBoardModal }]
   });
 
   // 🏛️ 北側高台：黃金齒輪神殿（呼應齒輪海狸師傅導覽：期末總檢核殿堂）
@@ -388,8 +431,11 @@ function repaint(){ renderStages(); renderTotal(); mountScratchIsland(); }
 
 document.addEventListener('click', function (e) {
   if (e.target.closest('#open-sc-board')) {
-    const m = document.getElementById('sc-board-modal');
-    if (m) m.classList.remove('hidden');
+    if (window._openScratchBoardModal) window._openScratchBoardModal();
+    else {
+      const m = document.getElementById('sc-board-modal');
+      if (m) m.classList.remove('hidden');
+    }
     return;
   }
   if (e.target.closest('#close-sc-board') || e.target.id === 'sc-board-modal') {

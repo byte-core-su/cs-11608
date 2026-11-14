@@ -4475,8 +4475,9 @@
       var lastNearCandidateId = null;
 
       function onKeyDown(e) {
+        if (e.defaultPrevented) return;
         var tag = (e.target && e.target.tagName) || '';
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
 
         /* ★ 快捷鍵（2026-11-12）：V 切換視角、T 切換時段、C 切換造型、R 隨機穿搭、N 自動帶路前往推薦下一關 —— 手不必離開鍵盤去拿滑鼠。
              有視窗蓋著、或島嶼被收起來（清單模式）時不作用。M（島嶼／清單）在檔案最下面，清單模式也要能按。 */
@@ -4506,9 +4507,13 @@
 
         if (e.code === 'Escape' || e.key === 'Escape') {
           if (document.getElementById('dal-airport-modal')) return;
+          if (closeBoardModal()) { e.preventDefault(); return; }
           if (document.querySelector('#modal.flex, #action-modal.flex, #quiz-screen:not(.hidden), #study-screen:not(.hidden), #result-screen:not(.hidden), #practice-screen:not(.hidden), #warning-screen:not(.hidden)')) return;
-          var weekClose = document.getElementById('close-week');
-          if (weekClose) { e.preventDefault(); weekClose.click(); return; }
+          var weekMask = document.getElementById('week-mask');
+          if (weekMask && !weekMask.classList.contains('hidden')) {
+            var weekClose = document.getElementById('close-week');
+            if (weekClose) { e.preventDefault(); weekClose.click(); return; }
+          }
           var detailView = document.getElementById('detail-view');
           if (detailView && !detailView.classList.contains('hidden') && typeof window.closeCourseDetail === 'function') {
             e.preventDefault();
@@ -4527,7 +4532,7 @@
           var floatBackdrop = document.querySelector('.ac-float-backdrop:not(.hidden)');
           if (floatBackdrop) {
             var xIcon = floatBackdrop.querySelector('.fa-xmark');
-            var xBtn = (xIcon && xIcon.closest('button')) || floatBackdrop.querySelector('button[data-close]');
+            var xBtn = (xIcon && xIcon.closest('button')) || floatBackdrop.querySelector('button[data-close], button[data-ac-board-close]');
             if (xBtn) { e.preventDefault(); xBtn.click(); return; }
           }
           if (wardrobePanel && !wardrobePanel.classList.contains('hidden')) {
@@ -4540,10 +4545,20 @@
             dismissDialog();
             return;
           }
+          // 若目前在清單／卡片模式（3D 畫布未顯示），按 Esc 自動切回 3D 島嶼探險
+          if (!onScreen(canvasEl)) {
+            if (toggleIslandListView()) { e.preventDefault(); return; }
+          }
+          // 若在分島的 3D 島嶼畫面上且無任何視窗開啟，按 Esc 直接返回主島（呼應右上角 Esc 離開提示）
+          if (variantKey !== 'hub') {
+            e.preventDefault();
+            location.href = (global.CONFIG && global.CONFIG.HUB_PAGE) || 'hub.html';
+            return;
+          }
           return;
         }
 
-        if (document.querySelector('#week-mask, #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden), #dal-airport-modal')) return;
+        if (document.querySelector('#week-mask:not(.hidden), #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden), #dal-airport-modal')) return;
 
         var isDialogActive = !!(dialogEl && !dialogEl.classList.contains('hidden') && state.nearId && !state.dialogDismissed);
         if (isDialogActive && e.code === 'Tab') {
@@ -4708,7 +4723,7 @@
              先留 0.7 秒讓「建築特寫」鏡頭走完、畫面定格在對的地方；視窗一關，下一格就恢復。
              ⚠️ 判斷「被收起來」用 getClientRects —— offsetParent 對 position:fixed 的祖先會誤判。 */
         var covered = isModalOpen || canvasEl.getClientRects().length === 0
-                   || !!document.querySelector('#week-mask, #modal.flex, #action-modal.flex');
+                   || !!document.querySelector('#week-mask:not(.hidden), #modal.flex, #action-modal.flex');
         if (!covered) coveredSince = 0;
         else if (!coveredSince) coveredSince = now;
         else if (now - coveredSince > 700) {
@@ -5167,12 +5182,84 @@
     return activeInstance;
   }
 
-  /* ★ 快捷鍵 M：島嶼探險 ⇄ 清單（2026-11-12）
-       不掛在島嶼本身，因為清單模式下島嶼可能已經收起來甚至卸載，那時也要能按 M 切回來。
+  /* =====================================================================
+     🧩 全站共用島嶼看板浮動視窗元件（openBoardModal / closeBoardModal）
+     ===================================================================== */
+  var activeBoardCloseCb = null;
+  function closeBoardModal() {
+    var el = document.getElementById('ac-shared-board-modal');
+    if (el && !el.classList.contains('hidden')) {
+      el.classList.add('hidden');
+      if (typeof activeBoardCloseCb === 'function') {
+        var cb = activeBoardCloseCb;
+        activeBoardCloseCb = null;
+        try { cb(); } catch (err) {}
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function openBoardModal(opts) {
+    opts = opts || {};
+    var el = document.getElementById('ac-shared-board-modal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'ac-shared-board-modal';
+      el.className = 'ac-float-backdrop hidden';
+      el.addEventListener('click', function (e) {
+        if (e.target === el || e.target.closest('[data-ac-board-close]')) {
+          closeBoardModal();
+        }
+      });
+      document.body.appendChild(el);
+    }
+    activeBoardCloseCb = opts.onClose || null;
+    var theme = opts.theme || '';
+    var maxW = opts.maxWidth || 'max-w-2xl';
+    var badgeHtml = opts.badge ? '<div class="ac-window-badge">' + opts.badge + '</div>' : '';
+    var footerActionHtml = '';
+    if (opts.footerAction && opts.footerAction.label) {
+      footerActionHtml = '<button type="button" id="ac-board-custom-action" class="ac-pill ac-pill-btn text-xs" style="background:#fef3c7;border-color:#f59e0b;color:#78350f">' + opts.footerAction.label + '</button>';
+    }
+    el.innerHTML =
+      '<div class="ac-float-window ' + theme + ' p-6 sm:p-8 ' + maxW + ' w-full mx-auto pop relative">' +
+        badgeHtml +
+        '<div class="ac-board-header">' +
+          '<h2 class="ac-board-title">' + (opts.title || '📋 島嶼規則看板') + '</h2>' +
+          '<button type="button" data-close="1" data-ac-board-close="1" class="ac-board-close-btn">✕ 返回島嶼 (Esc)</button>' +
+        '</div>' +
+        '<div class="ac-board-body">' + (opts.bodyHtml || '') + '</div>' +
+        '<div class="ac-board-footer">' +
+          '<span class="ac-board-hint">💡 按 <span class="ac-key">Esc</span> 或點擊視窗外即可返回島嶼</span>' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            footerActionHtml +
+            '<button type="button" data-ac-board-close="1" class="ac-pill ac-pill-btn text-xs" style="background:#10b981;border-color:#059669;color:#ffffff">🏝️ 返回島嶼繼續探險</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    el.classList.remove('hidden');
+    if (opts.footerAction && typeof opts.footerAction.onClick === 'function') {
+      var actBtn = el.querySelector('#ac-board-custom-action');
+      if (actBtn) {
+        actBtn.addEventListener('click', function () {
+          closeBoardModal();
+          opts.footerAction.onClick();
+        });
+      }
+    }
+    if (typeof opts.onMount === 'function') {
+      try { opts.onMount(el); } catch (err) { console.error(err); }
+    }
+    return el;
+  }
+
+  /* ★ 快捷鍵 M（島嶼探險 ⇄ 清單）與清單模式下的 Esc 返回島嶼（2026-11-12）
+       不掛在島嶼本身，因為清單模式下島嶼可能已經收起來甚至卸載，那時也要能按 M 或 Esc 切回來。
        · 單顆切換鈕的頁面（運算思維、智慧家居、Arduino）：按鈕標 data-ac-view-toggle
        · 兩顆並排的頁面（主島、測驗、流程圖、Scratch）：看現在島嶼有沒有在畫面上，按另一顆
        打字中、有視窗蓋著、切換鈕不在畫面上（例如作答中）都不作用。 */
-  var HOTKEY_BLOCKERS = '.ac-float-backdrop:not(.hidden), #dal-airport-modal, #week-mask, #modal.flex, #action-modal.flex';
+  var HOTKEY_BLOCKERS = '.ac-float-backdrop:not(.hidden), #dal-airport-modal, #week-mask:not(.hidden), #modal.flex, #action-modal.flex, #imgBox.on';
   function onScreen(el) { return !!el && el.getClientRects().length > 0; }
   function toggleIslandListView() {
     var single = document.querySelector('[data-ac-view-toggle]');
@@ -5183,15 +5270,26 @@
     return false;
   }
   global.addEventListener('keydown', function (e) {
-    if (e.code !== 'KeyM' || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+    if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
     var t = e.target, tag = (t && t.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (e.code === 'Escape' || e.key === 'Escape') {
+      if (closeBoardModal()) { e.preventDefault(); return; }
+      if (document.querySelector(HOTKEY_BLOCKERS)) return;
+      if (!onScreen(document.getElementById('ac-webgl-canvas'))) {
+        if (toggleIslandListView()) e.preventDefault();
+      }
+      return;
+    }
+    if (e.code !== 'KeyM') return;
     if (document.querySelector(HOTKEY_BLOCKERS)) return;
     if (toggleIslandListView()) e.preventDefault();
   });
 
   global.AC_ISLAND = {
     mount: mount,
+    openBoardModal: openBoardModal,
+    closeBoardModal: closeBoardModal,
     _relocateLayout: relocateIslandLayout
   };
 })(window);

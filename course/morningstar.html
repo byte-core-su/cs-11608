@@ -277,6 +277,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
       <button id="bBag" aria-label="背包">🎒<span class="lbl">背包</span></button>
       <button id="bSound" aria-label="音效開關">🔊</button>
       <button id="bPause" aria-label="暫停">⏸</button>
+      <a href="flowchart.html" aria-label="返回島嶼" title="返回蒸氣齒輪木工村" style="text-decoration:none;display:inline-flex;align-items:center;padding:4px 8px;border-radius:8px;background:rgba(255,255,255,.14);color:#fde68a;font-size:12px;font-weight:800">🏝️ 島嶼</a>
     </div>
   </div>
   <canvas id="mini" width="120" height="84"></canvas>
@@ -1808,7 +1809,7 @@ function showPause() {
   const got = CARD_ORDER.filter(k => P.cards[k]).length;
   showScreen(`<div class="card"><p class="eyebrow">${G.A.ch} · ${G.A.name}</p><h2>暫停</h2>
     <div class="result"><div><b>${fmtTime(P.time)}</b>冒險時間</div><div><b>${P.kills}</b>打倒的怪物</div></div>
-    <div class="acts"><button class="btn primary" data-go="resume">繼續</button><button class="btn" data-go="codex">程式觀念（${got}/${CARD_ORDER.length}）</button><button class="btn" data-go="title">回到標題</button></div>
+    <div class="acts"><button class="btn primary" data-go="resume">繼續</button><button class="btn" data-go="codex">程式觀念（${got}/${CARD_ORDER.length}）</button><button class="btn" data-go="title">回到標題</button><a class="btn" href="flowchart.html" style="text-decoration:none">🏝️ 返回島嶼</a></div>
     <p style="margin-top:16px"><button class="toggle" data-go="hints">程式觀念提示：${hintsOn ? '開' : '關'}</button></p></div>`);
 }
 function showCodex() {
@@ -1886,7 +1887,10 @@ window.addEventListener('keydown', ev => {
   const c = ev.code;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(c) && !UI.screen) ev.preventDefault();
   if (UI.screen) {
-    if (c === 'Escape' && UI.pause) togglePause(false);
+    if (c === 'Escape') {
+      if (UI.pause) togglePause(false);
+      else location.href = 'flowchart.html';
+    }
     return;
   }
   if (UI.dlg) { if (['Space', 'KeyE', 'Enter', 'KeyJ', 'KeyK'].includes(c) && !ev.repeat) advance(); return; }

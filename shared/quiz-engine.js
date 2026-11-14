@@ -207,8 +207,7 @@
     +             '<button type="button" data-qz-view="list" class="qz-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 章節清單</button>'
     +             '<span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>'
     +           '</div>'
-    /* 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） */
-    +           '<a id="qz-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" style="display:none">✈️ 回主島</a>'
+    +           '<a id="qz-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" title="按 Esc 鍵也可返回主島">✈️ 回主島</a>'
     +         '</div>'
     +       '</div>'
     +     '</div>'
@@ -238,11 +237,14 @@
     +   '<div id="study-screen" class="ac-float-backdrop hidden">'
     +     '<div class="ac-float-window theme-orchard p-8 max-w-2xl mx-auto animate-pop">'
     +       '<div class="ac-window-badge">🍎 豐收果園 · 園丁筆記</div>'
-    +       '<h2 id="study-title" class="text-2xl font-black text-amber-950 mb-6 border-b-4 border-amber-500 pb-2 inline-block">章節重點</h2>'
+    +       '<div class="flex items-center justify-between gap-2 mb-6 border-b-2 border-amber-200 pb-3">'
+    +         '<h2 id="study-title" class="text-2xl font-black text-amber-950">章節重點</h2>'
+    +         '<button type="button" data-close="1" id="study-top-close-btn" class="ac-board-close-btn">✕ 返回島嶼 (Esc)</button>'
+    +       '</div>'
     +       '<div id="study-content" class="study-note-box p-6 mb-8 text-slate-700 leading-relaxed space-y-4 text-lg max-h-[58vh] overflow-y-auto"></div>'
     +       '<div class="flex space-x-4">'
     +         '<button id="back-chapters-btn" class="flex-1 py-4 bg-amber-100 text-amber-900 border-2 border-amber-300 font-bold rounded-2xl hover:bg-amber-200 transition">返回目錄 (Esc)</button>'
-    +         '<button id="start-quiz-btn" class="flex-2 px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-2xl ' + MAIN.bgHover + ' shadow-lg ' + MAIN.shadow + ' transition transform active:scale-95">開始測驗挑戰</button>'
+    +         '<button id="start-quiz-btn" class="flex-2 px-10 py-4 ' + MAIN.bg + ' text-white font-black rounded-2xl ' + MAIN.bgHover + ' shadow-lg ' + MAIN.shadow + ' transition transform active:scale-95">開始測驗挑戰 (Enter)</button>'
     +       '</div>'
     +     '</div>'
     +   '</div>'
@@ -424,9 +426,6 @@
         + (on ? 'bg-emerald-500 text-white shadow' : 'text-stone-600 hover:text-stone-900');
     });
 
-    var hubLink = $('qz-hub-link');
-    if (hubLink) hubLink.style.display = (qzViewMode === 'list' || !window.AC_ISLAND) ? '' : 'none';
-
     if (qzViewMode === 'list' || !window.AC_ISLAND) {
       mountEl.classList.add('hidden');
       listEl.classList.remove('hidden');
@@ -512,13 +511,64 @@
       });
     }
 
+    function openQuizBoardModal() {
+      if (!window.AC_ISLAND || !window.AC_ISLAND.openBoardModal) return;
+      var quickChips = ORDER.map(function (id) {
+        var n = NODES[id] || { id: id, title: id };
+        var u = lastUnitsMap[id] || {};
+        var star = Number(u.star) || 0;
+        var badge = star > 0 ? (' ✅' + '★'.repeat(star)) : '';
+        return '<button type="button" data-board-ch="' + id + '" class="text-left px-3 py-2 rounded-xl border-2 text-xs font-black transition cursor-pointer ' +
+          (star > 0 ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100' : 'bg-white border-amber-200 text-stone-700 hover:border-amber-400 hover:bg-amber-50') + '">' +
+          n.title + badge + '</button>';
+      }).join('');
+      var bodyHtml =
+        '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">' +
+          '<div class="bg-white rounded-2xl border-2 border-amber-200 p-3.5 shadow-sm">' +
+            '<div class="text-sm font-black text-amber-900 mb-1">🍎 章節果樹</div>' +
+            '<p class="text-xs text-stone-600 font-bold leading-relaxed">走近果樹按 <span class="ac-key">Space</span> 先讀重點筆記，再連對 <b>' + TARGET + ' 題</b>（容錯 ' + MAX_WRONG + ' 題）即可過關拿星！</p>' +
+          '</div>' +
+          '<div class="bg-white rounded-2xl border-2 border-amber-200 p-3.5 shadow-sm">' +
+            '<div class="text-sm font-black text-amber-900 mb-1">🏡 穀倉＆風車果坊</div>' +
+            '<p class="text-xs text-stone-600 font-bold leading-relaxed">位在北側高台的整章綜合驗收測驗，挑戰全章混合題庫！</p>' +
+          '</div>' +
+          '<div class="bg-white rounded-2xl border-2 border-amber-200 p-3.5 shadow-sm">' +
+            '<div class="text-sm font-black text-amber-900 mb-1">🌱 記憶補給溫室</div>' +
+            '<p class="text-xs text-stone-600 font-bold leading-relaxed">通關任一章後開放，抽選 10 題複習（答錯題優先、當場公布正解、不計分）。</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bg-amber-50/80 rounded-2xl border-2 border-amber-200 p-4">' +
+          '<div class="text-xs font-black text-amber-900 mb-2">🗺️ 快速前往章節（點選直接開啟重點與測驗）：</div>' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[34vh] overflow-y-auto pr-1">' + quickChips + '</div>' +
+        '</div>';
+      window.AC_ISLAND.openBoardModal({
+        theme: 'theme-orchard',
+        badge: '🍎 豐收果園 · 闖關規則與章節總覽',
+        title: '📋 果園闖關規則看板',
+        bodyHtml: bodyHtml,
+        footerAction: {
+          label: '📋 切換章節清單模式 (M)',
+          onClick: function () {
+            var listBtn = document.querySelector('[data-qz-view="list"]');
+            if (listBtn) listBtn.click();
+          }
+        },
+        onMount: function (modalEl) {
+          modalEl.querySelectorAll('[data-board-ch]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var chId = btn.getAttribute('data-board-ch');
+              window.AC_ISLAND.closeBoardModal();
+              openChapter(chId);
+            });
+          });
+        }
+      });
+    }
+
     var boardActions = [{
-      label: '📋 切換章節清單',
+      label: '📋 查看規則與章節總覽',
       primary: true,
-      onClick: function () {
-        var listBtn = document.querySelector('[data-qz-view="list"]');
-        if (listBtn) listBtn.click();
-      }
+      onClick: openQuizBoardModal
     }];
     islandNodes.push({
       id: 'qz-board-node',
@@ -529,7 +579,7 @@
       tag: '果園說明看板',
       title: '📋 果園闖關規則看板',
       shortTitle: '闖關規則看板',
-      desc: '走近果樹按 Space 讀重點並答題；走近穀倉挑戰整章測驗！',
+      desc: '走近果樹按 Space 讀重點並答題；按 Space 查看果園規則與章節總覽！',
       pass: true,
       starsText: '果園指南',
       statusLabel: 'Space 查看',
@@ -1283,6 +1333,12 @@
     $('start-quiz-btn').addEventListener('click', startQuiz);
     $('next-btn').addEventListener('click', checkAnswer);
     $('back-chapters-btn').addEventListener('click', function () { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
+    if ($('study-top-close-btn')) $('study-top-close-btn').addEventListener('click', function () { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
+    if ($('study-screen')) $('study-screen').addEventListener('click', function (e) { if (e.target === $('study-screen')) { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); } });
+    if ($('result-screen')) $('result-screen').addEventListener('click', function (e) { if (e.target === $('result-screen')) { hide('result-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); } });
+    if ($('practice-screen')) $('practice-screen').addEventListener('click', function (e) { if (e.target === $('practice-screen')) { hide('practice-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); } });
+    if ($('action-modal')) $('action-modal').addEventListener('click', function (e) { if (e.target === $('action-modal')) closeActionModal(); });
+    if ($('modal')) $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) { $('modal').classList.remove('flex'); $('modal').classList.add('hidden'); } });
     if ($('quiz-quit-btn')) $('quiz-quit-btn').addEventListener('click', function () { quitQuiz(false); });
     if ($('quiz-top-close-btn')) $('quiz-top-close-btn').addEventListener('click', function () { quitQuiz(false); });
     if ($('quiz-back-study-btn')) $('quiz-back-study-btn').addEventListener('click', function () { quitQuiz(true); });

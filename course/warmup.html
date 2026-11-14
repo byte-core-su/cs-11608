@@ -114,14 +114,20 @@ document.addEventListener('keydown', function (e) {
   }
 });
 
-/* ── 進度條 ─────────────────────────────────────── */
+/* ── 進度條（已完成的關卡可點擊回頭複習） ─────────────────────────────────────── */
 function drawBar() {
   $('bar').innerHTML = STEPS.map((s, i) =>
-    `<div class="flex-1 h-2.5 rounded-full ${
-      i < at ? 'bg-emerald-500' : i === at ? 'bg-indigo-500' : 'bg-slate-300'
+    `<div data-step="${i}" title="${i < at ? '點擊回到第 ' + (i + 1) + ' 關' : '第 ' + (i + 1) + ' 關'}" class="flex-1 h-2.5 rounded-full transition ${
+      i < at ? 'bg-emerald-500 cursor-pointer hover:bg-emerald-600' : i === at ? 'bg-indigo-500' : 'bg-slate-300'
     }"></div>`).join('') +
     `<span class="text-xs font-black text-slate-500 pl-2 whitespace-nowrap">${
       Math.min(at + 1, STEPS.length)} / ${STEPS.length}</span>`;
+  $('bar').querySelectorAll('[data-step]').forEach(el => {
+    const idx = Number(el.getAttribute('data-step'));
+    if (idx < at) {
+      el.onclick = () => { at = idx; draw(); };
+    }
+  });
 }
 
 /* ── 畫一關 ─────────────────────────────────────── */
@@ -166,6 +172,7 @@ function draw() {
         class="w-full border-2 border-slate-300 rounded-xl px-3.5 py-2.5 text-[15px]
                focus:border-indigo-500 outline-none"></textarea>
       <div class="flex items-center gap-3 mt-2 flex-wrap">
+        ${at > 0 ? `<button id="prevStep" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-black px-4 py-2.5 rounded-xl transition">← 上一關</button>` : ''}
         <button id="send" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black
           px-6 py-2.5 rounded-xl shadow transition">送出</button>
         <span id="count" class="text-xs text-slate-400"></span>
@@ -176,6 +183,9 @@ function draw() {
 
   if (s.pick) {
     document.querySelectorAll('.opt').forEach(b => b.onclick = () => onPick(+b.dataset.i, b));
+  }
+  if ($('prevStep')) {
+    $('prevStep').onclick = () => { if (at > 0) { at--; draw(); } };
   }
   $('ans').oninput = () => {
     $('count').textContent = $('ans').value.replace(/\s/g, '').length + ' 字';

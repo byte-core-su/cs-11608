@@ -1132,7 +1132,7 @@
                     <button type="button" data-fc-view="list" class="fc-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode==='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">📋 關卡清單</button>
                     <span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>
                   </div>
-                  ${state.viewMode==='list' ? '<a href="hub.html" class="ac-pill ac-pill-btn text-xs">✈️ 回主島</a>' : ''}
+                  <a href="hub.html" class="ac-pill ac-pill-btn text-xs" title="按 Esc 鍵也可返回主島">✈️ 回主島</a>
                 </div>
               </div>
             </header>
@@ -1145,7 +1145,7 @@
               </div>` : ''; })()}
             ${state.leadMsg?`<div class="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-2 mb-2 text-xs sm:text-sm text-amber-800 leading-relaxed pop">⚠️ ${state.leadMsg}</div>`:''}
             ${state.leadOpen?`
-              <div class="ac-float-backdrop">
+              <div id="lead-backdrop" class="ac-float-backdrop">
                 <div class="ac-float-window theme-craft p-5 sm:p-7 max-w-5xl mx-auto pop">
                   <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 發條機器人前導工坊</div>
                   <div class="border-2 border-teal-400 rounded-2xl overflow-hidden shadow-lg bg-white">
@@ -1270,7 +1270,100 @@
             actions: [{ label: state.leadOpen ? '收合前導教材' : '打開清單學習機 🔰', primary: true, onClick: () => { state.leadOpen = !state.leadOpen; render(); } }]
           });
 
-          // 📋 島民闖關規則＆參考說明看板
+          // 📋 島民闖關規則＆參考說明看板（開啟浮動視窗，不離開 3D 島嶼）
+          function openFlowchartBoardModal() {
+            if (!window.AC_ISLAND || typeof window.AC_ISLAND.openBoardModal !== 'function') {
+              location.href = 'reference.html';
+              return;
+            }
+            const unitsAccordionHtml = UNITS.map(u => {
+              const done = !!state.done[u.id];
+              const st = Number((state.progStars||{})[u.id]||0);
+              const detailsHtml = (u.details || []).map((d, i) => `
+                <li class="flex gap-2 items-start text-xs sm:text-sm text-slate-700 leading-relaxed">
+                  <span class="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center mt-0.5">${i+1}</span>
+                  <span>${mark(d)}</span>
+                </li>`).join('');
+              return `
+                <details class="group bg-white rounded-xl border-2 ${done ? 'border-emerald-300' : 'border-amber-200'} overflow-hidden">
+                  <summary class="cursor-pointer list-none px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-amber-50/60 transition">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-lg flex-shrink-0">${u.icon}</span>
+                      <span class="text-xs font-black px-2 py-0.5 rounded-full ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}">第 ${String(u.no).padStart(2,'0')} 關</span>
+                      <span class="font-black text-sm text-slate-800 truncate">${u.title}</span>
+                      ${done ? `<span class="text-xs font-black text-emerald-600">✅ 流程圖${WORK && st>0 ? ` · 🐱${st}⭐` : ''}</span>` : ''}
+                    </div>
+                    <span class="text-xs font-bold text-amber-700 group-open:rotate-180 transition-transform">▾ 展開說明</span>
+                  </summary>
+                  <div class="px-4 pb-3.5 pt-2 border-t border-amber-100 bg-amber-50/30 space-y-2.5">
+                    <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">${mark(u.desc)}</p>
+                    <ol class="space-y-1.5">${detailsHtml}</ol>
+                    <div class="flex flex-wrap gap-2 pt-1">
+                      <button type="button" data-board-flow="${u.no}" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-black cursor-pointer transition">🧩 排這關流程圖 →</button>
+                      ${done ? `<button type="button" data-board-prog="${u.no}" class="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-black cursor-pointer transition">🐱 進這關程式設計 →</button>` : ''}
+                    </div>
+                  </div>
+                </details>`;
+            }).join('');
+
+            const bodyHtml = `
+              <div class="bg-white rounded-2xl border-2 border-amber-200 p-4 mb-4 shadow-sm">
+                <div class="font-black text-amber-900 text-sm mb-2">🦫 齒輪海狸師傅 · 闖關與計分規則</div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs sm:text-sm text-slate-700">
+                  <div class="bg-purple-50/80 border border-purple-200 rounded-xl p-3">
+                    <div class="font-black text-purple-800 mb-0.5">① 排流程圖（+${STARS_PER_UNIT}⭐）</div>
+                    <div>讀完題目 → 挑出需要的元件 → 依序排出正確流程圖即可過關。</div>
+                  </div>
+                  <div class="bg-orange-50/80 border border-orange-200 rounded-xl p-3">
+                    <div class="font-black text-orange-800 mb-0.5">② 寫 Scratch（${WORK ? '最多 3⭐' : '交作品'}）</div>
+                    <div>${WORK ? '完成自我檢核解鎖參考圖，上傳 .sb3 比對評分（2⭐ 過關、3⭐ 滿分）。' : '完成自我檢核解鎖參考圖，寫好 .sb3 交給老師。'}</div>
+                  </div>
+                  <div class="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3">
+                    <div class="font-black text-emerald-800 mb-0.5">③ 10 關自由選</div>
+                    <div>十座工坊全部開放！全部完成後可解鎖北方「🌟 晨星勇者神殿」。</div>
+                  </div>
+                </div>
+              </div>
+              <div class="text-xs font-black text-amber-900 mb-2">📖 十關參考說明書（點選展開各關步驟，或直接進入關卡）：</div>
+              <div class="space-y-2 max-h-[46vh] overflow-y-auto pr-1">${unitsAccordionHtml}</div>
+            `;
+
+            const bd = window.AC_ISLAND.openBoardModal({
+              badge: '⚙️ 蒸氣齒輪木工村 · 島民闖關規則＆參考說明書',
+              icon: '📋',
+              title: '流程圖＆程式設計 闖關指南',
+              theme: 'theme-craft',
+              maxWidth: 'max-w-3xl',
+              bodyHtml: bodyHtml,
+              footerHint: '💡 按 Esc 或右上角按鈕返回 3D 島嶼',
+              footerAction: {
+                label: '📖 開啟完整獨立參考頁',
+                onClick: () => { location.href = 'reference.html'; }
+              }
+            });
+            if (bd) {
+              bd.querySelectorAll('[data-board-flow]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                  const no = Number(btn.getAttribute('data-board-flow'));
+                  window.AC_ISLAND.closeBoardModal();
+                  if (UNITS[no - 1]) startUnit(UNITS[no - 1]);
+                });
+              });
+              bd.querySelectorAll('[data-board-prog]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                  const no = Number(btn.getAttribute('data-board-prog'));
+                  window.AC_ISLAND.closeBoardModal();
+                  if (UNITS[no - 1]) {
+                    clearTimers();
+                    state.unit = UNITS[no - 1];
+                    state.refOpen = false;
+                    startProgram();
+                  }
+                });
+              });
+            }
+          }
+
           islandNodes.push({
             id: 'fc-board-node',
             x: 52,
@@ -1287,7 +1380,7 @@
             statusLabel: '看板提示',
             locked: false,
             actions: [
-              { label: '📖 打開參考說明書 →', href: 'reference.html', primary: true }
+              { label: '📖 打開參考說明書 →', primary: true, onClick: openFlowchartBoardModal }
             ]
           });
 
@@ -1378,8 +1471,11 @@
         modalEl.innerHTML = `
           <div class="ac-float-window theme-craft max-w-3xl mx-auto px-5 sm:px-8 py-7">
             <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 挑選機關零件</div>
-            <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
+            <div class="flex items-center justify-between gap-2 flex-wrap mb-4">
+              <div class="flex items-center gap-2 flex-wrap">
+                <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
+                <button id="back-read" type="button" class="text-purple-800 hover:text-purple-950 bg-purple-50 border border-purple-200 px-3 py-1 rounded-full text-xs font-bold">📖 上一步：重讀題目</button>
+              </div>
               <div class="text-xs font-bold text-amber-800">第 ${u.no} 關 · 步驟 1／2：選元件</div>
             </div>
             <div class="flex items-start gap-3 mb-5 pop">
@@ -1445,8 +1541,11 @@
         modalEl.innerHTML = `
           <div class="ac-float-window theme-craft max-w-3xl mx-auto px-5 sm:px-8 py-7">
             <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 組裝流程圖齒輪</div>
-            <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
+            <div class="flex items-center justify-between gap-2 flex-wrap mb-4">
+              <div class="flex items-center gap-2 flex-wrap">
+                <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
+                <button id="back-select" type="button" class="text-purple-800 hover:text-purple-950 bg-purple-50 border border-purple-200 px-3 py-1 rounded-full text-xs font-bold">← 上一步：重選元件</button>
+              </div>
               <div class="text-xs ${state.mistakes >= state.unit.steps.length ? 'text-red-500 font-bold' : 'text-amber-800 font-bold'}">錯誤 ${state.mistakes} / ${state.unit.steps.length} 次（超過就要回去重讀）</div>
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-5 pop">
@@ -1636,8 +1735,10 @@
       const fvb = e.target.closest('.fc-view-btn');
       if(fvb){ state.viewMode = fvb.dataset.fcView || 'island'; render(); return; }
       if(e.target.closest('#logout')){ logout(); return; }
-      if(e.target.closest('#toggle-lead') || e.target.closest('#toggle-lead-close')){ state.leadOpen=!state.leadOpen; render(); return; }
+      if(e.target.closest('#toggle-lead') || e.target.closest('#toggle-lead-close') || e.target.id === 'lead-backdrop'){ state.leadOpen=!state.leadOpen; render(); return; }
       if(e.target.closest('#toggle-ref')){ state.refOpen=!state.refOpen; render(); return; }
+      if(e.target.closest('#back-read')){ clearTimers(); state.status='read'; state.readLeft=readSecondsFor(state.unit); render(); return; }
+      if(e.target.closest('#back-select')){ clearTimers(); state.status='select'; render(); return; }
       if(e.target.closest('#hint-btn')){
         if(state.hintUsed){                    // 已用掉提示 → 退回上一步重新閱讀（重新計時 30 秒）
           clearTimers();
@@ -1706,7 +1807,14 @@
       if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       const imgBox = document.getElementById('imgBox');
       if(imgBox && imgBox.classList.contains('on')) return;
-      if(state.status === 'menu') return;
+      if(state.status === 'menu'){
+        if((e.key === 'Escape' || e.code === 'Escape') && state.leadOpen){
+          e.preventDefault();
+          state.leadOpen = false;
+          render();
+        }
+        return;
+      }
 
       const isEnter = (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter');
       const isSpace = (e.key === ' ' || e.code === 'Space');

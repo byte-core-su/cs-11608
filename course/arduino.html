@@ -97,7 +97,7 @@
                 <button id="arduino-view-toggle" type="button" data-ac-view-toggle title="按 M 鍵也可以切換" onclick="toggleArduinoViewMode()" class="ac-pill hover:bg-amber-100 transition cursor-pointer" style="background:#fef3c7;border-color:#f59e0b">
                     📋 切換課綱卡片（M）
                 </button>
-                <a id="arduino-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" style="display:none">✈️ 回主島</a>
+                <a id="arduino-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" title="按 Esc 鍵也可返回主島">✈️ 回主島</a>
             </div>
         </div>
     </div>
@@ -1086,8 +1086,6 @@
             const islandSec = document.getElementById('arduino-island-section');
             const cardView = document.getElementById('arduino-card-view');
             const btn = document.getElementById('arduino-view-toggle');
-            const hubLink = document.getElementById('arduino-hub-link');
-            if (hubLink) hubLink.style.display = arduinoViewMode === 'island' ? 'none' : '';
             if (arduinoViewMode === 'island') {
                 if (islandSec) islandSec.classList.remove('hidden');
                 if (cardView) cardView.classList.add('hidden');
@@ -1104,6 +1102,53 @@
             document.getElementById('detail-view').classList.add('hidden');
             document.getElementById('interactive-playground').innerHTML = '';
             document.getElementById('detail-demo-container').innerHTML = '';
+        }
+
+        const detailBackdropEl = document.getElementById('detail-view');
+        if (detailBackdropEl) {
+            detailBackdropEl.addEventListener('click', function (e) {
+                if (e.target === detailBackdropEl) closeCourseDetail();
+            });
+        }
+
+        function openArduinoBoardModal() {
+            if (!window.AC_ISLAND || !window.AC_ISLAND.openBoardModal) return;
+            const lessons = [1, 2, 3, 4, 5].map(function (i) {
+                const d = courseData[i];
+                return '<button type="button" data-board-unit="' + i + '" class="text-left bg-white hover:bg-sky-50 border-2 border-sky-200 hover:border-sky-400 rounded-2xl p-3.5 transition cursor-pointer shadow-sm">' +
+                    '<div class="flex items-center justify-between gap-2 mb-1">' +
+                        '<span class="text-xs font-black text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full">' + d.badge + '</span>' +
+                        '<span class="text-xs font-bold text-sky-600">進入實驗艙 →</span>' +
+                    '</div>' +
+                    '<div class="font-black text-sm text-slate-800">' + d.title + '</div>' +
+                '</button>';
+            }).join('');
+            const bodyHtml =
+                '<div class="bg-sky-50/90 border-2 border-sky-200 rounded-2xl p-4 mb-4 text-xs sm:text-sm text-slate-700 leading-relaxed">' +
+                    '<b class="text-sky-900">🤖 專題五節課學習指南：</b>從生活裡挑一個「這東西應該要會自己動」的問題，拆成<b>感測 → 判斷 → 驅動</b>，挑出需要的元件並調好門檻，第五節會自動合成你的專屬作品卡！' +
+                '</div>' +
+                '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">' + lessons + '</div>';
+            window.AC_ISLAND.openBoardModal({
+                theme: 'theme-tech',
+                badge: '🤖 未來科技創客實驗島 · 專題學習地圖',
+                title: '📋 專題指南看板（五節課學習地圖）',
+                bodyHtml: bodyHtml,
+                footerAction: {
+                    label: '📋 切換完整課綱卡片模式 (M)',
+                    onClick: function () {
+                        if (arduinoViewMode === 'island') toggleArduinoViewMode();
+                    }
+                },
+                onMount: function (modalEl) {
+                    modalEl.querySelectorAll('[data-board-unit]').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            const u = Number(btn.getAttribute('data-board-unit'));
+                            window.AC_ISLAND.closeBoardModal();
+                            openCourseDetail(u);
+                        });
+                    });
+                }
+            });
         }
 
         function initArduinoIsland() {
@@ -1160,13 +1205,13 @@
                         id: 'ar-board', x: 50, y: 69, kind: 'board', num: '📋',
                         label: '專題指南看板', sub: '五節課學習地圖',
                         speaker: '📋 專題指南看板',
-                        dialog: '走近 5 座實驗艙按 Space 開啟模擬器；在此按 Space 可切換課綱卡片。',
-                        actionLabel: '📋 展開完整課綱卡片檢視'
+                        dialog: '走近 5 座實驗艙按 Space 開啟模擬器；在此按 Space 查看五節課學習地圖。',
+                        actionLabel: '📋 查看五節課學習地圖'
                     }
                 ],
                 onOpen: function (node) {
                     if (node.id === 'ar-board') {
-                        toggleArduinoViewMode();
+                        openArduinoBoardModal();
                         return;
                     }
                     openCourseDetail(Number(node.id));

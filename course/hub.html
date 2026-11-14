@@ -17,10 +17,7 @@
         radial-gradient(#b7e4c7 1.5px, transparent 1.5px);
       background-size: 100% 100%, 100% 100%, 28px 28px;
     }
-    .tape{position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);width:76px;height:26px;backdrop-filter:blur(1px);border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-    @keyframes pop{0%{opacity:0;transform:translateY(12px) scale(.96)}100%{opacity:1;transform:none}}
-    .pop{animation:pop .5s ease-out both}
-    .underline-doodle{background:linear-gradient(transparent 62%, rgba(250,204,21,.55) 62%)}
+    /* 共用樣式（.tape, .pop, .underline-doodle, .hl）已統一收斂至 shared/island.css */
   </style>
 </head>
 <body class="min-h-screen text-slate-800 ac-theme-bg">
@@ -573,7 +570,7 @@
       }).join('') + arenaCard(mods, SZ);
 
 
-      // 本週成績卡（點「累積星星」開啟）
+      // 本週成績卡（點「本週成績佈告欄」或頂部「本週成績」開啟）
       const maxBar = Math.max(1, ...wk.recent.map(r=>r.stars));
       const medal = wk.thisWeekStars >= 10 ? '🏆' : wk.thisWeekStars >= 6 ? '🥇' : wk.thisWeekStars >= 3 ? '🥈' : wk.thisWeekStars > 0 ? '🥉' : '🌱';
       const praise = wk.thisWeekStars >= 10 ? '本週火力全開，太強了！'
@@ -582,52 +579,68 @@
                    : wk.thisWeekStars > 0 ? '起步了！這週再多闖一關吧。'
                    : wk.beforeStart ? '這學期還沒開學，開學後才會開始算每週成績。'
                    : '這週還沒有新星星，挑一關開始吧！';
+      const weekInnerHtml = `
+        <div class="bg-white rounded-2xl border-2 border-amber-200 p-5 text-center mb-3.5 shadow-sm">
+          <div class="text-xs font-black text-amber-600 tracking-widest">${wk.weekLabel} · 本週成績卡</div>
+          <div class="text-5xl my-1.5">${medal}</div>
+          <div class="text-4xl font-black ${wk.thisWeekStars>0?'text-amber-500':'text-slate-300'} tracking-wider">⭐ ${wk.thisWeekStars}</div>
+          <div class="mt-2 inline-block ${wk.thisWeekScore>0?'bg-amber-500 text-white':'bg-slate-200 text-slate-500'} font-black text-xl px-5 py-1 rounded-full shadow">${wk.thisWeekScore} 分</div>
+          ${(wk.thisWeekStars>0 || wk.beforeStart) ? '' : (wk.hereThisWeek
+            ? `<div class="text-xs text-slate-500 mt-1.5">這週有來上課（基本分）—— 拿到星星就會往上加</div>`
+            : `<div class="text-xs text-slate-400 mt-1.5">這週還沒有登入紀錄</div>`)}
+          <p class="text-sm font-bold text-slate-600 mt-2.5">${praise}</p>
+          <p class="text-[11px] text-slate-400 mt-1">${wk.thisWeekStars>0 ? '分數 ＝ 60 ＋ 星數 × 4（滿分 100）' : wk.beforeStart ? '' : '本週還沒有星星，先完成一個小關卡就會開始計分'}</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-amber-200 p-4 shadow-sm">
+          <div class="text-xs font-black text-slate-500 mb-2">📊 最近幾週的星星</div>
+          <div class="flex items-end justify-between gap-1.5 h-24 mb-1">
+            ${wk.recent.map(r=>`
+              <div class="flex-1 flex flex-col items-center justify-end h-full">
+                <div class="text-[10px] font-bold ${r.no===wk.curWeekNo?'text-amber-600':'text-slate-400'}">${r.stars||''}</div>
+                <div class="w-full rounded-t ${r.no===wk.curWeekNo?'bg-amber-400':'bg-slate-200'}" style="height:${Math.max(4, r.stars/maxBar*70)}px"></div>
+                <div class="text-[10px] mt-1 ${r.no===wk.curWeekNo?'font-black text-amber-700':'text-slate-400'}">${r.no}</div>
+              </div>`).join('')}
+          </div>
+          <div class="text-[10px] text-slate-400 text-center mb-3.5">週次（最佳紀錄：${wk.best} 星／週）</div>
+
+          <div class="text-xs font-black text-slate-500 mb-2">✨ 本週星星來自</div>
+          ${Object.keys(wk.bySrc).length
+            ? `<div class="space-y-1.5">${Object.entries(wk.bySrc).map(([m,st])=>`
+                <div class="flex items-center justify-between bg-amber-50/50 border border-amber-200 rounded-lg px-3 py-1.5 text-sm">
+                  <span class="font-bold text-slate-700">${MOD_NAME[m]||m}</span>
+                  <span class="font-black text-amber-500">+${st} ⭐</span>
+                </div>`).join('')}</div>`
+            : `<div class="text-center text-sm text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-lg py-3">這週還沒有新星星<br><span class="text-xs">完成任何一個小關卡就會出現在這裡</span></div>`}
+
+          <div class="mt-3 text-center text-[11px] text-slate-400">累積總星數 ★ ${s.stars} / ${s.maxTotal}　·　通關 ${s.subDone}/${s.subTotal} 小關</div>
+        </div>`;
+
+      window._openHubWeekModal = function() {
+        if (window.AC_ISLAND && typeof window.AC_ISLAND.openBoardModal === 'function') {
+          window.AC_ISLAND.openBoardModal({
+            badge: '🏝️ 科技探險主島 · 島民服務處成績佈告欄',
+            icon: '📋',
+            title: `${wk.weekLabel} · 本週成績佈告欄`,
+            theme: '',
+            maxWidth: 'max-w-lg',
+            bodyHtml: weekInnerHtml,
+            footerHint: '💡 按 Esc 或右上角按鈕返回島嶼'
+          });
+        } else {
+          state.showWeek = true;
+          render();
+        }
+      };
+
       const weekCard = state.showWeek ? `
-        <div id="week-mask" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div class="w-full max-w-md pop">
-            <div class="relative bg-gradient-to-br from-amber-50 to-white rounded-3xl border-4 border-amber-300 shadow-2xl overflow-hidden">
-              <span class="tape"></span>
-              <button id="close-week" class="absolute top-3 right-4 text-slate-400 hover:text-slate-700 text-2xl leading-none">&times;</button>
-
-              <div class="p-6 text-center border-b-2 border-dashed border-amber-200">
-                <div class="text-xs font-black text-amber-600 tracking-widest">${wk.weekLabel} · 本週成績卡</div>
-                <div class="text-6xl my-2">${medal}</div>
-                <div class="text-5xl font-black ${wk.thisWeekStars>0?'text-amber-500':'text-slate-300'} tracking-wider">⭐ ${wk.thisWeekStars}</div>
-                <div class="mt-2 inline-block ${wk.thisWeekScore>0?'bg-amber-500 text-white':'bg-slate-200 text-slate-500'} font-black text-2xl px-5 py-1.5 rounded-full shadow">${wk.thisWeekScore} 分</div>
-                <!-- ★ 0 星的兩種情況要分開講：
-                     人有來、也登入了 → 給基本分；整週沒出現 → 0 分。
-                     ⚠️ 不講清楚的話，兩個 0 星的同學看到不同分數會以為系統壞了。 -->
-                ${(wk.thisWeekStars>0 || wk.beforeStart) ? '' : (wk.hereThisWeek
-                  ? `<div class="text-xs text-slate-500 mt-1">這週有來上課（基本分）—— 拿到星星就會往上加</div>`
-                  : `<div class="text-xs text-slate-400 mt-1">這週還沒有登入紀錄</div>`)}
-                <p class="text-sm font-bold text-slate-600 mt-3">${praise}</p>
-                <p class="text-[11px] text-slate-400 mt-1">${wk.thisWeekStars>0 ? '分數 ＝ 60 ＋ 星數 × 4（滿分 100）' : wk.beforeStart ? '' : '本週還沒有星星，先完成一個小關卡就會開始計分'}</p>
-              </div>
-
-              <div class="p-5">
-                <div class="text-xs font-black text-slate-500 mb-2">📊 最近幾週的星星</div>
-                <div class="flex items-end justify-between gap-1.5 h-24 mb-1">
-                  ${wk.recent.map(r=>`
-                    <div class="flex-1 flex flex-col items-center justify-end h-full">
-                      <div class="text-[10px] font-bold ${r.no===wk.curWeekNo?'text-amber-600':'text-slate-400'}">${r.stars||''}</div>
-                      <div class="w-full rounded-t ${r.no===wk.curWeekNo?'bg-amber-400':'bg-slate-200'}" style="height:${Math.max(4, r.stars/maxBar*70)}px"></div>
-                      <div class="text-[10px] mt-1 ${r.no===wk.curWeekNo?'font-black text-amber-700':'text-slate-400'}">${r.no}</div>
-                    </div>`).join('')}
-                </div>
-                <div class="text-[10px] text-slate-400 text-center mb-4">週次（最佳紀錄：${wk.best} 星／週）</div>
-
-                <div class="text-xs font-black text-slate-500 mb-2">✨ 本週星星來自</div>
-                ${Object.keys(wk.bySrc).length
-                  ? `<div class="space-y-1.5">${Object.entries(wk.bySrc).map(([m,st])=>`
-                      <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm">
-                        <span class="font-bold text-slate-700">${MOD_NAME[m]||m}</span>
-                        <span class="font-black text-amber-500">+${st} ⭐</span>
-                      </div>`).join('')}</div>`
-                  : `<div class="text-center text-sm text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-lg py-4">這週還沒有新星星<br><span class="text-xs">完成任何一個小關卡就會出現在這裡</span></div>`}
-
-                <div class="mt-4 text-center text-[11px] text-slate-400">累積總星數 ★ ${s.stars} / ${s.maxTotal}　·　通關 ${s.subDone}/${s.subTotal} 小關</div>
-              </div>
+        <div id="week-mask" class="ac-float-backdrop">
+          <div class="ac-float-window w-full max-w-lg mx-auto p-5 sm:p-6 pop relative">
+            <div class="ac-window-badge">🏝️ 科技探險主島 · 島民服務處成績佈告欄</div>
+            <div class="ac-board-header">
+              <h2 class="ac-board-title"><span>📋</span><span>${wk.weekLabel} · 本週成績佈告欄</span></h2>
+              <button id="close-week" type="button" class="ac-board-close-btn">✕ 返回島嶼 (Esc)</button>
             </div>
+            ${weekInnerHtml}
           </div>
         </div>` : '';
 
@@ -720,7 +733,7 @@
           };
         });
 
-        // 中央廣場：島民佈告欄（點開本週成績卡）
+        // 中央廣場：島民佈告欄（點開本週成績卡，不重繪 3D 島嶼）
         islandNodes.push({
           id: 'week-board',
           x: 52,
@@ -735,7 +748,7 @@
           starsText: `本週 ${wk.thisWeekScore}分`,
           statusLabel: '成績查詢',
           locked: false,
-          actions: [{ label: '查看本週成績卡 📋', primary: true, onClick: () => { state.showWeek = true; render(); } }]
+          actions: [{ label: '查看本週成績卡 📋', primary: true, onClick: () => { if (window._openHubWeekModal) window._openHubWeekModal(); } }]
         });
 
         // 闖關排行賽露營地（若有開啟）
@@ -813,7 +826,7 @@
       if(e.target.closest('#setup-back')){ state.setup=null; state.loginError=''; render(); return; }
       if(e.target.closest('#demo')){ state.demo=true; state.status='main'; render(); return; }
       if(e.target.closest('#logout')){ logout(); return; }
-      if(e.target.closest('#open-week')){ state.showWeek=true; render(); return; }
+      if(e.target.closest('#open-week')){ if (window._openHubWeekModal) window._openHubWeekModal(); else { state.showWeek=true; render(); } return; }
       if(e.target.closest('#close-week')){ state.showWeek=false; render(); return; }
       // 點卡片外的暗色區域也可關閉
       if(state.showWeek && e.target.id==='week-mask'){ state.showWeek=false; render(); return; }

@@ -107,16 +107,12 @@
 
 <body class="ac-theme-bg text-slate-800 min-h-screen pb-24">
 
-<a href="scratch.html"
-   class="fixed top-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800 text-white
-          font-bold text-sm px-3.5 py-2 rounded-full shadow-lg hover:bg-slate-700 transition">← 闖關地圖</a>
-
 <!-- ★ 寬度和闖關地圖（scratch.html）一樣，都是 4xl。
      ⚠️ 一度改成 5xl 想讓步驟列放得下，結果內容比標題寬一大截，
         而且從地圖點進來會「跳一下」—— 兩頁不同寬，看起來像兩個網站。
      ⇒ 步驟列改成會換行（見上面的 .steps）就不必靠加寬解決，
         寬度回到和地圖一致。**版面一致比多幾十像素重要。** -->
-<main class="max-w-4xl mx-auto px-4 pt-20 sm:pt-8">
+<main class="max-w-4xl mx-auto px-4 pt-4 sm:pt-6">
   <div id="app"></div>
 </main>
 
@@ -127,7 +123,9 @@ const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c =>
 
 /* ── 這一頁在做哪一關（十關全部開放，網址帶 ?unit=） ── */
 const UNITS = (window.CONFIG.UNITS || []).map((u, i) => ({ no: i + 1, id: u[0], name: u[1] }));
-const wantId = new URLSearchParams(location.search).get('unit') || '';
+const urlParams = new URLSearchParams(location.search);
+const wantId = urlParams.get('unit') || '';
+const wantStep = urlParams.get('step') || '';
 const unit = UNITS.filter(u => u.id === wantId)[0] || null;
 const lv = unit ? (window.BLOCK_LEVELS || {})[unit.id] : null;
 
@@ -277,18 +275,42 @@ function render() {
 
   const S = steps();
   const s = S[at];
+  const prevUnit = unit.no > 1 ? UNITS[unit.no - 2] : null;
+  const nextUnit = unit.no < UNITS.length ? UNITS[unit.no] : null;
+  const finalIdx = S.findIndex(x => x.key === 'final');
+  const showTempleHint = wantStep === 'final' && finalIdx >= 0 && at < finalIdx;
+
   $('app').innerHTML = `
+    <div class="ac-hud mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <a href="scratch.html" class="ac-pill ac-pill-btn text-xs" style="background:#fef3c7;border-color:#f59e0b;color:#78350f">
+            ← 返回 Scratch 島嶼 (Esc)
+          </a>
+          <span class="text-xs font-black px-2.5 py-1 rounded-full border border-orange-300 bg-orange-50 text-orange-700">
+            🐱 第 ${String(unit.no).padStart(2,'0')} 關 · ${esc(unit.id)}
+          </span>
+        </div>
+        <div class="flex items-center gap-1.5 flex-wrap">
+          ${prevUnit ? `<a href="level.html?unit=${encodeURIComponent(prevUnit.id)}" class="ac-pill ac-pill-btn text-xs" title="前往第 ${prevUnit.no} 關：${esc(prevUnit.name)}">◀ 上一關</a>` : ''}
+          <select id="unit-jump" class="ac-pill text-xs cursor-pointer bg-white" style="padding:4px 10px" aria-label="快速切換關卡">
+            ${UNITS.map(u => `<option value="${esc(u.id)}" ${u.id === unit.id ? 'selected' : ''}>第 ${String(u.no).padStart(2,'0')} 關：${esc(u.name)}</option>`).join('')}
+          </select>
+          ${nextUnit ? `<a href="level.html?unit=${encodeURIComponent(nextUnit.id)}" class="ac-pill ac-pill-btn text-xs" title="前往第 ${nextUnit.no} 關：${esc(nextUnit.name)}">下一關 ▶</a>` : ''}
+        </div>
+      </div>
+    </div>
     <header class="mb-4">
-      <span class="text-xs font-bold px-2.5 py-1 rounded-full border border-orange-300 bg-orange-50 text-orange-700">
-        🐱 第 ${String(unit.no).padStart(2,'0')} 關
-      </span>
-      <h1 class="text-2xl sm:text-3xl font-black mt-2">${esc(unit.name)}</h1>
+      <h1 class="text-2xl sm:text-3xl font-black">${esc(unit.name)}</h1>
     </header>
     <div class="steps-bar mb-5">${S.map((x, i) => `
       <button class="stp ${i === at ? 'stp-now' : stepDone(i) ? 'stp-done' : canGo(i) ? 'stp-done' : 'stp-todo'}"
               data-step="${i}" ${canGo(i) ? '' : 'disabled'}>
         <span>${x.icon}</span><span>${i + 1}. ${x.name}</span>
       </button>`).join('')}</div>
+    ${showTempleHint ? `<div class="mb-4 rounded-2xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-xs sm:text-sm font-bold text-amber-900">
+      🏛️ <b>黃金齒輪神殿提示：</b>期末檢核的題目會用到這一關「🎮 實作體驗」算出來的數據，請先依序走完前面步驟與實作體驗，即可解鎖最後一步「🏁 期末檢核」！
+    </div>` : ''}
     ${resumed ? `<div class="resume mb-4">
       📍 上次做到<b>第 ${at + 1} 步（${S[at].name}）</b>，直接從這裡接下去。
       <button id="fromTop">想從第 1 步再看一次</button>
@@ -297,6 +319,9 @@ function render() {
     <section id="body" class="bg-white rounded-2xl border border-slate-200 shadow-md p-5 sm:p-7 pop"></section>
     <div id="foot" class="mt-4"></div>
     ${materialPanel()}`;
+
+  const uj = $('unit-jump');
+  if (uj) uj.onchange = () => { if (uj.value && uj.value !== unit.id) location.href = 'level.html?unit=' + encodeURIComponent(uj.value); };
 
   document.querySelectorAll('[data-step]').forEach(b => {
     b.onclick = () => { if (canGo(+b.dataset.step)) { at = +b.dataset.step; render(); window.scrollTo({top:0,behavior:'smooth'}); } };
@@ -906,14 +931,28 @@ window.applyProgress = function (stars, pre, quiz, step, play) {
        被系統丟到最後一步只會覺得「它把我踢走了」。
        ⇒ 跳到最遠的那一步，但**明講**，而且留一個「回第 1 步」。 */
   const done = Number((step || {})[unit ? unit.id : ''] || 0);
+  const S = steps();
   if (done > 0) {
-    const S = steps();
     for (let i = 0; i < done && i < S.length; i++) ready[i] = true;
     at = Math.min(done, S.length - 1);
     resumed = at > 0;
   }
+  const finalIdx = S.findIndex(x => x.key === 'final');
+  if (wantStep === 'final' && finalIdx >= 0 && canGo(finalIdx)) {
+    at = finalIdx;
+    resumed = false;
+  }
   render();
 };
+
+document.addEventListener('keydown', function (e) {
+  if (e.code === 'Escape' || e.key === 'Escape') {
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+    e.preventDefault();
+    location.href = 'scratch.html';
+  }
+});
 
 function sid() {
   try { return sessionStorage.getItem('sid' + window.CONFIG.TERM) || ''; } catch (e) { return ''; }

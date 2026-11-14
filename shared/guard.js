@@ -16,9 +16,10 @@
     var term = (window.CONFIG && window.CONFIG.TERM) || '11501';
 
     var sid = null;
+    var isDemoMode = !(window.SITE && window.SITE.DEMO_MODE === false);
     try {
       sid = sessionStorage.getItem('sid' + term);
-      if (!sid) {
+      if (!sid && isDemoMode) {
         sid = '1410101';
         sessionStorage.setItem('sid' + term, sid);
         sessionStorage.setItem('me' + term, JSON.stringify({

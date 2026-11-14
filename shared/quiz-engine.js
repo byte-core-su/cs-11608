@@ -1311,48 +1311,100 @@
       $('prac-back').addEventListener('click', function () { hide('practice-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
     }
     document.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape' && e.code !== 'Escape') return;
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      var isEsc = (e.key === 'Escape' || e.code === 'Escape');
+      var isEnter = (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter');
+      var isSpace = (e.key === ' ' || e.code === 'Space');
+
       if ($('modal') && !$('modal').classList.contains('hidden')) {
-        e.preventDefault();
-        $('modal').classList.remove('flex');
-        $('modal').classList.add('hidden');
+        if (isEsc || isEnter || isSpace) {
+          e.preventDefault();
+          $('modal').classList.remove('flex');
+          $('modal').classList.add('hidden');
+        }
         return;
       }
       if ($('action-modal') && !$('action-modal').classList.contains('hidden')) {
-        e.preventDefault();
-        closeActionModal();
+        if (isEsc) {
+          e.preventDefault();
+          closeActionModal();
+        } else if (isEnter && $('hist-again')) {
+          e.preventDefault();
+          $('hist-again').click();
+        }
         return;
       }
       if ($('quiz-screen') && !$('quiz-screen').classList.contains('hidden')) {
-        e.preventDefault();
-        quitQuiz(false);
+        if (isEsc) {
+          e.preventDefault();
+          quitQuiz(false);
+          return;
+        }
+        if ($('qz-veil') && !$('qz-veil').classList.contains('hidden')) {
+          if ((isEnter || isSpace) && $('qz-veil-btn')) {
+            e.preventDefault();
+            $('qz-veil-btn').click();
+          }
+          return;
+        }
+        var optIdx = -1;
+        if (e.code === 'Digit1' || e.code === 'Numpad1') optIdx = 0;
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') optIdx = 1;
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') optIdx = 2;
+        else if (e.code === 'Digit4' || e.code === 'Numpad4') optIdx = 3;
+        if (optIdx >= 0 && !explain) {
+          var opts = document.querySelectorAll('.qz-opt');
+          if (optIdx < opts.length) {
+            e.preventDefault();
+            selectOption(optIdx);
+          }
+          return;
+        }
+        if ((isEnter || isSpace) && $('next-btn') && !$('next-btn').disabled && !$('next-btn').classList.contains('hidden')) {
+          e.preventDefault();
+          $('next-btn').click();
+          return;
+        }
         return;
       }
       if ($('study-screen') && !$('study-screen').classList.contains('hidden')) {
-        e.preventDefault();
-        hide('study-screen');
-        show('chapter-screen');
-        mountQuizIsland(lastUnitsMap);
+        if (isEsc) {
+          e.preventDefault();
+          hide('study-screen');
+          show('chapter-screen');
+          mountQuizIsland(lastUnitsMap);
+        } else if (isEnter && $('start-quiz-btn')) {
+          e.preventDefault();
+          $('start-quiz-btn').click();
+        }
         return;
       }
       if ($('result-screen') && !$('result-screen').classList.contains('hidden')) {
-        e.preventDefault();
-        hide('result-screen');
-        show('chapter-screen');
-        mountQuizIsland(lastUnitsMap);
+        if (isEsc || isEnter) {
+          e.preventDefault();
+          hide('result-screen');
+          show('chapter-screen');
+          mountQuizIsland(lastUnitsMap);
+        }
         return;
       }
       if ($('practice-screen') && !$('practice-screen').classList.contains('hidden')) {
-        e.preventDefault();
-        hide('practice-screen');
-        show('chapter-screen');
-        mountQuizIsland(lastUnitsMap);
+        if (isEsc) {
+          e.preventDefault();
+          hide('practice-screen');
+          show('chapter-screen');
+          mountQuizIsland(lastUnitsMap);
+        }
         return;
       }
       if ($('warning-screen') && !$('warning-screen').classList.contains('hidden')) {
-        e.preventDefault();
-        hide('warning-screen');
-        show('study-screen');
+        if (isEsc || isEnter) {
+          e.preventDefault();
+          hide('warning-screen');
+          show('study-screen');
+        }
         return;
       }
     });

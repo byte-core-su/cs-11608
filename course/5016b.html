@@ -431,11 +431,15 @@
     <section id="detail-view" class="ac-float-backdrop hidden text-slate-800">
         <div class="ac-float-window theme-tech max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
             <div class="ac-window-badge">🤖 未來科技創客實驗島 · 智慧家居實驗艙</div>
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <button onclick="closeCourseDetail()" class="ac-pill hover:bg-sky-100 transition cursor-pointer" style="background:#e0f2fe;border-color:#0284c7;color:#0c4a6e">
-                    🏝️ 返回機電島總覽
+                    🏝️ 返回機電島總覽 (Esc)
                 </button>
-                <span class="text-xs font-black text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1 rounded-full">⚡ 3D 創客實驗島背景即時運作中</span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <button type="button" id="detail-prev-btn" class="ac-pill hover:bg-amber-100 transition cursor-pointer text-xs">◀ 上一節</button>
+                    <span id="detail-step-indicator" class="text-xs font-black text-sky-800 bg-sky-50 border border-sky-200 px-3 py-1 rounded-full">第 1 / 5 節</span>
+                    <button type="button" id="detail-next-btn" class="ac-pill hover:bg-amber-100 transition cursor-pointer text-xs">下一節 ▶</button>
+                </div>
             </div>
             
             <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
@@ -1633,9 +1637,11 @@
 
         };
 
+        let currentUnitId = 1;
         function openCourseDetail(unitId) {
             const data = courseData[unitId];
             if (!data) return;
+            currentUnitId = Number(unitId) || 1;
 
             // Clear any lingering animations from previous unit
             clearAnimations();
@@ -1644,6 +1650,21 @@
             const detailView = document.getElementById('detail-view');
             detailView.classList.remove('hidden');
             detailView.scrollTop = 0;
+
+            const stepInd = document.getElementById('detail-step-indicator');
+            if (stepInd) stepInd.textContent = '第 ' + currentUnitId + ' / 5 節';
+            const prevBtn = document.getElementById('detail-prev-btn');
+            if (prevBtn) {
+                prevBtn.disabled = currentUnitId <= 1;
+                prevBtn.style.opacity = currentUnitId <= 1 ? '0.4' : '1';
+                prevBtn.onclick = function () { if (currentUnitId > 1) openCourseDetail(currentUnitId - 1); };
+            }
+            const nextBtn = document.getElementById('detail-next-btn');
+            if (nextBtn) {
+                nextBtn.disabled = currentUnitId >= 5;
+                nextBtn.style.opacity = currentUnitId >= 5 ? '0.4' : '1';
+                nextBtn.onclick = function () { if (currentUnitId < 5) openCourseDetail(currentUnitId + 1); };
+            }
             
             // Setup meta text and theme indicators
             document.getElementById('detail-badge').textContent = data.badge;

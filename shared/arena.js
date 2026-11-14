@@ -490,6 +490,39 @@
   });
   $('btn-again').addEventListener('click', function () { show('s-start'); loadToday(); });
 
+  /* ── 鍵盤快捷鍵：作答中按 1~4 選選項、Enter/Space 送出；非作答時按 Esc 回闖關基地 ── */
+  document.addEventListener('keydown', function (e) {
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (inQuiz() && !state.pulled) {
+      var optIdx = -1;
+      if (e.code === 'Digit1' || e.code === 'Numpad1') optIdx = 0;
+      else if (e.code === 'Digit2' || e.code === 'Numpad2') optIdx = 1;
+      else if (e.code === 'Digit3' || e.code === 'Numpad3') optIdx = 2;
+      else if (e.code === 'Digit4' || e.code === 'Numpad4') optIdx = 3;
+      if (optIdx >= 0) {
+        var optEl = document.querySelector('.opt[data-i="' + optIdx + '"]');
+        if (optEl) {
+          e.preventDefault();
+          state.picked = optIdx;
+          document.querySelectorAll('.opt').forEach(function (x) { x.classList.toggle('sel', x === optEl); });
+          $('btn-send').disabled = false;
+        }
+        return;
+      }
+      if ((e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') && !$('btn-send').disabled && state.picked >= 0) {
+        e.preventDefault();
+        $('btn-send').click();
+        return;
+      }
+      return;
+    }
+    if ((e.key === 'Escape' || e.code === 'Escape') && $('s-quiz').classList.contains('hidden')) {
+      e.preventDefault();
+      location.href = 'hub.html';
+    }
+  });
+
   /* 登入狀態由 arena.html 告訴這裡（Firebase 是 module，比這一支晚執行） */
   window.ARENA_SET_AUTH = function (a) {
     SID = String((a && a.sid) || ''); TOKEN = (a && a.token) || null;

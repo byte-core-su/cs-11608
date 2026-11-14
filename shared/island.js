@@ -2885,18 +2885,28 @@
         + '</div>';
     }).join('');
 
+    var challengeNodes = nodes.filter(function (n) {
+      return n.id !== 'dodo-airport' && n.kind !== 'board' && n.id !== 'warmup-node' && n.id !== 'lead-list-node' && n.id !== 'arena' && n.id !== 'cert-booth';
+    });
+    var passedChallengeCount = challengeNodes.filter(function (n) { return !!(n.pass || n.done); }).length;
+    var allChallengesCleared = challengeNodes.length >= 3 && passedChallengeCount === challengeNodes.length;
+    var allClearBadgeHtml = allChallengesCleared
+      ? '<span class="ac-cam-btn" style="background:linear-gradient(90deg,#fef3c7,#fde68a);border-color:#f59e0b;color:#92400e;pointer-events:none">👑 本島全數通關（' + passedChallengeCount + '/' + challengeNodes.length + '）</span>'
+      : '';
+
     container.innerHTML = ''
       + '<div class="ac-island-wrap pop">'
       +   '<div class="ac-island-stage" id="ac-stage">'
       +     '<canvas id="ac-webgl-canvas" class="ac-webgl-canvas"></canvas>'
       +     '<div class="ac-controls-bar">'
       +       '<div class="flex items-center gap-2 flex-wrap">'
-      +         '<button type="button" id="ac-wardrobe-toggle" class="ac-cam-btn" style="background:#fdf2f8;border-color:#f472b6;color:#9d174d">🪞 更換造型</button>'
+      +         allClearBadgeHtml
+      +         '<button type="button" id="ac-wardrobe-toggle" class="ac-cam-btn" style="background:#fdf2f8;border-color:#f472b6;color:#9d174d">🪞 更換造型（C）</button>'
       +         '<button type="button" id="ac-time-toggle" class="ac-cam-btn" style="background:#eff6ff;border-color:#60a5fa;color:#1e3a8a">' + timeBtnLabelMap[state.timeMode] + '</button>'
       +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn">🎥 視角：動森跟隨（V 切換全島鳥瞰）</button>'
       +       '</div>'
       +       '<div class="ac-controls-hint hidden md:block">🎮 ' + KEY('WASD') + KEY('方向鍵') + ' 移動' + HINT_SEP + KEY('◀ ▶') + ' 選擇' + HINT_SEP + KEY('Enter') + ' 確認' + HINT_SEP + KEY('Esc') + ' 離開'
-                + HINT_SEP + KEY('V') + ' 視角' + HINT_SEP + KEY('T') + ' 時段' + HINT_SEP + KEY('M') + ' 清單</div>'
+                + HINT_SEP + KEY('V') + ' 視角' + HINT_SEP + KEY('T') + ' 時段' + HINT_SEP + KEY('C') + ' 造型' + HINT_SEP + KEY('N') + ' 下一關' + HINT_SEP + KEY('M') + ' 清單</div>'
       +     '</div>'
       +     '<div id="ac-wardrobe-panel" class="ac-wardrobe-panel hidden"></div>'
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
@@ -2978,8 +2988,8 @@
         + '<div class="flex items-center justify-between border-b-2 border-amber-200 pb-2 mb-2.5">'
         +   '<div class="font-black text-sm text-amber-950">🪞 動森島民隨身梳妝鏡</div>'
         +   '<div class="flex items-center gap-1.5">'
-        +     '<button type="button" id="ac-look-random" class="ac-wardrobe-chip" style="background:#fef3c7;border-color:#f59e0b">🎲 隨機穿搭</button>'
-        +     '<button type="button" id="ac-look-close" class="ac-wardrobe-chip">✕ 關閉</button>'
+        +     '<button type="button" id="ac-look-random" class="ac-wardrobe-chip" style="background:#fef3c7;border-color:#f59e0b">🎲 隨機穿搭（R）</button>'
+        +     '<button type="button" id="ac-look-close" class="ac-wardrobe-chip">✕ 關閉 (Esc)</button>'
         +   '</div>'
         + '</div>'
         + '<div class="space-y-2.5 text-xs">'
@@ -3149,19 +3159,46 @@
       if (dialogEl) dialogEl.classList.add('hidden');
     }
 
-    function guideToRecommendedNode() {
-      var candidate = null;
+    function findRecommendedNode() {
       for (var i = 0; i < nodes.length; i++) {
-        var n = nodes[i];
-        if (n.id === 'dodo-airport' || n.kind === 'board' || n.locked) continue;
-        if (!n.done && !n.pass) {
-          candidate = n;
-          break;
-        }
+        var n0 = nodes[i];
+        if (n0.id === 'dodo-airport' || n0.kind === 'board' || n0.locked) continue;
+        if (n0.flagKind === 'next' && !n0.done && !n0.pass) return n0;
       }
-      if (!candidate && nodes.length > 0) candidate = nodes[0];
-      if (!candidate) return;
-      state.npcGuideHint = '🧭 推薦你接下來用 WASD / 方向鍵走去「' + (candidate.shortTitle || candidate.title) + '」挑戰喔！';
+      for (var j = 0; j < nodes.length; j++) {
+        var n = nodes[j];
+        if (n.id === 'dodo-airport' || n.kind === 'board' || n.locked) continue;
+        if (!n.done && !n.pass) return n;
+      }
+      return null;
+    }
+
+    function guideToRecommendedNode(autoWalk) {
+      var candidate = findRecommendedNode();
+      if (!candidate) {
+        if (autoWalk) {
+          dismissDialog();
+          var rect0 = stageEl.getBoundingClientRect();
+          spawnFloatScreen(rect0.width * 0.5, rect0.height * 0.42, '🏆 太棒了！本島所有關卡都已經通關囉！');
+        } else {
+          state.npcGuideHint = '🏆 太厲害了！你已經完成這座島上的所有關卡挑戰囉！';
+          renderDialog();
+        }
+        return;
+      }
+      if (autoWalk) {
+        dismissDialog();
+        state.hasMoved = true;
+        state.tx = candidate.x;
+        state.ty = Math.min(92, candidate.y + 4.8);
+        var rect = stageEl.getBoundingClientRect();
+        spawnFloatScreen(rect.width * 0.5, rect.height * 0.42, '🧭 自動帶路前往「' + (candidate.shortTitle || candidate.title) + '」（按方向鍵可隨時接手）');
+        return;
+      }
+      state.npcGuideHint = '🧭 推薦你接下來挑戰「' + (candidate.shortTitle || candidate.title) + '」！已幫你啟動自動帶路（也可隨時按 N 鍵或方向鍵前往）！';
+      state.hasMoved = true;
+      state.tx = candidate.x;
+      state.ty = Math.min(92, candidate.y + 4.8);
       renderDialog();
     }
 
@@ -4491,10 +4528,26 @@
         var tag = (e.target && e.target.tagName) || '';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-        /* ★ 快捷鍵（2026-11-12）：V 切換視角、T 切換時段 —— 和上方那兩顆按鈕一樣，手不必離開鍵盤去拿滑鼠。
+        /* ★ 快捷鍵（2026-11-12）：V 切換視角、T 切換時段、C 切換造型、R 隨機穿搭、N 自動帶路前往推薦下一關 —— 手不必離開鍵盤去拿滑鼠。
              有視窗蓋著、或島嶼被收起來（清單模式）時不作用。M（島嶼／清單）在檔案最下面，清單模式也要能按。 */
-        if ((e.code === 'KeyV' || e.code === 'KeyT') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        if ((e.code === 'KeyV' || e.code === 'KeyT' || e.code === 'KeyC' || e.code === 'KeyR' || e.code === 'KeyN') && !e.ctrlKey && !e.altKey && !e.metaKey) {
           if (!e.repeat && canvasEl.getClientRects().length && !document.querySelector(HOTKEY_BLOCKERS)) {
+            if (e.code === 'KeyR') {
+              if (wardrobePanel && !wardrobePanel.classList.contains('hidden')) {
+                var rBtn = wardrobePanel.querySelector('#ac-look-random');
+                if (rBtn) { e.preventDefault(); rBtn.click(); }
+              }
+              return;
+            }
+            if (e.code === 'KeyC') {
+              if (wardrobeBtn) { e.preventDefault(); wardrobeBtn.click(); }
+              return;
+            }
+            if (e.code === 'KeyN') {
+              e.preventDefault();
+              guideToRecommendedNode(true);
+              return;
+            }
             var hotBtn = e.code === 'KeyV' ? camBtn : timeBtn;
             if (hotBtn) { e.preventDefault(); hotBtn.click(); }
           }

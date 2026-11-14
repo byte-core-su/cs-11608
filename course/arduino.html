@@ -290,11 +290,15 @@
     <section id="detail-view" class="ac-float-backdrop hidden text-slate-800">
         <div class="ac-float-window theme-tech max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
             <div class="ac-window-badge">🤖 未來科技創客實驗島 · Arduino 專題實驗艙</div>
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <button onclick="closeCourseDetail()" class="ac-pill hover:bg-sky-100 transition cursor-pointer" style="background:#e0f2fe;border-color:#0284c7;color:#0c4a6e">
-                    🏝️ 返回專題島總覽
+                    🏝️ 返回專題島總覽 (Esc)
                 </button>
-                <span class="text-xs font-black text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1 rounded-full">⚡ 3D 創客實驗島背景即時運作中</span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <button type="button" id="detail-prev-btn" class="ac-pill hover:bg-amber-100 transition cursor-pointer text-xs">◀ 上一節</button>
+                    <span id="detail-step-indicator" class="text-xs font-black text-sky-800 bg-sky-50 border border-sky-200 px-3 py-1 rounded-full">第 1 / 5 節</span>
+                    <button type="button" id="detail-next-btn" class="ac-pill hover:bg-amber-100 transition cursor-pointer text-xs">下一節 ▶</button>
+                </div>
             </div>
 
             <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
@@ -379,12 +383,42 @@
         }
 
         /* =================================================================
-           學生這五節做的決定
-           ⚠️ 只存在這一次開著的頁面裡：重整就沒了，作品卡請截圖或抄下來。
-              （之後要接 Firestore 的話是 modules.arduino，
-                但等內容定案再接 —— 現在改版還太頻繁。）
+           學生這五節做的決定（自動同步存入本機 localStorage，重新整理不遺失）
            ================================================================= */
+        const WORK_STORAGE_KEY = (function () {
+            try {
+                const term = (window.CONFIG && window.CONFIG.TERM) || '11502';
+                const sid = sessionStorage.getItem('sid' + term) || 'guest';
+                return 'ac_arduino_work_' + term + '_' + sid;
+            } catch (e) { return 'ac_arduino_work_default'; }
+        })();
+
         const work = { problem: '', sense: '', cond: '', act: '', parts: [], on: 40, note: '' };
+        function loadWork() {
+            try {
+                const raw = localStorage.getItem(WORK_STORAGE_KEY);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (saved && typeof saved === 'object') {
+                    if (typeof saved.problem === 'string') work.problem = saved.problem;
+                    if (typeof saved.sense === 'string') work.sense = saved.sense;
+                    if (typeof saved.cond === 'string') work.cond = saved.cond;
+                    if (typeof saved.act === 'string') work.act = saved.act;
+                    if (Array.isArray(saved.parts)) work.parts = saved.parts.slice();
+                    if (typeof saved.on === 'number') work.on = saved.on;
+                    if (typeof saved.note === 'string') work.note = saved.note;
+                }
+            } catch (e) {}
+        }
+        function saveWork() {
+            try { localStorage.setItem(WORK_STORAGE_KEY, JSON.stringify(work)); } catch (e) {}
+        }
+        function resetWork() {
+            work.problem = ''; work.sense = ''; work.cond = ''; work.act = '';
+            work.parts = []; work.on = 40; work.note = '';
+            try { localStorage.removeItem(WORK_STORAGE_KEY); } catch (e) {}
+        }
+        loadWork();
 
         /* 第一節要挑的問題。
            ★★ 其中兩個是**故意做不到的**。
@@ -478,6 +512,12 @@
                                '<i data-lucide="' + p.icon + '" class="w-4 h-4 inline-block mr-1 text-indigo-400"></i>' + p.title + '</button>';
                     }).join('');
                     grid.querySelectorAll('[data-p]').forEach(function (btn) {
+                        const initP = PROBLEMS.filter(function (x) { return x.id === btn.dataset.p; })[0];
+                        if (initP && initP.ok && work.problem === initP.title) {
+                            btn.classList.add('pick-on');
+                            say.className = 'text-sm leading-relaxed p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200';
+                            say.innerHTML = '✅ <b>目前已選這個題目。</b>' + initP.why + '<br>已經自動記下來了，可點右上角「下一節 ▶」前往第二節。';
+                        }
                         btn.onclick = function () {
                             const p = PROBLEMS.filter(function (x) { return x.id === btn.dataset.p; })[0];
                             grid.querySelectorAll('[data-p]').forEach(function (b) { b.classList.remove('pick-on'); });
@@ -486,8 +526,9 @@
                                 work.problem = p.title;
                                 if (!work.sense) work.sense = p.sense;
                                 if (!work.act) work.act = p.act;
+                                saveWork();
                                 say.className = 'text-sm leading-relaxed p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200';
-                                say.innerHTML = '✅ <b>這個做得到。</b>' + p.why + '<br>已經記下來了，第二節會用到。';
+                                say.innerHTML = '✅ <b>這個做得到。</b>' + p.why + '<br>已經自動儲存，第二節會用到。';
                             } else {
                                 say.className = 'text-sm leading-relaxed p-3 rounded-lg bg-rose-50 text-rose-800 border border-rose-200';
                                 say.innerHTML = '⚠️ <b>這個做不到 —— 卡在「' + p.stuck + '」。</b><br>' + p.why;
@@ -562,6 +603,7 @@
                         work.sense = $('#f-sense').value.trim();
                         work.cond = $('#f-cond').value.trim();
                         work.act = $('#f-act').value.trim();
+                        saveWork();
                         const s = work.sense || '？？？', c = work.cond || '？？？', a = work.act || '？？？';
                         $('#f-preview').innerHTML =
                             '<div class="text-rose-400 font-bold">一直重複</div>' +
@@ -686,6 +728,7 @@
                             const i = work.parts.indexOf(p.name);
                             if (i >= 0) { work.parts.splice(i, 1); btn.classList.remove('pick-on'); }
                             else { work.parts.push(p.name); btn.classList.add('pick-on'); }
+                            saveWork();
                             refresh();
                         };
                     });
@@ -764,12 +807,14 @@
                         '</div>';
                     const $ = function (s) { return container.querySelector(s); };
                     const tried = {};
+                    $('#on').value = work.on || 40;
 
                     function fires(v, on) { return v < on; }
 
                     function refresh() {
                         const v = Number($('#v').value), on = Number($('#on').value);
                         work.on = on;
+                        saveWork();
                         $('#v-val').textContent = v;
                         $('#on-txt').textContent = on;
                         const go = fires(v, on);
@@ -871,19 +916,21 @@
                 ],
                 initPlayground: function (container) {
                     const miss = [];
-                    if (!work.problem) miss.push('第一節：還沒選題目');
-                    if (!(work.sense && work.cond && work.act)) miss.push('第二節：三步還沒填完');
-                    if (!work.parts.length) miss.push('第三節：還沒挑元件');
+                    if (!work.problem) miss.push({ label: '第一節：還沒選題目', unit: 1 });
+                    if (!(work.sense && work.cond && work.act)) miss.push({ label: '第二節：三步還沒填完', unit: 2 });
+                    if (!work.parts.length) miss.push({ label: '第三節：還沒挑元件', unit: 3 });
 
                     container.innerHTML =
                         '<div class="w-full space-y-3">' +
                         (miss.length
                             ? '<div class="text-sm p-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 leading-relaxed">' +
-                              '⚠️ 作品卡還缺東西：<br>' + miss.map(function (m) { return '· ' + m; }).join('<br>') + '<br>' +
-                              '<button onclick="closeCourseDetail()" class="mt-2 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">回課程總覽補齊</button></div>'
+                              '⚠️ 作品卡還缺東西（點按鈕可直接前往該節補齊）：<div class="flex flex-wrap gap-2 mt-2">' +
+                              miss.map(function (m) {
+                                  return '<button type="button" onclick="openCourseDetail(' + m.unit + ')" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition cursor-pointer">👉 ' + m.label + '</button>';
+                              }).join('') + '</div></div>'
                             : '') +
                         '  <div class="bg-white border-2 border-indigo-200 rounded-2xl p-5 space-y-2.5" id="card">' +
-                        '    <div class="text-xs font-bold text-indigo-500 tracking-widest">MY PROJECT</div>' +
+                        '    <div class="flex items-center justify-between"><span class="text-xs font-bold text-indigo-500 tracking-widest">MY PROJECT</span><span class="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">💾 已自動暫存於本機</span></div>' +
                         '    <div><span class="text-xs text-slate-400 block">我要解決的問題</span>' +
                         '      <b class="text-slate-800">' + esc(work.problem || '（第一節還沒選）') + '</b></div>' +
                         '    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">' +
@@ -902,12 +949,21 @@
                         '  <div><label class="text-xs font-bold text-slate-500">我為什麼這樣設計（門檻為什麼設在這裡？中間試過什麼？）</label>' +
                         '    <textarea id="note" rows="3" maxlength="300" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-slate-200 text-sm focus:border-indigo-400 outline-none" placeholder="例如：一開始設 60，結果白天也會亮，改成 30 才正常。"></textarea></div>' +
                         '  <div id="p5-say" class="text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed"></div>' +
+                        '  <div class="flex flex-wrap items-center gap-2 pt-1">' +
+                        '    <button type="button" id="copy-project-card" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow transition cursor-pointer">📋 一鍵複製作品卡文字</button>' +
+                        '    <button type="button" id="reset-project-card" class="bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer">🗑️ 清空重寫</button>' +
+                        '    <span id="copy-project-msg" class="text-xs font-bold text-emerald-600"></span>' +
+                        '  </div>' +
                         '</div>';
                     const t = container.querySelector('#note');
                     const say = container.querySelector('#p5-say');
+                    const copyBtn = container.querySelector('#copy-project-card');
+                    const resetBtn = container.querySelector('#reset-project-card');
+                    const copyMsg = container.querySelector('#copy-project-msg');
                     t.value = work.note;
                     function refresh() {
                         work.note = t.value;
+                        saveWork();
                         if (work.note.trim().length < 10) {
                             say.className = 'text-sm p-3 rounded-lg bg-slate-100 text-slate-500 leading-relaxed';
                             say.innerHTML = '再寫幾個字（至少十個字）。<br>★ 這一段才是把你和「照著做的人」分開的地方 —— 過程中<b>改過什麼</b>最值得寫。';
@@ -917,6 +973,37 @@
                         }
                     }
                     t.addEventListener('input', refresh);
+                    if (copyBtn) {
+                        copyBtn.onclick = function () {
+                            const txt = [
+                                '【Arduino 智慧專題作品卡】',
+                                '1. 我要解決的問題：' + (work.problem || '（未選）'),
+                                '2. 機器要偵測：' + (work.sense || '—'),
+                                '3. 判斷條件：' + (work.cond || '—'),
+                                '4. 驅動動作：' + (work.act || '—'),
+                                '5. 使用元件：' + (work.parts.join('、') || '（未挑）'),
+                                '6. 設定門檻：小於 ' + work.on,
+                                '7. 設計說明：' + (work.note.trim() || '（未填）')
+                            ].join('\n');
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(txt).then(function () {
+                                    copyMsg.textContent = '✅ 已複製！可直接貼到 Classroom 或學習單';
+                                    setTimeout(function () { copyMsg.textContent = ''; }, 3000);
+                                }).catch(function () {
+                                    window.prompt('請按 Ctrl+C 複製作品卡文字：', txt);
+                                });
+                            } else {
+                                window.prompt('請按 Ctrl+C 複製作品卡文字：', txt);
+                            }
+                        };
+                    }
+                    if (resetBtn) {
+                        resetBtn.onclick = function () {
+                            if (!window.confirm('確定要清空第 1～5 節的作品卡紀錄並重新開始嗎？')) return;
+                            resetWork();
+                            openCourseDetail(5);
+                        };
+                    }
                     refresh();
                 },
                 demoHTML: `
@@ -950,12 +1037,29 @@
             }
         };
 
+        let currentUnitId = 1;
         function openCourseDetail(unitId) {
             const data = courseData[unitId];
             if (!data) return;
+            currentUnitId = Number(unitId) || 1;
             clearAnimations();
 
             document.getElementById('detail-view').classList.remove('hidden');
+
+            const stepInd = document.getElementById('detail-step-indicator');
+            if (stepInd) stepInd.textContent = '第 ' + currentUnitId + ' / 5 節';
+            const prevBtn = document.getElementById('detail-prev-btn');
+            if (prevBtn) {
+                prevBtn.disabled = currentUnitId <= 1;
+                prevBtn.style.opacity = currentUnitId <= 1 ? '0.4' : '1';
+                prevBtn.onclick = function () { if (currentUnitId > 1) openCourseDetail(currentUnitId - 1); };
+            }
+            const nextBtn = document.getElementById('detail-next-btn');
+            if (nextBtn) {
+                nextBtn.disabled = currentUnitId >= 5;
+                nextBtn.style.opacity = currentUnitId >= 5 ? '0.4' : '1';
+                nextBtn.onclick = function () { if (currentUnitId < 5) openCourseDetail(currentUnitId + 1); };
+            }
 
             document.getElementById('detail-badge').textContent = data.badge;
             document.getElementById('detail-title').textContent = data.title;

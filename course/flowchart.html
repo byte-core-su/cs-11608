@@ -455,8 +455,11 @@
       return shuffle([...u.steps, ...distractors]);
     }
 
-    // 【測試模式】預設直接進入 menu（動森島嶼畫面），不卡「連線中…」等待 Firebase
-    let state = { status:'menu', studentId:'1410101', studentName:'測試島民', slowNote:'', mmdUnit:null, done:{},
+    // 體驗／測試模式開關由根目錄 config.js 的 DEMO_MODE 統一控制
+    const IS_DEMO_MODE = !(window.SITE && window.SITE.DEMO_MODE === false);
+    let state = { status: IS_DEMO_MODE ? 'menu' : 'loading',
+                  studentId: IS_DEMO_MODE ? '1410101' : '',
+                  studentName: IS_DEMO_MODE ? '測試島民' : '', slowNote:'', mmdUnit:null, done:{},
                   progStars:{}, imgUnits:{}, imgReview:{}, unit:null, candidates:[], selected:{}, selMsg:'', placed:[], pool:[], mistakes:0,
                   qIdx:0, qPicked:null, qScore:0, refOpen:false, leadOpen:false, graderOpen:false,
                   readLeft:0, hintUsed:false, hintLeft:0, selTries:0,
@@ -683,7 +686,7 @@
     onAuthStateChanged(auth, user=>{
       if(user){
         const saved = sessionStorage.getItem(SAVED_KEY) || state.studentId;
-        if(saved && window.CONFIG.isSid(saved) && saved !== '1410101') autoLogin(saved);
+        if(saved && window.CONFIG.isSid(saved) && (!IS_DEMO_MODE || saved !== '1410101')) autoLogin(saved);
       }
     });
     /* 連線慢（autoLogin 要讀名冊＋進度兩次）：只補一行提示，不換畫面 */
@@ -1148,7 +1151,7 @@
                   <div class="border-2 border-teal-400 rounded-2xl overflow-hidden shadow-lg bg-white">
                     <div class="bg-teal-50 px-4 py-2.5 flex items-center justify-between border-b border-teal-200">
                       <span class="text-sm font-black text-teal-800">${state.leadDone?'✅':'🔰'} 前導教材：${LEAD.title}</span>
-                      <button id="toggle-lead-close" class="text-xs font-black text-teal-700 hover:text-teal-950 bg-white px-3 py-1 rounded-full border border-teal-300">✕ 收合教材</button>
+                      <button id="toggle-lead-close" class="text-xs font-black text-teal-700 hover:text-teal-950 bg-white px-3 py-1 rounded-full border border-teal-300">✕ 收合教材 (Esc)</button>
                     </div>
                     <iframe src="${LEAD.href}${state.leadDone?'?done=1':''}" class="w-full block bg-white" style="height:70vh;border:0" title="${LEAD.title}" loading="lazy"></iframe>
                     <div class="text-[11px] text-slate-400 px-3 py-1.5 text-center bg-teal-50">前導教材已嵌在此，${state.leadDone?'看完往下繼續闖關':'考過結業測驗就會自動記錄完成'}</div>
@@ -1331,7 +1334,7 @@
           <div class="ac-float-window theme-craft max-w-4xl mx-auto px-5 sm:px-8 py-7">
             <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 機關設計藍圖</div>
             <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
               <div class="text-xs font-bold text-amber-800">第 ${u.no} 關 · 先閱讀資料</div>
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden pop">
@@ -1377,7 +1380,7 @@
           <div class="ac-float-window theme-craft max-w-3xl mx-auto px-5 sm:px-8 py-7">
             <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 挑選機關零件</div>
             <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
               <div class="text-xs font-bold text-amber-800">第 ${u.no} 關 · 步驟 1／2：選元件</div>
             </div>
             <div class="flex items-start gap-3 mb-5 pop">
@@ -1444,7 +1447,7 @@
           <div class="ac-float-window theme-craft max-w-3xl mx-auto px-5 sm:px-8 py-7">
             <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 組裝流程圖齒輪</div>
             <div class="flex items-center justify-between mb-4">
-              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <button id="back-menu" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
               <div class="text-xs ${state.mistakes >= state.unit.steps.length ? 'text-red-500 font-bold' : 'text-amber-800 font-bold'}">錯誤 ${state.mistakes} / ${state.unit.steps.length} 次（超過就要回去重讀）</div>
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-5 pop">
@@ -1542,7 +1545,7 @@
             <div class="ac-window-badge">⚙️ 蒸氣齒輪木工村 · 程式設計與檢核工作台</div>
             <div class="flex items-center justify-between mb-4">
               <!-- 這一頁的返回鍵同時會重讀進度，星數才會即時更新（不另設第二顆按鈕） -->
-              <button id="back-refresh" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表</button>
+              <button id="back-refresh" class="text-amber-900 hover:text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full text-sm font-bold">← 關卡列表 (Esc)</button>
               <div class="text-xs font-bold text-amber-800">第 ${u.no} 關 · 程式設計</div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
@@ -1694,8 +1697,89 @@
     document.addEventListener('input', e=>{
     });
 
+    // 浮動視窗內的鍵盤快捷鍵（閱讀完 Enter 開始、程式檢核 1~4 作答與 Enter 下一題、Esc 回列表）
+    document.addEventListener('keydown', e=>{
+      const tag = (e.target && e.target.tagName) || '';
+      if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const imgBox = document.getElementById('imgBox');
+      if(imgBox && imgBox.classList.contains('on')) return;
+      if(state.status === 'menu') return;
+
+      const isEnter = (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter');
+      const isSpace = (e.key === ' ' || e.code === 'Space');
+
+      if(e.key === 'Escape' || e.code === 'Escape'){
+        e.preventDefault();
+        clearTimers();
+        if(state.status === 'program'){
+          loadProgress(state.studentId).finally(()=>{ state.status='menu'; render(); });
+        } else {
+          state.status = 'menu';
+          render();
+        }
+        return;
+      }
+      if(state.status === 'read' && isEnter){
+        const btn = document.getElementById('begin-sel');
+        if(btn && !btn.disabled){ e.preventDefault(); beginSelect(); }
+        return;
+      }
+      if(state.status === 'clear' && isEnter){
+        e.preventDefault();
+        startProgram();
+        return;
+      }
+      if(state.status === 'program'){
+        if(state.qPulled && (isEnter || isSpace)){
+          e.preventDefault();
+          backQuiz();
+          return;
+        }
+        const total = (state.quizSet || []).length;
+        if(state.qIdx < total){
+          if(state.qPicked == null){
+            let optIdx = -1;
+            if(e.code === 'Digit1' || e.code === 'Numpad1') optIdx = 0;
+            else if(e.code === 'Digit2' || e.code === 'Numpad2') optIdx = 1;
+            else if(e.code === 'Digit3' || e.code === 'Numpad3') optIdx = 2;
+            else if(e.code === 'Digit4' || e.code === 'Numpad4') optIdx = 3;
+            const q = state.quizSet[state.qIdx];
+            if(optIdx >= 0 && q && Array.isArray(q.o) && optIdx < q.o.length){
+              e.preventDefault();
+              pickAns(optIdx);
+            }
+          } else if(isEnter || isSpace){
+            e.preventDefault();
+            nextQ();
+          }
+        } else if(state.qScore < total && isEnter){
+          e.preventDefault();
+          retryQuiz();
+        }
+      }
+    });
+
 
     render();
+
+    // 支援從 reference.html 帶 ?unit=N&mode=flow|prog 直接打開指定關卡
+    (function () {
+      const qs = new URLSearchParams(location.search);
+      const uNo = Number(qs.get('unit') || 0);
+      const mode = qs.get('mode') || 'flow';
+      if (uNo >= 1 && uNo <= UNITS.length) {
+        const targetUnit = UNITS[uNo - 1];
+        try { history.replaceState(null, '', location.pathname); } catch (e) {}
+        if (mode === 'prog') {
+          clearTimers();
+          state.unit = targetUnit;
+          state.refOpen = false;
+          startProgram();
+        } else {
+          startUnit(targetUnit);
+        }
+      }
+    })();
   </script>
 <!-- ── 程式截圖放大檢視 ────────────────────
      ⚠️ 放在 body 最後、用事件委派 —— 卡片是 render() 用 innerHTML

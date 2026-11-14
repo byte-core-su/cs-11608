@@ -158,6 +158,7 @@ const NO_UP = UNITS.filter(u => !GATE.needsUpload(u.id));
 let unitStars = {};   // 作品星：{ '4-2-1': 3, … }　Apps Script 寫進 {學期}-progress
 let quizDone  = {};   // 概念檢測成績：{ '4-2-1': { score: 4 } }　概念星由它現算
 let playDone  = {};   // 沒有作品要交的關卡：實作體驗做完了沒
+let finalDone = {};   // 第 10 關期末檢核成績：{ '6-3-3': { best: 10, total: 10, pass: true } }
 let scViewMode = 'island';
 
 /* ===================== 畫面 ===================== */
@@ -232,16 +233,16 @@ function mountScratchIsland(){
   listEl.classList.add('hidden');
 
   const unitCoords = [
-    { x: 20, y: 68, kind: 'craft-forge',     icon: '🍽️' }, // 01 點餐幫手
-    { x: 35, y: 62, kind: 'craft-watermill', icon: '📐' }, // 02 正多邊形
-    { x: 24, y: 47, kind: 'craft-clockwork', icon: '🧱' }, // 03 打磚塊
-    { x: 42, y: 44, kind: 'craft-minecart',  icon: '💰' }, // 04 接金幣
-    { x: 58, y: 48, kind: 'craft-sawmill',   icon: '🚀' }, // 05 星際防禦
-    { x: 74, y: 63, kind: 'craft-forge',     icon: '🏃' }, // 06 大隊接力
-    { x: 77, y: 42, kind: 'craft-watermill', icon: '🫧' }, // 07 氣泡排序
-    { x: 32, y: 24, kind: 'craft-minecart',  icon: '🔎' }, // 08 循序搜尋
-    { x: 52, y: 23, kind: 'craft-sawmill',   icon: '🎯' }, // 09 二分搜尋
-    { x: 70, y: 22, kind: 'craft-clockwork', icon: '⚡' }  // 10 搜尋PK賽
+    { x: 20, y: 68, kind: 'craft-forge',     icon: '📐' }, // 01 平行的正方形
+    { x: 35, y: 62, kind: 'craft-watermill', icon: '📏' }, // 02 愈畫愈大的正方形
+    { x: 24, y: 47, kind: 'craft-clockwork', icon: '🔷' }, // 03 畫圖形（邊數、邊長）
+    { x: 42, y: 44, kind: 'craft-minecart',  icon: '🐦' }, // 04 小鳥吃蟲
+    { x: 58, y: 48, kind: 'craft-sawmill',   icon: '🧍' }, // 05 排隊比高矮
+    { x: 74, y: 63, kind: 'craft-forge',     icon: '🔢' }, // 06 選擇排序法
+    { x: 77, y: 42, kind: 'craft-watermill', icon: '🃏' }, // 07 插入排序法
+    { x: 32, y: 24, kind: 'craft-minecart',  icon: '🔎' }, // 08 循序搜尋法
+    { x: 52, y: 23, kind: 'craft-sawmill',   icon: '🎯' }, // 09 二元搜尋法
+    { x: 70, y: 22, kind: 'craft-clockwork', icon: '⚡' }  // 10 資料大爆炸
   ];
 
   const firstTodo = UNITS.find(u => {
@@ -325,6 +326,39 @@ function mountScratchIsland(){
     }}]
   });
 
+  // 🏛️ 北側高台：黃金齒輪神殿（呼應齒輪海狸師傅導覽：期末總檢核殿堂）
+  const lastUnit = UNITS[UNITS.length - 1] || { id: '6-3-3', name: '資料大爆炸' };
+  const finalRec = (finalDone && finalDone[lastUnit.id]) || {};
+  const finalPass = !!finalRec.pass;
+  const doneTotal = UNITS.filter(u => GATE.needsUpload(u.id)
+    ? (WORK ? (unitStars[u.id] || 0) >= 2 : (window.GRADING && window.GRADING.quizStars ? window.GRADING.quizStars(quizDone, u.id) > 0 : false))
+    : !!playDone[u.id]).length;
+  islandNodes.push({
+    id: 'final-temple-node',
+    x: 86,
+    y: 22,
+    kind: 'craft-temple',
+    icon: '🏛️',
+    tag: '黃金雙齒輪神殿',
+    title: '🏛️ 黃金齒輪神殿 · 期末總檢核',
+    shortTitle: '黃金齒輪神殿',
+    speaker: '🏛️ 黃金齒輪神殿 · 終極演算法試煉',
+    desc: finalPass
+      ? `🏆 恭喜你通過黃金齒輪神殿的期末總檢核（最佳紀錄 ${finalRec.best || 10}/${finalRec.total || 10}）！隨時可再次進入挑戰。`
+      : `集結本學期「自訂積木、參數傳遞、排序與搜尋演算法」的終極殿堂！目前已完成 ${doneTotal}/${UNITS.length} 關，進入第 10 關完成實作體驗即可挑戰期末總檢核！`,
+    pass: finalPass,
+    starsText: finalPass ? '🏆 已通關' : `${doneTotal}/${UNITS.length} 關`,
+    statusLabel: finalPass ? '神殿通關' : '終極試煉',
+    flagText: (!finalPass && doneTotal >= UNITS.length) ? '🔥 終極試煉' : '',
+    flagKind: 'next',
+    locked: false,
+    actions: [{
+      label: finalPass ? '🏛️ 再次挑戰期末總檢核 →' : '🏛️ 前往第 10 關＆期末總檢核 →',
+      href: 'level.html?unit=' + encodeURIComponent(lastUnit.id) + '&step=final',
+      primary: true
+    }]
+  });
+
   window.AC_ISLAND.mount(mountEl, {
     pageId: 'scratch_' + (window.CONFIG.TERM || '11502'),
     variant: 'code',
@@ -377,10 +411,11 @@ document.addEventListener('click', function (e) {
 });
 
 /* 讀完進度的那支 module script 用這個把資料交進來 */
-window.applyStars = function (obj, quiz, play) {
+window.applyStars = function (obj, quiz, play, fin) {
   unitStars = obj || {};
   quizDone = quiz || {};
   playDone = play || {};
+  finalDone = fin || {};
   repaint();
 };
 repaint();
@@ -413,7 +448,7 @@ repaint();
       try { ranThisSession = sessionStorage.getItem('warmup' + window.CONFIG.TERM) === '1'; } catch (e) {}
       if (!sc.warmup && !ranThisSession) { location.replace('warmup.html'); return; }
 
-      window.applyStars(sc.unitStars || {}, sc.quiz || {}, sc.play || {});
+      window.applyStars(sc.unitStars || {}, sc.quiz || {}, sc.play || {}, sc.final || {});
     } catch (e) {
       console.error('讀進度失敗', e);
       const box = document.getElementById('stage-grid');

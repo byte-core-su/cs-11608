@@ -169,9 +169,10 @@
     };
 
     // ===== 全域狀態 =====
-    // 【測試模式】預設直接進入島嶼主畫面（關閉登入介面以便測試）
+    // 體驗／測試模式開關由根目錄 config.js 的 DEMO_MODE 統一控制
+    const IS_DEMO_MODE = !(window.SITE && window.SITE.DEMO_MODE === false);
     try {
-      if (!sessionStorage.getItem(SAVED_KEY)) {
+      if (IS_DEMO_MODE && !sessionStorage.getItem(SAVED_KEY)) {
         sessionStorage.setItem(SAVED_KEY, '1410101');
         sessionStorage.setItem('me' + (window.CONFIG.TERM || '11501'), JSON.stringify({
           sid: '1410101', cls: '801', no: '01', name: '測試島民', key: '801_01_測試島民', at: Date.now()
@@ -180,19 +181,19 @@
     } catch (e) {}
 
     let state = {
-      status: 'main',      // 【測試模式】預設直接進 main（原為 'loading'）
+      status: IS_DEMO_MODE ? 'main' : 'loading',
       /* 出席判定要用的兩份資料（週分數規則）：
          cls   = 這個學生哪一班（從名冊來）
          sched = 課表（整班共用一份，登入後讀一次） */
-      cls: '801', sched: null,
+      cls: IS_DEMO_MODE ? '801' : '', sched: null,
       authReady: false,
-      studentId: '1410101',
-      studentName: '測試島民',
+      studentId: IS_DEMO_MODE ? '1410101' : '',
+      studentName: IS_DEMO_MODE ? '測試島民' : '',
       loginError: '',
       loginSid: '',        // 剛剛打的學號（登入失敗時不必重打）
       setup: null,         // 第一次登入：{ sid, code } → 顯示設定驗證碼的畫面
       data: null,          // Firestore 文件內容
-      demo: true,          // 【測試模式】預設啟用範例預覽資料
+      demo: IS_DEMO_MODE,  // 預設是否啟用範例預覽資料
       showWeek: false,     // 是否顯示「本週成績卡」
       viewMode: 'island'   // 'island' (動森島嶼探險) | 'list' (卡片清單)
     };

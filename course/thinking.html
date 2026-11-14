@@ -277,7 +277,7 @@
                         <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col flex-1 min-h-0 border border-pink-100">
                         <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center shrink-0">
                             <h3 className="text-xl font-bold text-white"><i className="fa-solid fa-users mr-2"></i>{userClass} 班過關紀錄查詢</h3>
-                            <button onClick={onClose} className="text-indigo-200 hover:text-white transition-colors">
+                            <button data-close="1" onClick={onClose} title="關閉 (Esc)" className="text-indigo-200 hover:text-white transition-colors">
                                 <i className="fa-solid fa-xmark text-2xl"></i>
                             </button>
                         </div>
@@ -413,7 +413,7 @@
                         </div>
 
                         <div className="w-full md:w-2/3 p-6 sm:p-10 bg-slate-100 flex flex-col items-center justify-center relative">
-                            <button onClick={onClose} className="hidden md:flex absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-200 rounded-full w-10 h-10 items-center justify-center shadow-sm transition-colors z-10">
+                            <button data-close="1" onClick={onClose} title="關閉 (Esc)" className="hidden md:flex absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-200 rounded-full w-10 h-10 items-center justify-center shadow-sm transition-colors z-10">
                                 <i className="fa-solid fa-xmark text-xl"></i>
                             </button>
 
@@ -528,7 +528,7 @@
                 <div className="ac-float-backdrop">
                     <div className="ac-float-window theme-carnival p-6 sm:p-10 max-w-5xl w-full mx-auto relative my-auto">
                         <div className="ac-window-badge">🎠 森林奇幻遊樂園 · 旋轉木馬通關回報亭</div>
-                        <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full w-10 h-10 flex items-center justify-center transition-colors z-10">
+                        <button data-close="1" onClick={onClose} title="關閉 (Esc)" className="absolute top-6 right-6 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full w-10 h-10 flex items-center justify-center transition-colors z-10">
                             <i className="fa-solid fa-xmark text-xl"></i>
                         </button>
 
@@ -648,18 +648,18 @@
         };
 
         // --- 主應用程式 ---
+        const IS_DEMO_MODE = !(window.SITE && window.SITE.DEMO_MODE === false);
         const App = () => {
-            // 【測試模式】預設直接帶入測試島民身分，免登入即可直接進入神木林測試
-            const [user, setUser] = useState({
+            // 體驗／測試模式開關由根目錄 config.js 的 DEMO_MODE 統一控制
+            const [user, setUser] = useState(IS_DEMO_MODE ? {
                 classRoom: '801',
                 seatNo: '1',
                 name: '測試島民',
                 docId: '801_1_測試島民',
                 sid: '1410101'
-            });
+            } : null);
             const [selectedChallenge, setSelectedChallenge] = useState(null);
-            // 【測試模式】不卡登入讀取畫面
-            const [loading, setLoading] = useState(false);
+            const [loading, setLoading] = useState(!IS_DEMO_MODE);
             const [showCertModal, setShowCertModal] = useState(false);
             const [showQueryModal, setShowQueryModal] = useState(false); 
             const [showMyCertsModal, setShowMyCertsModal] = useState(false); 
@@ -830,11 +830,28 @@
             // 載入時用闖關基地存的學號登入（測試模式下已在預設 state 載入測試島民，背景靜默嘗試同步即可）
             useEffect(() => {
                 const saved = sessionStorage.getItem(SID_KEY);
-                if (saved && window.CONFIG.isSid(saved) && saved !== '1410101') {
+                if (saved && window.CONFIG.isSid(saved) && (!IS_DEMO_MODE || saved !== '1410101')) {
                     setLoading(true);
                     doSidLogin(saved).then(err => { if (err) setLoading(false); });
+                } else if (!IS_DEMO_MODE) {
+                    setLoading(false);
                 }
             }, []);
+
+            // 支援按 Esc 關閉三個浮動視窗（證書製作、我的證書、班級進度）
+            useEffect(() => {
+                if (!showCertModal && !showMyCertsModal && !showQueryModal) return;
+                const onKey = (e) => {
+                    if (e.code === 'Escape' || e.key === 'Escape') {
+                        e.preventDefault();
+                        setShowCertModal(false);
+                        setShowMyCertsModal(false);
+                        setShowQueryModal(false);
+                    }
+                };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [showCertModal, showMyCertsModal, showQueryModal]);
 
 
             /* 「有沒有通關」只判斷一次（isDone），清單打勾、開不開遊戲、右邊顯示、證書鈕都用它。
@@ -1047,28 +1064,34 @@
                         </div>
                     </div>
 
-                    {/* 當前選擇關卡的即時狀態與本班通關人數提示條（僅清單模式顯示，避免擠壓 3D 島嶼地圖） */}
-                    {selectedChallenge && viewMode !== 'island' && (
-                        <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 mb-2">
-                            <div className="bg-amber-50/95 border-2 border-amber-400 rounded-2xl px-4 py-2.5 shadow-md flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                    {/* 當前選擇關卡的即時狀態與「立即製作證書」捷徑（島嶼與清單模式皆提供，精簡單行不擠壓地圖） */}
+                    {selectedChallenge && (
+                        <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 mt-1.5 mb-1">
+                            <div className="bg-amber-50/95 border-2 border-amber-400 rounded-2xl px-4 py-2 shadow-md flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-950">
                                     <span>{isDone(selectedChallenge.id) ? '🏆' : '🎮'}</span>
                                     <span>
                                         第 {selectedChallenge.id} 關「<b>{selectedChallenge.title}</b>」
-                                        {isDone(selectedChallenge.id) ? '（已拿到證書）' : '（挑戰視窗已開啟，過關後請截圖點「證書製作」）'}
+                                        {isDone(selectedChallenge.id) ? '（已拿到證書）' : '（挑戰視窗已開啟，過關後請按 Win+Alt+PrtScn 截圖）'}
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     {classPassCount !== null && (
                                         <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-black border border-emerald-300">
                                             🔥 本班已通關：{classPassCount} 人
                                         </span>
                                     )}
                                     {!isDone(selectedChallenge.id) && (
-                                        <button onClick={() => handleOpenChallenge(selectedChallenge)} className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold hover:bg-indigo-700">
-                                            重新開啟視窗
-                                        </button>
+                                        <>
+                                            <button onClick={() => setShowCertModal(true)} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-xs font-black shadow transition cursor-pointer">
+                                                📸 截好圖了！立即領證書
+                                            </button>
+                                            <button onClick={() => handleOpenChallenge(selectedChallenge)} className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold hover:bg-indigo-700 cursor-pointer">
+                                                重新開啟視窗
+                                            </button>
+                                        </>
                                     )}
+                                    <button onClick={() => setSelectedChallenge(null)} className="text-amber-700 hover:text-amber-950 px-1.5 text-xs font-black cursor-pointer" title="隱藏此提示">✕</button>
                                 </div>
                             </div>
                         </div>

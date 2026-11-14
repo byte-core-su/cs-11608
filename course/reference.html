@@ -29,7 +29,19 @@
 </head>
 <body class="ac-theme-bg min-h-screen">
 
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 pt-4 pb-12 sm:pb-16">
+
+    <div class="ac-hud mb-6">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">📘</span>
+          <span class="text-xs sm:text-sm font-black text-amber-950">創客木工島 · 流程圖＆程式設計參考說明書</span>
+        </div>
+        <a href="flowchart.html" class="ac-pill ac-pill-btn text-xs" style="background:#fef3c7;border-color:#f59e0b;color:#78350f">
+          ← 返回流程圖島嶼 (Esc)
+        </a>
+      </div>
+    </div>
 
     <header class="text-center mb-8">
       <span class="inline-block bg-amber-200 text-amber-900 text-xs font-bold px-4 py-1.5 rounded-full border border-amber-300 mb-4">📘 程式設計單元</span>
@@ -102,9 +114,11 @@
       `<a href="#u${u.no}" class="text-xs font-bold bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 px-3 py-1.5 rounded-full shadow-sm transition">${u.no}. ${u.title}</a>`
     ).join('');
 
+    const wantUnitNo = Number(new URLSearchParams(location.search).get('unit') || (location.hash.match(/^#u(\d+)$/) || [])[1] || 1);
+
     // 單元卡片
     document.getElementById('units').innerHTML = UNITS.map(u => `
-      <details id="u${u.no}" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-20" ${u.no === 1 ? 'open' : ''}>
+      <details id="u${u.no}" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-20" ${u.no === wantUnitNo ? 'open' : ''}>
         <summary class="cursor-pointer p-5 flex items-center gap-4 hover:bg-slate-50 transition">
           <div class="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-lg font-black flex-shrink-0">${u.no}</div>
           <div class="flex-1 min-w-0">
@@ -126,12 +140,27 @@
             <p class="text-xs text-slate-400 mt-4">💡 <span class="hl">黃色</span>是關鍵動作、<span class="hl-b">藍色</span>是數量。</p>
           </div>
           <div class="mt-5 flex flex-wrap gap-2">
-            <a href="flowchart.html" class="text-xs font-bold bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">🧩 去畫流程圖</a>
-            <a href="flowchart.html" class="text-xs font-bold bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition">🐱 去寫程式</a>
+            <a href="flowchart.html?unit=${u.no}&mode=flow" class="text-xs font-bold bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">🧩 去畫第 ${u.no} 關流程圖 →</a>
+            <a href="flowchart.html?unit=${u.no}&mode=prog" class="text-xs font-bold bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition">🐱 去寫第 ${u.no} 關程式 →</a>
           </div>
         </div>
       </details>
     `).join('');
+
+    // 點擊上方快速跳轉時，自動展開對應單元的 details
+    document.getElementById('unit-nav').addEventListener('click', function (e) {
+      const a = e.target.closest('a[href^="#u"]');
+      if (!a) return;
+      const targetEl = document.querySelector(a.getAttribute('href'));
+      if (targetEl && targetEl.tagName === 'DETAILS') targetEl.open = true;
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.code === 'Escape' || e.key === 'Escape') {
+        e.preventDefault();
+        location.href = 'flowchart.html';
+      }
+    });
   </script>
 </body>
 </html>

@@ -150,12 +150,10 @@
            +    ch.title
            +    '<span class="ml-2 text-xs font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ' + p.chip + '">'
            +    (cg.label || '🎯 點我挑戰整章測驗') + '</span></button>'
-           +    (ch.pdf ? '<a href="' + ch.pdf + '" target="_blank" class="pdf-link">課本教材 PDF</a>' : '')
            +  '</div></div>';
     } else {
       html += '<div class="flex justify-between items-start mb-4"><div class="flex flex-wrap items-center">'
            +    '<h3 class="text-xl font-black ' + p.textDark + '">' + ch.title + '</h3>'
-           +    (ch.pdf ? '<a href="' + ch.pdf + '" target="_blank" class="pdf-link">課本教材 PDF</a>' : '')
            +  '</div></div>';
     }
 
@@ -204,9 +202,6 @@
     +           '<span id="chapter-progress" class="ac-pill text-xs font-bold text-stone-700">讀取進度中…</span>'
     +         '</div>'
     +         '<div class="flex items-center gap-2 flex-wrap">'
-    +           C.chapters.map(function (ch) {
-                  return ch.pdf ? '<a href="' + ch.pdf + '" target="_blank" class="pdf-link">📄 ' + ch.title.split('：')[0] + ' 教材 PDF</a>' : '';
-                }).join('')
     +           '<div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">'
     +             '<button type="button" data-qz-view="island" class="qz-view-btn px-3 py-1 rounded-full text-xs font-black transition bg-emerald-500 text-white shadow">🏝️ 島嶼探險</button>'
     +             '<button type="button" data-qz-view="list" class="qz-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 章節清單</button>'
@@ -485,7 +480,7 @@
         tag: id === 'review-all' ? '傳說黃金果樹' : (id.indexOf('all') >= 0 ? '整章豐收驗收' : '果園章節果樹'),
         title: n.title,
         shortTitle: lay.shortTitle || n.title,
-        desc: star > 0 ? ('已採收通關獲得 ' + '★'.repeat(star) + '（最高分 ' + (u.score || 100) + '%）・按 Enter 可檢視證書或再次挑戰') : '走近搖晃果樹！先讀章節重點，再進行連對 ' + TARGET + ' 題採收挑戰！',
+        desc: star > 0 ? ('已通關 ' + '★'.repeat(star) + '（最高 ' + (u.score || 100) + '%）・按 Space 查看紀錄或再戰') : '走近果樹按 Space 先讀重點，再連對 ' + TARGET + ' 題過關！',
         pass: star > 0,
         starsText: star > 0 ? '★'.repeat(star) : '',
         statusLabel: star > 0 ? '已通關' : '待挑戰',
@@ -517,21 +512,14 @@
       });
     }
 
-    var boardActions = C.chapters.filter(function (ch) { return !!ch.pdf; }).map(function (ch, idx) {
-      return {
-        label: '📄 開啟 ' + ch.title.split('：')[0] + ' 教材 PDF',
-        primary: idx === 0,
-        onClick: function () { window.open(ch.pdf, '_blank'); }
-      };
-    });
-    boardActions.push({
-      label: '📋 切換章節清單檢視',
-      primary: boardActions.length === 0,
+    var boardActions = [{
+      label: '📋 切換章節清單',
+      primary: true,
       onClick: function () {
         var listBtn = document.querySelector('[data-qz-view="list"]');
         if (listBtn) listBtn.click();
       }
-    });
+    }];
     islandNodes.push({
       id: 'qz-board-node',
       x: 42,
@@ -539,12 +527,12 @@
       kind: 'board',
       icon: '📋',
       tag: '果園說明看板',
-      title: '📋 果園闖關規則＆教材看板',
+      title: '📋 果園闖關規則看板',
       shortTitle: '闖關規則看板',
-      desc: '💡 走到島上「果樹」前按 Enter，可先讀小節重點整理，再進行連對 10 題挑戰；走到「大穀倉／風車果坊」前按 Enter，則可一次挑戰整章綜合測驗！也可與廣場上的「🐿️ 蘋蘋松鼠園長」對話聽取攻略。',
+      desc: '走近果樹按 Space 讀重點並答題；走近穀倉挑戰整章測驗！',
       pass: true,
       starsText: '果園指南',
-      statusLabel: 'Enter 查看',
+      statusLabel: 'Space 查看',
       locked: false,
       actions: boardActions
     });

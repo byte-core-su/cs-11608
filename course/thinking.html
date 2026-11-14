@@ -947,8 +947,8 @@
                         num: '📋',
                         label: '班級進度榜',
                         sub: user.classRoom + ' 班排行榜',
-                        speaker: '📢 島民佈告欄',
-                        dialog: '想知道 ' + user.classRoom + ' 班的同學們目前闖到第幾關了嗎？來看看佈告欄吧！',
+                        speaker: '📢 班級進度榜',
+                        dialog: '按 Space 查看 ' + user.classRoom + ' 班同學目前的通關進度！',
                         actionLabel: '📊 查看班級進度'
                     }
                 );
@@ -1019,36 +1019,48 @@
                     
                     {showQueryModal && <QueryModal onClose={() => setShowQueryModal(false)} userClass={user.classRoom} />}
 
-                    {/* 動森 NookPhone 頂部導覽列 */}
-                    <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 pt-3">
+                    {/* 動森 NookPhone 頂部導覽列（島嶼模式精簡無重複按鈕，清單模式才展開工具鈕） */}
+                    <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 pt-2.5 pb-1.5">
                         <div className="ac-hud">
-                            <div className="flex items-center gap-2.5">
+                            <div className="flex items-center gap-2.5 flex-wrap">
                                 <span className="text-2xl">🌲</span>
-                                <div>
-                                    <div className="text-[11px] font-black text-emerald-700 tracking-wider">BEBRAS FOREST · 謎題神木林</div>
-                                    <h1 className="text-base sm:text-lg font-black text-amber-950 leading-tight">運算思維挑戰島</h1>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
+                                <h1 className="text-base sm:text-lg font-black text-amber-950 leading-tight">運算思維挑戰島</h1>
                                 <span className="ac-pill">🧑‍🌾 {user.classRoom}班 {user.seatNo}號 {user.name}</span>
                                 <span className="ac-pill" style={{ background: '#ecfdf5', borderColor: '#6ee7b7', color: '#065f46' }}>
                                     🏅 進度 {challenges.filter(c => isDone(c.id)).length}/{challenges.length}
                                 </span>
-                                <span className="ac-pill hidden md:inline-flex">⏱️ {formatTime(studyTime)}</span>
-                                <button onClick={() => setShowMyCertsModal(true)} className="ac-pill hover:bg-amber-100 transition cursor-pointer">
-                                    🏆 我的證書
-                                </button>
-                                <button
-                                    onClick={() => { if (!allDone) setShowCertModal(true); }}
-                                    disabled={allDone}
-                                    className={`ac-pill transition ${allDone ? 'opacity-60 cursor-not-allowed' : 'hover:bg-amber-100 cursor-pointer'}`}
-                                    style={{ background: allDone ? '#e2e8f0' : '#fef3c7', borderColor: '#f59e0b' }}
-                                >
-                                    {allDone ? '✅ 十關全通' : '📸 證書製作'}
-                                </button>
-                                <button onClick={() => setShowQueryModal(true)} className="ac-pill hover:bg-amber-100 transition cursor-pointer">
-                                    📊 班級進度
-                                </button>
+                                {selectedChallenge && (
+                                    <span className="inline-flex items-center gap-1.5 bg-amber-100 border border-amber-400 text-amber-950 px-2.5 py-0.5 rounded-full text-xs font-black">
+                                        <span>{isDone(selectedChallenge.id) ? '🏆' : '🎮'} 第{selectedChallenge.id}關「{selectedChallenge.title}」</span>
+                                        {classPassCount !== null && <span className="text-emerald-700">· 本班 {classPassCount} 人通關</span>}
+                                        {!isDone(selectedChallenge.id) && (
+                                            <button onClick={() => setShowCertModal(true)} className="ml-1 px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-[11px] font-black cursor-pointer">
+                                                📸 領證書
+                                            </button>
+                                        )}
+                                        <button onClick={() => setSelectedChallenge(null)} className="text-amber-700 hover:text-amber-950 ml-0.5 cursor-pointer" title="隱藏">✕</button>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {viewMode !== 'island' && (
+                                    <>
+                                        <button onClick={() => setShowMyCertsModal(true)} className="ac-pill hover:bg-amber-100 transition cursor-pointer">
+                                            🏆 我的證書
+                                        </button>
+                                        <button
+                                            onClick={() => { if (!allDone) setShowCertModal(true); }}
+                                            disabled={allDone}
+                                            className={`ac-pill transition ${allDone ? 'opacity-60 cursor-not-allowed' : 'hover:bg-amber-100 cursor-pointer'}`}
+                                            style={{ background: allDone ? '#e2e8f0' : '#fef3c7', borderColor: '#f59e0b' }}
+                                        >
+                                            {allDone ? '✅ 十關全通' : '📸 證書製作'}
+                                        </button>
+                                        <button onClick={() => setShowQueryModal(true)} className="ac-pill hover:bg-amber-100 transition cursor-pointer">
+                                            📊 班級進度
+                                        </button>
+                                    </>
+                                )}
                                 <button
                                     data-ac-view-toggle=""
                                     title="按 M 鍵也可以切換"
@@ -1058,44 +1070,10 @@
                                 >
                                     {viewMode === 'island' ? '📋 切換挑戰清單（M）' : '🏝️ 切換島嶼探險（M）'}
                                 </button>
-                                {/* 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） */}
                                 {viewMode !== 'island' && <a href="hub.html" className="ac-pill ac-pill-btn text-xs">✈️ 回主島</a>}
                             </div>
                         </div>
                     </div>
-
-                    {/* 當前選擇關卡的即時狀態與「立即製作證書」捷徑（島嶼與清單模式皆提供，精簡單行不擠壓地圖） */}
-                    {selectedChallenge && (
-                        <div className="max-w-[96vw] xl:max-w-[1680px] w-full mx-auto px-2 sm:px-4 mt-1.5 mb-1">
-                            <div className="bg-amber-50/95 border-2 border-amber-400 rounded-2xl px-4 py-2 shadow-md flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-950">
-                                    <span>{isDone(selectedChallenge.id) ? '🏆' : '🎮'}</span>
-                                    <span>
-                                        第 {selectedChallenge.id} 關「<b>{selectedChallenge.title}</b>」
-                                        {isDone(selectedChallenge.id) ? '（已拿到證書）' : '（挑戰視窗已開啟，過關後請按 Win+Alt+PrtScn 截圖）'}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    {classPassCount !== null && (
-                                        <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-black border border-emerald-300">
-                                            🔥 本班已通關：{classPassCount} 人
-                                        </span>
-                                    )}
-                                    {!isDone(selectedChallenge.id) && (
-                                        <>
-                                            <button onClick={() => setShowCertModal(true)} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-xs font-black shadow transition cursor-pointer">
-                                                📸 截好圖了！立即領證書
-                                            </button>
-                                            <button onClick={() => handleOpenChallenge(selectedChallenge)} className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold hover:bg-indigo-700 cursor-pointer">
-                                                重新開啟視窗
-                                            </button>
-                                        </>
-                                    )}
-                                    <button onClick={() => setSelectedChallenge(null)} className="text-amber-700 hover:text-amber-950 px-1.5 text-xs font-black cursor-pointer" title="隱藏此提示">✕</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     {/* 動森島嶼探險模式 */}
                     {viewMode === 'island' ? (

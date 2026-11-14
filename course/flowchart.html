@@ -1108,31 +1108,31 @@
           <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 pt-2 pb-4">
             <header class="ac-hud mb-2 relative pop">
               <div class="flex flex-wrap items-center justify-between gap-2.5">
-                <div class="flex items-center gap-2.5">
+                <div class="flex items-center gap-2.5 flex-wrap">
                   <span class="text-2xl">⚙️</span>
-                  <div>
-                    <div class="text-[11px] font-extrabold text-amber-800 tracking-wider">🏡 創客木工島 · 流程圖與程式設計${state.studentName?`　｜　島民 ${state.studentName}`:''}</div>
-                    <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">
-                      <span class="inline-block text-emerald-700">🧩 流程圖 ${doneCount}/${UNITS.length} 關 (${doneCount*STARS_PER_UNIT}⭐)</span>
-                      <span class="text-stone-300 mx-1">|</span>
-                      <span class="inline-block text-orange-700">🐱 程式 ${progDoneCount}/${UNITS.length} 關 (${progStarTotal}⭐)</span>
-                      <span class="text-stone-300 mx-1">|</span>
-                      <span class="inline-block text-amber-600">🎁 加分 ${bonusAll}⭐ ＝ 合計 ${grand}⭐</span>
-                    </h1>
-                  </div>
+                  <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">流程圖與程式設計</h1>
+                  <span class="ac-pill text-xs">
+                    <span class="text-emerald-700">🧩 流程圖 ${doneCount}/${UNITS.length}</span>
+                    <span class="text-stone-300 mx-1">·</span>
+                    <span class="text-orange-700">🐱 程式 ${progDoneCount}/${UNITS.length}</span>
+                    <span class="text-stone-300 mx-1">·</span>
+                    <span class="text-amber-700">⭐ 合計 ${grand}</span>
+                  </span>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap shrink-0">
-                  <a href="reference.html" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900 text-xs">📖 參考說明</a>
-                  <button id="toggle-lead" class="ac-pill ac-pill-btn text-xs ${state.leadDone?'bg-emerald-50 border-emerald-300 text-emerald-800':'bg-teal-100 border-teal-400 text-teal-900'}">
-                    <span>${state.leadDone?'✅':'🔰'} 前導：${LEAD.title}</span>
-                    <span class="text-xs font-black">${state.leadOpen?'▾ 收合':'▸ 展開'}</span>
-                  </button>
+                  ${state.viewMode === 'list' ? `
+                    <a href="reference.html" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900 text-xs">📖 參考說明</a>
+                    <button id="toggle-lead" class="ac-pill ac-pill-btn text-xs ${state.leadDone?'bg-emerald-50 border-emerald-300 text-emerald-800':'bg-teal-100 border-teal-400 text-teal-900'}">
+                      <span>${state.leadDone?'✅':'🔰'} 前導：${LEAD.title}</span>
+                      <span class="text-xs font-black">${state.leadOpen?'▾ 收合':'▸ 展開'}</span>
+                    </button>
+                  ` : ''}
                   <div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">
                     <button type="button" data-fc-view="island" class="fc-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode!=='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">🏝️ 島嶼探險</button>
                     <button type="button" data-fc-view="list" class="fc-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode==='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">📋 關卡清單</button>
                     <span class="self-center px-2 text-[10px] font-black text-amber-800" title="按 M 鍵切換島嶼／清單">⌨ M</span>
                   </div>
-                  ${state.viewMode==='list' ? '<a href="hub.html" class="ac-pill ac-pill-btn text-xs">✈️ 回主島</a>' : '' /* 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） */}
+                  ${state.viewMode==='list' ? '<a href="hub.html" class="ac-pill ac-pill-btn text-xs">✈️ 回主島</a>' : ''}
                 </div>
               </div>
             </header>
@@ -1278,17 +1278,16 @@
             kind: 'board',
             icon: '📋',
             tag: '島民佈告欄',
-            title: '📋 流程圖＆程式設計闖關看板',
+            title: '📋 流程圖＆程式設計看板',
             shortTitle: '闖關規則看板',
             speaker: '🦫 齒輪海狸師傅 · 島民佈告欄',
-            desc: `十關全部開放，順序自己決定：排流程圖(+${STARS_PER_UNIT}⭐) → ${WORK ? '寫 Scratch 上傳評分（最多 3⭐）' : '寫 Scratch，作品交給老師'}。看不懂先讀參考說明！`,
+            desc: `10 關自由選：先排流程圖 (+${STARS_PER_UNIT}⭐) 再寫 Scratch，按 Space 開啟參考說明書。`,
             pass: false,
             starsText: '闖關指南',
             statusLabel: '看板提示',
             locked: false,
             actions: [
-              { label: '📖 打開參考說明書 →', href: 'reference.html', primary: true },
-              { label: '🔰 開啟前導教材', primary: false, onClick: () => { state.leadOpen = true; render(); } }
+              { label: '📖 打開參考說明書 →', href: 'reference.html', primary: true }
             ]
           });
 

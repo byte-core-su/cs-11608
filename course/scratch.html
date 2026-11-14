@@ -53,24 +53,18 @@
   <!-- 頂部精簡導覽列：進入島嶼直接以 3D 地圖為主畫面 -->
   <div class="ac-hud mb-2 pop">
     <div class="flex flex-wrap items-center justify-between gap-2.5">
-      <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-2.5 flex-wrap">
         <span class="text-2xl">🐱</span>
-        <div>
-          <div class="text-[11px] font-black text-amber-800 tracking-wider">SCRATCH ALGORITHM ISLAND · 演算法與積木工坊島</div>
-          <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">Scratch 程式設計闖關（10 關全開放）</h1>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">Scratch 程式設計</h1>
         <span class="ac-pill text-xs">
-          🐱 完成 <span id="done-count" class="text-orange-600 font-black">0</span>/<span id="unit-count">10</span> 關
+          完成 <span id="done-count" class="text-orange-600 font-black">0</span>/<span id="unit-count">10</span> 關
         </span>
         <span class="ac-pill text-xs">
           <span id="work-wrap">🧩 作品 <span id="total-star" class="text-amber-500 font-black">0</span>⭐ · </span>🧠 概念 <span id="quiz-star" class="text-indigo-600 font-black">0</span>⭐
         </span>
-        <button type="button" id="open-sc-board" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900 text-xs cursor-pointer">
-          📋 學習目標＆計分看板
-        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
         <div class="inline-flex rounded-full bg-amber-100/80 p-1 border-2 border-amber-200">
           <button type="button" data-sc-view="island" class="sc-view-btn px-3 py-1 rounded-full text-xs font-black transition bg-emerald-500 text-white shadow">🏝️ 島嶼探險</button>
           <button type="button" data-sc-view="list" class="sc-view-btn px-3 py-1 rounded-full text-xs font-black transition text-stone-600 hover:text-stone-900">📋 卡片清單</button>
@@ -312,10 +306,10 @@ function mountScratchIsland(){
     kind: 'board',
     icon: '📋',
     tag: '島民佈告欄',
-    title: '📋 Scratch 學習目標＆計分規則看板',
+    title: '📋 學習目標＆計分規則看板',
     shortTitle: '學習目標看板',
     speaker: '🦫 齒輪海狸師傅 · 島民佈告欄',
-    desc: '10 關全部開放，順序自己決定！用自訂積木、參數、條件與變數做出遊戲，並比較兩種排序法與兩種搜尋法。按 Enter 查看完整學習目標與計分規則！',
+    desc: '10 關自由選！完成每關「作品星＋概念星」，按 Space 查看計分規則。',
     pass: false,
     starsText: '闖關指南',
     statusLabel: '看板提示',

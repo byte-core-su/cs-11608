@@ -3085,77 +3085,77 @@
         name: '🦝 狸克島務長',
         role: '群島總導覽員',
         tips: [
-          '歡迎來到「科技探險群島」！我是島務長狸克，用方向鍵或 WASD 走近任一座主題館、按空白鍵 (Space)，就能直接進入那個系列的島嶼喔！',
-          '看到左上角的「☀️ 時段」按鈕了嗎？按 T 鍵或點一下可以切換「晴朗白天、魔幻夕陽、璀璨星夜」三種光影！',
-          '想換穿不同帽子、衣服或背上精靈翅膀？按 C 鍵隨時都能打開隨身梳妝鏡打扮自己！',
-          '走近島上的蘋果樹、橘子樹或椰子樹並點一下，樹上的果實就會掉下來喔！',
-          '不知道先去哪一座島嗎？隨時按 N 鍵，我就會直接幫你自動帶路前往推薦關卡！'
+          '歡迎來到科技探險群島！走近主題館按 Space 就能直接進入喔！',
+          '按 T 鍵可切換「白天、夕陽、星夜」三種島嶼光影！',
+          '按 C 鍵可打開隨身梳妝鏡，自由搭配帽子、服裝與翅膀！',
+          '走近果樹點一下，樹上的水果就會掉下來喔！',
+          '不知道先去哪裡？隨時按 N 鍵，自動幫你帶路去推薦關卡！'
         ]
       },
       ethics: {
         name: '🐿️ 蘋蘋松鼠園長',
         role: '豐收果園守護者',
         tips: [
-          '歡迎來到「豐收果園與陽光溫室島」！這裡的每一棵果樹都代表一個資訊倫理與資安章節喔！',
-          '走近果樹按空白鍵 (Space)，會直接開啟「重點整理」浮動視窗，讀完再按「開始挑戰」，連續答對就能摘下黃金果實！',
-          '只要通過一個章節，那棵果樹或穀倉的屋頂就會升起「3D 旋轉黃金榮譽星」與慶祝花叢！',
-          '走上北邊的石階斜坡，高台上還有「金蘋果傳說神木」與「陽光玻璃大溫室」總複習等你挑戰！',
-          '把 10 個章節全部通關後，就能解鎖主島上的「🏆 排行賽露營地」跟全校高手過招喔！'
+          '歡迎來到豐收果園島！每棵果樹都代表一個學習章節喔！',
+          '走近果樹按 Space 先讀重點整理，再連對題目摘下黃金果實！',
+          '通關後，果樹或穀倉屋頂會升起旋轉黃金星與慶祝花叢！',
+          '北邊高台還有「黃金神木」總測驗與「記憶補給溫室」等你挑戰！',
+          '10 個章節全通關後，就能解鎖主島的「🏆 排行賽露營地」喔！'
         ]
       },
       thinking: {
         name: '🐰 奇奇魔術兔',
         role: '森林遊樂園園長',
         tips: [
-          '歡迎光臨「森林奇幻遊樂園」！島上的 10 座遊樂設施分別對應 10 道國際運算思維謎題！',
-          '不管是滑梯公園、電流急急棒還是小籠包攤位，順序完全自由，想玩哪一座就走過去按空白鍵 (Space) 直接進入！',
-          '在挑戰視窗過關後，記得按 Windows + Alt + PrintScreen 擷取視窗畫面！',
-          '截好圖之後，走去廣場西側的「🎠 旋轉木馬通關回報亭」按空白鍵上傳截圖，就能領取通關證書囉！',
-          '試試切換成「🌙 璀璨星夜」模式，夜晚的摩天輪與遊樂園超浪漫喔！'
+          '歡迎光臨森林遊樂園！10 座遊樂設施對應 10 道運算思維謎題！',
+          '順序完全自由，走近想玩的設施按 Space 就能直接開始挑戰！',
+          '挑戰過關後，記得按 Win + Alt + PrtScn 擷取視窗畫面！',
+          '截好圖後，走去「🎡 摩天輪證書所」按 Space 即可領取證書！',
+          '按 T 鍵切換成「🌙 星夜」模式，夜晚的遊樂園超浪漫喔！'
         ]
       },
       code: {
         name: '🦫 齒輪海狸師傅',
         role: '蒸氣木工村總工程師',
         tips: [
-          '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
-          '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
-          '走近任一工坊按空白鍵 (Space) 直接進入後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
-          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以回到那座工坊再傳一次 Scratch 作品！',
-          '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
+          '歡迎來到蒸氣木工村！建議先找「🤖 發條機器人」完成前導訓練！',
+          '十座工坊自由選：先排好「流程圖 (+2⭐)」，再寫「Scratch (+3⭐)」！',
+          '走近工坊按 Space 直接進入，可在浮動視窗裡邊看風景邊排流程圖！',
+          '拿到 2⭐ 就算完成，想挑戰滿分 3⭐ 隨時可以再上傳一次作品！',
+          '十關全完成後，別忘了去北邊高台的「🌟 晨星勇者神殿」冒險喔！'
         ]
       },
       flowchart: {
         name: '🦫 齒輪海狸師傅',
         role: '蒸氣木工村總工程師',
         tips: [
-          '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
-          '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
-          '走近任一工坊按空白鍵 (Space) 直接進入後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
-          '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以回到那座工坊再傳一次 Scratch 作品！',
-          '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
+          '歡迎來到蒸氣木工村！建議先找「🤖 發條機器人」完成前導訓練！',
+          '十座工坊自由選：先排好「流程圖 (+2⭐)」，再寫「Scratch (+3⭐)」！',
+          '走近工坊按 Space 直接進入，可在浮動視窗裡邊看風景邊排流程圖！',
+          '拿到 2⭐ 就算完成，想挑戰滿分 3⭐ 隨時可以再上傳一次作品！',
+          '十關全完成後，別忘了去北邊高台的「🌟 晨星勇者神殿」冒險喔！'
         ]
       },
       arduino: {
         name: '🤖 諾克號創客機',
         role: '未來創客島 AI 領航員',
         tips: [
-          '嗶嗶！歡迎登陸「未來科技創客實驗島」！我是你的 AI 領航員諾克號！',
-          '島上的 5 座科技實驗艙分別展示智慧門閘、人體感應燈廊、風力能源塔、光控圓頂與研發總部！',
-          '走近任一實驗艙按空白鍵 (Space)，就能直接打開科技浮動視窗操作「3D 互動硬體模擬器」與檢視積木程式邏輯！',
-          '在浮動視窗開啟時，背景的 3D 攝影機會自動推進特寫該座科技建築喔！',
-          '切換到「🌙 璀璨星夜」模式，整座科技島的光電迴路與霓虹圓頂都會閃閃發光！'
+          '嗶嗶！歡迎登陸未來創客島，我是領航員諾克號！',
+          '島上 5 座實驗艙分別展示感應門、迎賓燈、風扇、光球與研發總部！',
+          '走近任一實驗艙按 Space，即可操作 3D 硬體模擬器與積木邏輯！',
+          '開啟實驗艙視窗時，背景 3D 鏡頭會自動推進特寫該座建築喔！',
+          '按 T 鍵切換到「🌙 星夜」模式，全島霓虹迴路都會閃閃發光！'
         ]
       },
       scratch: {
         name: '🦫 齒輪海狸師傅',
-        role: '下學期 Scratch 演算法工坊總導師',
+        role: 'Scratch 演算法工坊總導師',
         tips: [
-          '歡迎來到下學期的「Scratch 演算法蒸氣工坊」！先去廣場旁的「🤖 暖身訓練塔」完成積木暖身，或走近「📋 學習目標＆計分看板」按空白鍵 (Space) 查看規則吧！',
-          '這個模組你會學到：📦 函式與模組化（把重複動作包成自訂積木）、🔧 參數傳遞（加輸入孔控制方向與次數）、🔍 排序與搜尋演算法！',
-          '島上 10 座工坊全部開放、不限順序！走近任一工坊按空白鍵 (Space) 即可進入下載範本並查看提示，做好後把 .sb3 檔上傳批改。',
-          '每一關有兩顆星：⭐ 作品星（上傳 .sb3 並通過結構檢查）＋ 💡 觀念星（回答作品裡的一道延伸問題，答錯不扣作品星）！',
-          '十關全部完成後，別忘了前往北邊高台的「🏛️ 黃金齒輪神殿」挑戰隱藏魔王關喔！'
+          '歡迎來到 Scratch 工坊！可先去「🤖 暖身訓練塔」完成積木暖身！',
+          '這裡會學到：📦 自訂積木、🔧 參數傳遞，以及 🔍 排序與搜尋演算法！',
+          '10 座工坊自由選！走近按 Space 即可進入作答與上傳 .sb3 作品。',
+          '每關有「⭐ 作品星」與「🧠 概念星」，兩邊都能累積星星！',
+          '十關完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰總檢核！'
         ]
       }
     };
@@ -3269,52 +3269,20 @@
 
     function renderDialog() {
       if (!dialogEl) return;
-      if (state.dialogDismissed || !state.nearId) {
-        dialogEl.classList.add('hidden');
-        return;
-      }
-      var menuItems = getDialogMenuItems();
-      if (state.nearId === '__npc__') {
-        dialogEl.classList.remove('hidden');
-        var tips = currentNpcInfo.tips;
-        var msg = state.npcGuideHint || tips[npcTipIndex % tips.length];
-        var idxLabel = state.npcGuideHint ? '路線指引' : ('秘訣 ' + ((npcTipIndex % tips.length) + 1) + ' / ' + tips.length);
-        dialogEl.innerHTML = ''
-          + '<div class="ac-dialog-speaker" style="background:linear-gradient(90deg,#d97706,#b45309)">' + esc(currentNpcInfo.name + ' · ' + currentNpcInfo.role) + '</div>'
-          + '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 pointer-events-none select-none">'
-          +   '<div class="min-w-0 flex-1">'
-          +     '<div class="flex items-center gap-2 flex-wrap">'
-          +       '<h3 class="text-base sm:text-lg font-black text-amber-950 truncate">💬 島長導覽對話</h3>'
-          +       '<span class="text-xs font-black text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">' + idxLabel + '</span>'
-          +     '</div>'
-          +     '<p class="text-xs sm:text-sm text-stone-700 font-bold mt-0.5 leading-relaxed">' + esc(msg) + '</p>'
-          +   '</div>'
-          +   renderMenuChoicesHtml(menuItems, true)
-          + '</div>';
-        return;
-      }
-
-      var activeNode = findNode(state.nearId);
-      // ★ 極簡動森 HUD：一般關卡建築直接由建築頭頂木牌顯示「[Space] 進入」，不在畫面下方跳出大對話框遮擋視野；
-      //   底部對話框僅留給「島長 NPC」與「廣場規則佈告欄 (board)」使用！
-      if (!activeNode || activeNode.kind !== 'board') {
+      // ★ 極簡動森 HUD：所有建築與廣場佈告欄 (board) 一律由頭頂木牌顯示「[Space] 進入 / 查看」，
+      //   不在畫面底部跳出對話框；底部氣泡 100% 留給「島長 NPC (__npc__)」說話專用！
+      if (state.dialogDismissed || state.nearId !== '__npc__') {
         dialogEl.classList.add('hidden');
         return;
       }
       dialogEl.classList.remove('hidden');
-
+      var tips = currentNpcInfo.tips;
+      var msg = state.npcGuideHint || tips[npcTipIndex % tips.length];
+      var idxLabel = state.npcGuideHint ? '' : (' (' + ((npcTipIndex % tips.length) + 1) + '/' + tips.length + ')');
       dialogEl.innerHTML = ''
-        + '<div class="ac-dialog-speaker">' + esc(activeNode.speakerTag) + '</div>'
-        + '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 pointer-events-none select-none">'
-        +   '<div class="min-w-0 flex-1">'
-        +     '<div class="flex items-center gap-2 flex-wrap">'
-        +       '<h3 class="text-base sm:text-lg font-black text-amber-950 truncate">' + esc(activeNode.title) + '</h3>'
-        +       (activeNode.starsText ? '<span class="text-xs font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">' + esc(activeNode.starsText) + '</span>' : '')
-        +     '</div>'
-        +     '<p class="text-xs sm:text-sm text-stone-600 font-medium mt-0.5 line-clamp-2">' + activeNode.descHtml + '</p>'
-        +   '</div>'
-        +   renderMenuChoicesHtml(menuItems, false)
-        + '</div>';
+        + '<div class="ac-dialog-speaker" style="background:linear-gradient(90deg,#d97706,#b45309)">' + esc(currentNpcInfo.name + idxLabel) + '</div>'
+        + '<p class="ac-dialog-text">' + esc(msg) + '</p>'
+        + '<div class="ac-dialog-hint">' + KEY('Space') + ' 下一句 · ' + KEY('N') + ' 帶路</div>';
     }
 
     function triggerNodeAction(node, actionIdx) {

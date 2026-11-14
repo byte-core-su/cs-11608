@@ -87,21 +87,16 @@
     <!-- 動森 NookPhone 頂部導覽橫幅 -->
     <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 pt-3 pb-2">
         <div class="ac-hud flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl bg-indigo-500 text-white flex items-center justify-center shadow-sm">
-                    <i data-lucide="lightbulb" class="w-6 h-6"></i>
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-2xl bg-indigo-500 text-white flex items-center justify-center shadow-sm">
+                    <i data-lucide="lightbulb" class="w-5 h-5"></i>
                 </div>
-                <div>
-                    <div class="text-[11px] font-black text-indigo-700 tracking-wider">Arduino PBL · 未來科技創客實驗島</div>
-                    <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">Arduino 智慧專題微課程與模擬器</h1>
-                </div>
+                <h1 class="text-base sm:text-lg font-black text-amber-950 leading-tight">Arduino 智慧專題</h1>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-                <span class="ac-pill">🔌 找問題 · 感測判斷驅動 · 選元件 · 調門檻 · 專題發表</span>
                 <button id="arduino-view-toggle" type="button" data-ac-view-toggle title="按 M 鍵也可以切換" onclick="toggleArduinoViewMode()" class="ac-pill hover:bg-amber-100 transition cursor-pointer" style="background:#fef3c7;border-color:#f59e0b">
                     📋 切換課綱卡片（M）
                 </button>
-                <!-- 回主島：島嶼模式走機場碼頭；清單模式沒有機場，所以只在清單模式補這顆（2026-11-12） -->
                 <a id="arduino-hub-link" href="hub.html" class="ac-pill ac-pill-btn text-xs" style="display:none">✈️ 回主島</a>
             </div>
         </div>
@@ -1164,8 +1159,8 @@
                     {
                         id: 'ar-board', x: 50, y: 69, kind: 'board', num: '📋',
                         label: '專題指南看板', sub: '五節課學習地圖',
-                        speaker: '📋 未來科技島 · 專題指南看板',
-                        dialog: '💡 島上共有 5 座科技實驗艙（找問題 → 感測判斷驅動 → 選元件 → 調門檻 → 專題發表），走到建築門口按 Enter 即可開啟 3D 模擬器與教材；也可找廣場上的「🤖 諾克號創客機」對話聽取導覽！',
+                        speaker: '📋 專題指南看板',
+                        dialog: '走近 5 座實驗艙按 Space 開啟模擬器；在此按 Space 可切換課綱卡片。',
                         actionLabel: '📋 展開完整課綱卡片檢視'
                     }
                 ],

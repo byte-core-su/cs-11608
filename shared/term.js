@@ -690,9 +690,10 @@
       var borderCol = idx === 0 ? '#0284c7' : '#059669';
       var bgCol = idx === 0 ? '#e0f2fe' : '#d1fae5';
       var txtCol = idx === 0 ? '#0c4a6e' : '#064e3b';
+      var shortIslands = r.islands.map(function (isl) { return isl.icon + isl.name.replace(/島|工坊|控制|專題/g, ''); }).join(' · ');
       return '<div class="ac-node" tabindex="-1" data-counter-pin="' + escHtml(t.id) + '">'
         + (flagText ? '<div class="ac-node-flag ' + (isRec ? 'flag-next' : '') + '">' + escHtml(flagText) + '</div>' : '')
-        + '<div class="ac-node-stars">' + escHtml(r.gate + ' · ' + r.flightNo) + '</div>'
+        + '<div class="ac-node-stars">' + escHtml(shortIslands) + '</div>'
         + '<div class="ac-node-label" style="background:' + bgCol + ';border-color:' + borderCol + ';color:' + txtCol + ';max-width:230px">'
         +   '<span class="text-[11px] bg-white/90 px-1.5 py-0.2 rounded-full border" style="border-color:' + borderCol + '">' + escHtml(r.counterNo) + '</span>'
         +   '<span>' + escHtml(t.short || t.name) + ' 登機櫃台</span>'
@@ -707,7 +708,7 @@
       +     '<div class="flex items-center gap-2.5 flex-wrap">'
       +       '<span class="text-2xl">✈️</span>'
       +       '<span class="dal-flap-cell text-xs sm:text-sm">DODO AIRLINES · 3D TERMINAL</span>'
-      +       '<span class="text-xs sm:text-sm font-black text-sky-300 tracking-wide">' + escHtml(schoolTitle) + ' · 3D 入境登機室大廳（雙學期櫃台）</span>'
+      +       '<span class="text-xs sm:text-sm font-black text-sky-300 tracking-wide">' + escHtml(schoolTitle) + ' · 3D 入境登機室大廳</span>'
       +     '</div>'
       +     '<div class="flex items-center gap-2 flex-wrap">'
       +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer" title="切換視角（快捷鍵 V）">🎥 全景</button>'
@@ -719,7 +720,7 @@
       +     '<canvas id="dal-3d-canvas" class="ac-webgl-canvas"></canvas>'
       +     '<div class="ac-controls-bar">'
       +       '<div class="ac-controls-hint">' + (quickTermId
-                ? '🎮 ' + KEYI('Enter') + ' 直接登機（本學期）' + SEPI + KEYI('WASD') + KEYI('方向鍵') + ' 走到櫃台' + SEPI + KEYI('Space') + ' 登機'
+                ? '🎮 ' + KEYI('Enter') + ' 直接登機（' + escHtml(quickTermObj.short || quickTermObj.name) + '）' + SEPI + KEYI('WASD') + KEYI('方向鍵') + ' 走到櫃台' + SEPI + KEYI('Space') + ' 登機'
                 : '🎮 ' + KEYI('WASD') + KEYI('方向鍵') + ' 走到櫃台' + SEPI + KEYI('Space') + ' 登機' + SEPI + KEYI('Esc') + ' 離開') + '</div>'
       +     '</div>'
       +     '<div id="dal-3d-overlay" class="ac-overlay-layer">'
@@ -727,13 +728,6 @@
       +       '<div id="dal-player-tag" class="ac-player-tag">🧑‍🌾 島民旅客</div>'
       +     '</div>'
       +     '<div id="dal-3d-dialog" class="ac-dialog-bar hidden"></div>'
-      +     (quickTermId
-              ? '<div id="dal-quick-board" style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:44;pointer-events:none;white-space:nowrap;'
-                + 'background:rgba(255,251,235,.97);border:3px solid #f59e0b;border-radius:999px;padding:9px 22px;font-weight:900;font-size:15px;color:#78350f;box-shadow:0 6px 16px rgba(0,0,0,.22)">'
-                + '<span style="' + KEYCAP + '">Enter</span>直接登機 ✈️ ' + escHtml(quickTermObj.name + '（' + (quickTermObj.short || quickTermObj.id) + '）')
-                + '<span style="font-size:12px;font-weight:800;color:#92400e;margin-left:12px">要去另一個學期：走到另一個櫃台</span>'
-                + '</div>'
-              : '')
       +   '</div>'
       + '</div>';
 
@@ -742,14 +736,7 @@
     var dialogEl  = hostEl.querySelector('#dal-3d-dialog');
     var playerTag = hostEl.querySelector('#dal-player-tag');
     var camBtn    = hostEl.querySelector('#dal-cam-btn');
-    var quickEl   = hostEl.querySelector('#dal-quick-board');
-    var quickShown = true;
-    /* 「直接登機」那一條只在「站在大廳中間、沒有對話」時出現：走近櫃台就讓位給櫃台自己的對話 */
-    function updateQuickBoard(nearCounter) {
-      if (!quickEl) return;
-      var show = !state.dialogOpen && !state.boarding && !nearCounter;
-      if (show !== quickShown) { quickShown = show; quickEl.style.display = show ? '' : 'none'; }
-    }
+    function updateQuickBoard() {}
     var teacherLink = hostEl.querySelector('#dal-teacher-link');
 
     var state = {
@@ -763,6 +750,7 @@
       tz: null,
       heading: Math.PI,
       walking: false,
+      hasMoved: false,
       keys: {},
       camMode: 'overview', // 'overview' (登機室全景可同時看兩座櫃台) | 'counter' (櫃台特寫)
       yawOffset: 0,
@@ -849,25 +837,11 @@
       renderBottomDialog();
     }
 
-    function renderLoungeMenuHtml(items, otherRoute) {
-      if (state.boarding) {
-        return '<div class="shrink-0 text-xs font-black text-emerald-700 bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-full pointer-events-none select-none">✈️ 水上飛機起飛中…</div>';
-      }
-      if (!items.length) return '';
-      var pills = items.map(function (it) {
-        return '<span class="ac-btn-primary ring-4 ring-amber-300 select-none pointer-events-none" style="cursor:default">▶ ' + escHtml(it.label) + '</span>';
-      }).join('');
-      return '<div class="flex flex-col items-end gap-1.5 shrink-0 pointer-events-none select-none">'
-        + '<div class="flex items-center gap-2 flex-wrap justify-end">' + pills + '</div>'
-        + '<div class="text-[11px] font-black text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-0.5 rounded-full">'
-        +   '⌨️ 按 空白鍵 (Space) 直接登機 · 要去另一學期可直接走向' + escHtml(otherRoute ? otherRoute.counterNo : '另一座櫃台')
-        + '</div>'
-        + '</div>';
-    }
-
     function renderBottomDialog() {
       if (!dialogEl) return;
-      if (!state.dialogOpen && !state.boarding) {
+      // ★ 極簡 HUD：平時走近櫃台直接由櫃台頭頂木牌顯示「[Space] 登機」，不跳出底部對話框；
+      //   僅在按空白鍵觸發登機起飛動畫時顯示起飛橫幅！
+      if (!state.boarding) {
         dialogEl.classList.add('hidden');
         return;
       }
@@ -876,15 +850,6 @@
       var termId = state.selectedTerm || '11501';
       var termObj = info(termId) || { id: termId, name: termId, short: termId };
       var route = FLIGHT_ROUTES[termId] || FLIGHT_ROUTES['11501'];
-      var otherTermId = termId === '11501' ? '11502' : '11501';
-      var otherRoute = FLIGHT_ROUTES[otherTermId];
-
-      var islandsBadges = route.islands.map(function (isl) {
-        return '<span class="inline-flex items-center gap-1 bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-black px-2 py-0.5 rounded-lg" title="' + escHtml(isl.sub) + '">'
-          + '<span>' + isl.icon + '</span>'
-          + '<span>' + escHtml(isl.name) + '</span>'
-          + '</span>';
-      }).join('');
 
       var speakerBg = termId === '11501'
         ? 'background:linear-gradient(90deg,#0284c7,#0369a1)'
@@ -892,21 +857,9 @@
 
       dialogEl.innerHTML = ''
         + '<div class="ac-dialog-speaker" style="' + speakerBg + '">'
-        +   escHtml(route.counterNo + ' · ' + route.gate + ' (' + route.flightNo + ') · ' + route.staffName)
+        +   escHtml(route.counterNo + ' · ' + termObj.name + '（' + (termObj.short || termObj.id) + '）')
         + '</div>'
-        + '<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-0.5">'
-        +   '<div class="min-w-0 flex-1 text-left">'
-        +     '<div class="flex items-center gap-2 flex-wrap">'
-        +       '<h3 class="text-sm sm:text-base font-black text-amber-950">🏝️ ' + escHtml(termObj.name + '（' + (termObj.short || termObj.id) + '）· ' + route.archipelago) + '</h3>'
-        +       (state.boarding ? '<span class="text-xs font-black text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">✈️ 螺旋槳全速起飛中…</span>' : '')
-        +     '</div>'
-        +     '<div class="flex items-center gap-1.5 flex-wrap mt-1.5">'
-        +       '<span class="text-[11px] font-black text-stone-500">🗺️ 航線停靠：</span>'
-        +       islandsBadges
-        +     '</div>'
-        +   '</div>'
-        +   renderLoungeMenuHtml(getLoungeMenu(), otherRoute)
-        + '</div>';
+        + '<p class="ac-dialog-text">✈️ 水上飛機起飛中，即將降落「' + escHtml(route.archipelago) + '」…</p>';
     }
 
     renderBottomDialog();
@@ -1514,9 +1467,11 @@
         });
 
         if (playerTag) {
+          if (state.walking && !state.hasMoved) state.hasMoved = true;
           var pScr = projectToScreen(state.px, playerMesh.position.y + 3.35, state.pz);
           playerTag.style.left = Math.round(pScr.x) + 'px';
           playerTag.style.top  = Math.round(pScr.y) + 'px';
+          playerTag.classList.toggle('is-hidden', !!state.hasMoved);
         }
 
         renderer.render(scene, camera);

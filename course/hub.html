@@ -105,10 +105,8 @@
        學期由 shared/term.js 決定（網址 ?term= → 這個分頁剛才選的 → 這台電腦上次選的 → 依日期）。
        換學期回首頁選；登入狀態兩學期共用，不必重登。 */
     function termPill(){
-      const others = ((window.TERMSEL && window.TERMSEL.list) || []).length > 1;
-      return `<span class="inline-flex items-center gap-1.5 text-xs font-bold bg-white/80 text-slate-600 border border-slate-200 rounded-full px-3 py-1">
-        ${window.CONFIG.TERM === (((window.TERMSEL && window.TERMSEL.list)||[])[0]||{}).id ? '📘' : '📗'} ${esc(window.CONFIG.TERM_NAME || '')}（${esc(window.CONFIG.TERM_SHORT || window.CONFIG.TERM)}）
-        ${others ? `<span class="ml-1 text-[11px] font-black text-sky-700">✈️ 換學期請走到南方機場碼頭</span>` : ''}</span>`;
+      return `<span class="inline-flex items-center gap-1 text-xs font-bold bg-white/80 text-slate-600 border border-slate-200 rounded-full px-2.5 py-0.5">
+        ${window.CONFIG.TERM === (((window.TERMSEL && window.TERMSEL.list)||[])[0]||{}).id ? '📘' : '📗'} ${esc(window.CONFIG.TERM_NAME || '')}（${esc(window.CONFIG.TERM_SHORT || window.CONFIG.TERM)}）</span>`;
     }
 
     // ===== 關卡定義：每一學期的卡片寫在 {學期}/config.js 的 MODULES =====
@@ -635,28 +633,24 @@
 
       el.innerHTML = `
         ${weekCard}
-        <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 py-3">
-          ${isDemo?`<div class="mb-3 text-center"><span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full border border-amber-300">🔎 範例預覽模式（非真實資料）</span></div>`:''}
-
-          <header class="ac-hud mb-5 pop">
-            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="w-full max-w-[96vw] xl:max-w-[1680px] mx-auto px-2 sm:px-4 py-2.5">
+          <header class="ac-hud mb-3 pop">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-full border-2 ${avatarColor} flex items-center justify-center text-xl font-black flex-shrink-0 shadow-sm">${avatarChar}</div>
-                <div>
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="ac-pill text-xs">🍃 島民 ${isDemo?'DEMO':state.studentId}</span>
-                    ${termPill()}
-                    <span class="text-xs font-extrabold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">進度 ${s.pct}%（${s.subDone}/${s.subTotal} 關）</span>
-                  </div>
-                  <h1 class="text-xl sm:text-2xl font-black text-amber-950 mt-0.5">${displayName?`嗨，${displayName}！歡迎來到科技探險島`:'歡迎來到科技探險島 🏝️'}</h1>
+                <div class="w-10 h-10 rounded-full border-2 ${avatarColor} flex items-center justify-center text-lg font-black flex-shrink-0 shadow-sm">${avatarChar}</div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h1 class="text-base sm:text-lg font-black text-amber-950">${displayName ? `嗨，${displayName}` : '科技探險島'}</h1>
+                  ${termPill()}
+                  <span class="text-xs font-extrabold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">⭐ ${s.stars}/${s.maxTotal}（${s.subDone}/${s.subTotal} 關）</span>
                 </div>
               </div>
 
-              <div class="flex items-center gap-2.5 flex-wrap">
-                <button id="open-week" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900">
-                  <span>⭐ 總星數 ${s.stars}/${s.maxTotal}</span>
-                  <span class="text-xs bg-white/80 px-2 py-0.5 rounded-full border border-amber-300">本週 +${wk.thisWeekStars}⭐ (${wk.thisWeekScore}分) 📋</span>
-                </button>
+              <div class="flex items-center gap-2 flex-wrap">
+                ${state.viewMode === 'list' ? `
+                  <button id="open-week" class="ac-pill ac-pill-btn bg-amber-100 border-amber-300 text-amber-900 text-xs">
+                    📋 本週成績 (${wk.thisWeekScore}分)
+                  </button>
+                ` : ''}
                 <div class="inline-flex rounded-full bg-amber-100/70 p-1 border-2 border-amber-200">
                   <button type="button" data-view="island" class="ac-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode!=='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">🏝️ 島嶼探險</button>
                   <button type="button" data-view="list" class="ac-view-btn px-3 py-1 rounded-full text-xs font-black transition ${state.viewMode==='list'?'bg-emerald-500 text-white shadow':'text-stone-600 hover:text-stone-900'}">📋 卡片清單</button>
@@ -734,9 +728,9 @@
           kind: 'board',
           icon: '📋',
           tag: '島民服務處',
-          title: `${wk.weekLabel} · 島民成績佈告欄`,
+          title: `📋 ${wk.weekLabel} · 本週成績佈告欄`,
           shortTitle: '本週成績佈告欄',
-          desc: `本週獲得 ⭐ ${wk.thisWeekStars}（${wk.thisWeekScore} 分）· 按 Enter 查看近八週星星統計與明細！`,
+          desc: `本週獲得 ⭐ ${wk.thisWeekStars}（${wk.thisWeekScore} 分），按 Space 查看近八週成績明細。`,
           pass: wk.thisWeekStars > 0,
           starsText: `本週 ${wk.thisWeekScore}分`,
           statusLabel: '成績查詢',

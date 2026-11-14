@@ -697,6 +697,7 @@
         +   '<span class="text-[11px] bg-white/90 px-1.5 py-0.2 rounded-full border" style="border-color:' + borderCol + '">' + escHtml(r.counterNo) + '</span>'
         +   '<span>' + escHtml(t.short || t.name) + ' 登機櫃台</span>'
         + '</div>'
+        + '<div class="ac-node-prompt">' + KEYI('Space') + ' 登機</div>'
         + '</div>';
     }).join('');
 
@@ -709,7 +710,7 @@
       +       '<span class="text-xs sm:text-sm font-black text-sky-300 tracking-wide">' + escHtml(schoolTitle) + ' · 3D 入境登機室大廳（雙學期櫃台）</span>'
       +     '</div>'
       +     '<div class="flex items-center gap-2 flex-wrap">'
-      +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer">🎥 視角：登機室全景（V 切換）</button>'
+      +       '<button type="button" id="dal-cam-btn" class="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black transition cursor-pointer" title="切換視角（快捷鍵 V）">🎥 全景</button>'
       +       teacherBtnHtml
       +       closeBtnHtml
       +     '</div>'
@@ -718,8 +719,8 @@
       +     '<canvas id="dal-3d-canvas" class="ac-webgl-canvas"></canvas>'
       +     '<div class="ac-controls-bar">'
       +       '<div class="ac-controls-hint">' + (quickTermId
-                ? '🎮 ' + KEYI('Enter') + ' 直接登機（本學期）' + SEPI + KEYI('WASD') + KEYI('方向鍵') + ' 走到另一個櫃台換學期' + SEPI + KEYI('◀ ▶') + ' 選擇' + SEPI + KEYI('Esc') + ' 離開' + SEPI + KEYI('V') + ' 視角'
-                : '🎮 ' + KEYI('WASD') + KEYI('方向鍵') + ' 走到左（1號）或右（2號）櫃台' + SEPI + KEYI('◀ ▶') + ' 選擇' + SEPI + KEYI('Enter') + ' 確認' + SEPI + KEYI('Esc') + ' 離開' + SEPI + KEYI('V') + ' 視角') + '</div>'
+                ? '🎮 ' + KEYI('Enter') + ' 直接登機（本學期）' + SEPI + KEYI('WASD') + KEYI('方向鍵') + ' 走到櫃台' + SEPI + KEYI('Space') + ' 登機'
+                : '🎮 ' + KEYI('WASD') + KEYI('方向鍵') + ' 走到櫃台' + SEPI + KEYI('Space') + ' 登機' + SEPI + KEYI('Esc') + ' 離開') + '</div>'
       +     '</div>'
       +     '<div id="dal-3d-overlay" class="ac-overlay-layer">'
       +       pinsHtml
@@ -831,14 +832,13 @@
       }, 920);
     }
 
-    /* 櫃台對談選單：只能用鍵盤（◀ ▶ 選擇、Enter 確認、Esc 離開），不提供滑鼠點選 */
+    /* 櫃台提示：走近櫃台直接按 空白鍵 (Space) 登機，不鎖住左右方向鍵、不需二次確認 */
     function getLoungeMenu() {
       if (state.boarding || !state.dialogOpen) return [];
       var termId = state.selectedTerm || '11501';
       var termObj = info(termId) || { id: termId, name: termId, short: termId };
       return [
-        { label: '✈️ 辦理登機・飛往 ' + (termObj.short || termObj.id) + ' 群島 →', onSelect: function () { triggerBoarding(termId); } },
-        { label: '✕ 暫不登機 (Esc)', isClose: true, onSelect: function () { closeLoungeDialog(); } }
+        { label: '✈️ 辦理登機・飛往 ' + (termObj.short || termObj.id) + ' 群島 →', onSelect: function () { triggerBoarding(termId); } }
       ];
     }
 
@@ -854,20 +854,13 @@
         return '<div class="shrink-0 text-xs font-black text-emerald-700 bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-full pointer-events-none select-none">✈️ 水上飛機起飛中…</div>';
       }
       if (!items.length) return '';
-      if (state.menuIdx >= items.length || state.menuIdx < 0) state.menuIdx = 0;
-      var pills = items.map(function (it, idx) {
-        var sel = idx === state.menuIdx;
-        var cls = sel
-          ? (it.isClose
-              ? 'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full font-black text-xs sm:text-sm bg-amber-600 text-white border-2 border-amber-700 ring-4 ring-amber-300 shadow-md'
-              : 'ac-btn-primary ring-4 ring-amber-300')
-          : 'inline-flex items-center gap-1 px-3 py-1.5 rounded-full font-extrabold text-xs bg-stone-200/85 text-stone-600 border-2 border-stone-300 opacity-80';
-        return '<span class="' + cls + ' select-none pointer-events-none" style="cursor:default">' + (sel ? '▶ ' : '　') + escHtml(it.label) + '</span>';
+      var pills = items.map(function (it) {
+        return '<span class="ac-btn-primary ring-4 ring-amber-300 select-none pointer-events-none" style="cursor:default">▶ ' + escHtml(it.label) + '</span>';
       }).join('');
       return '<div class="flex flex-col items-end gap-1.5 shrink-0 pointer-events-none select-none">'
         + '<div class="flex items-center gap-2 flex-wrap justify-end">' + pills + '</div>'
         + '<div class="text-[11px] font-black text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-0.5 rounded-full">'
-        +   '⌨️ ◀ ▶ 選擇 · Enter 確認 · Esc 離開（另一學期請按 Esc 後走向' + escHtml(otherRoute ? otherRoute.counterNo : '另一座櫃台') + '）'
+        +   '⌨️ 按 空白鍵 (Space) 直接登機 · 要去另一學期可直接走向' + escHtml(otherRoute ? otherRoute.counterNo : '另一座櫃台')
         + '</div>'
         + '</div>';
     }
@@ -937,15 +930,15 @@
       setTimeout(function () { tip.remove(); }, 950);
     }
 
-    hostEl.addEventListener('click', function (e) {
+      hostEl.addEventListener('click', function (e) {
       if (e.target.closest('#dal-3d-dialog')) {
         e.preventDefault();
         e.stopPropagation();
-        flashLoungeHint('⌨️ 對談選單請用鍵盤 ◀ ▶ 選擇、Enter 確認、Esc 離開');
+        flashLoungeHint('⌨️ 走近櫃台後請按空白鍵 (Space) 直接登機');
         return;
       }
       if (e.target.closest('[data-counter-pin]')) {
-        flashLoungeHint('🚶 請用方向鍵 / WASD 走到櫃台前');
+        flashLoungeHint('🚶 請用方向鍵 / WASD 走到櫃台前按空白鍵登機');
       }
     });
 
@@ -953,9 +946,7 @@
       camBtn.addEventListener('click', function () {
         state.camMode = state.camMode === 'overview' ? 'counter' : 'overview';
         state.yawOffset = 0;
-        camBtn.textContent = state.camMode === 'overview'
-          ? '🎥 視角：登機室全景（V 切換）'
-          : '🎥 視角：櫃台跟隨特寫（V 切換）';
+        camBtn.textContent = state.camMode === 'overview' ? '🎥 全景' : '🎥 特寫';
       });
     }
 
@@ -1280,36 +1271,20 @@
         if (e.code === 'KeyV' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat && camBtn && !state.boarding) {
           e.preventDefault(); camBtn.click(); return;
         }
-        if (state.dialogOpen && !state.boarding) {
-          var lm = getLoungeMenu();
-          if (lm.length) {
-            if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
-              e.preventDefault(); state.keys = {};
-              state.menuIdx = (state.menuIdx - 1 + lm.length) % lm.length; renderBottomDialog(); return;
-            }
-            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Tab') {
-              e.preventDefault(); state.keys = {};
-              state.menuIdx = (state.menuIdx + 1) % lm.length; renderBottomDialog(); return;
-            }
-            if (e.code === 'Enter' || e.code === 'Space') {
-              e.preventDefault(); state.keys = {};
-              (lm[state.menuIdx] || lm[0]).onSelect(); return;
-            }
-          }
-        }
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
           state.keys[e.code] = true;
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
-        } else if ((e.code === 'Enter' || e.code === 'Space') && !state.dialogOpen && !state.boarding) {
+        } else if ((e.code === 'Space' || e.key === ' ' || e.code === 'Enter') && !state.boarding && !e.repeat) {
           var nd1 = Math.hypot(state.px - FLIGHT_ROUTES['11501'].standWx, state.pz - FLIGHT_ROUTES['11501'].standWz);
           var nd2 = Math.hypot(state.px - FLIGHT_ROUTES['11502'].standWx, state.pz - FLIGHT_ROUTES['11502'].standWz);
           if (nd1 < 2.4 || nd2 < 2.4) {
             e.preventDefault();
-            state.dismissedTerm = null;
-            state.menuIdx = 0;
-            selectCounter(nd1 <= nd2 ? '11501' : '11502', false, true);
-          } else if (quickTermId && e.code === 'Enter' && !e.repeat) {
-            // 站在大廳、不在任何櫃台前：Enter 直接登機到本學期（空白鍵不算，免得誤觸）
+            state.keys = {};
+            var nearTerm = nd1 <= nd2 ? '11501' : '11502';
+            selectCounter(nearTerm, false, true);
+            triggerBoarding(nearTerm);
+          } else if (quickTermId && e.code === 'Enter') {
+            // 站在大廳、不在任何櫃台前：Enter 直接登機到本學期
             e.preventDefault();
             state.keys = {};
             updateQuickBoard(true);

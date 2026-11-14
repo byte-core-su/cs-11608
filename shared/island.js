@@ -2837,9 +2837,9 @@
     if (['day', 'sunset', 'night'].indexOf(savedTimeMode) < 0) savedTimeMode = 'day';
 
     var timeBtnLabelMap = {
-      day:    '☀️ 時段：晴朗白天（T 切換）',
-      sunset: '🌇 時段：魔幻夕陽（T 切換）',
-      night:  '🌙 時段：璀璨星夜（T 切換）'
+      day:    '☀️ 白天',
+      sunset: '🌇 夕陽',
+      night:  '🌙 星夜'
     };
 
     var state = {
@@ -2875,6 +2875,9 @@
         : (n.badgeHtml || '');
       var isAirport = n.id === 'dodo-airport';
       var labelStyle = isAirport ? 'style="background:#e0f2fe;border-color:#0284c7;color:#0c4a6e"' : '';
+      var promptHtml = n.locked
+        ? '<div class="ac-node-prompt is-locked">🔒 ' + esc(n.lockReason || '尚未開放') + '</div>'
+        : '<div class="ac-node-prompt">' + KEY('Space') + ' ' + (isAirport ? '搭機' : (n.kind === 'board' ? '查看' : '進入')) + '</div>';
       return '<div class="' + cls + '" tabindex="-1" data-node="' + esc(n.id) + '">'
         + flag
         + stars
@@ -2882,6 +2885,7 @@
         +   (n.badge ? '<span class="text-[11px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded-full border border-amber-300">' + esc(n.badge) + '</span>' : '')
         +   '<span>' + esc(n.shortTitle) + '</span>'
         + '</div>'
+        + promptHtml
         + '</div>';
     }).join('');
 
@@ -2891,7 +2895,7 @@
     var passedChallengeCount = challengeNodes.filter(function (n) { return !!(n.pass || n.done); }).length;
     var allChallengesCleared = challengeNodes.length >= 3 && passedChallengeCount === challengeNodes.length;
     var allClearBadgeHtml = allChallengesCleared
-      ? '<span class="ac-cam-btn" style="background:linear-gradient(90deg,#fef3c7,#fde68a);border-color:#f59e0b;color:#92400e;pointer-events:none">👑 本島全數通關（' + passedChallengeCount + '/' + challengeNodes.length + '）</span>'
+      ? '<span class="ac-cam-btn" style="background:linear-gradient(90deg,#fef3c7,#fde68a);border-color:#f59e0b;color:#92400e;pointer-events:none" title="本島挑戰關卡已全數完成">👑 全通關</span>'
       : '';
 
     container.innerHTML = ''
@@ -2899,14 +2903,15 @@
       +   '<div class="ac-island-stage" id="ac-stage">'
       +     '<canvas id="ac-webgl-canvas" class="ac-webgl-canvas"></canvas>'
       +     '<div class="ac-controls-bar">'
-      +       '<div class="flex items-center gap-2 flex-wrap">'
+      +       '<div class="flex items-center gap-1.5 flex-wrap">'
       +         allClearBadgeHtml
-      +         '<button type="button" id="ac-wardrobe-toggle" class="ac-cam-btn" style="background:#fdf2f8;border-color:#f472b6;color:#9d174d">🪞 更換造型（C）</button>'
-      +         '<button type="button" id="ac-time-toggle" class="ac-cam-btn" style="background:#eff6ff;border-color:#60a5fa;color:#1e3a8a">' + timeBtnLabelMap[state.timeMode] + '</button>'
-      +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn">🎥 視角：動森跟隨（V 切換全島鳥瞰）</button>'
+      +         '<button type="button" id="ac-wardrobe-toggle" class="ac-cam-btn" style="background:#fdf2f8;border-color:#f472b6;color:#9d174d" title="更換造型（快捷鍵 C）">🪞 造型</button>'
+      +         '<button type="button" id="ac-time-toggle" class="ac-cam-btn" style="background:#eff6ff;border-color:#60a5fa;color:#1e3a8a" title="切換白天／夕陽／星夜（快捷鍵 T）">' + timeBtnLabelMap[state.timeMode] + '</button>'
+      +         '<button type="button" id="ac-cam-toggle" class="ac-cam-btn" title="切換動森跟隨／全島鳥瞰（快捷鍵 V）">🎥 跟隨</button>'
+      +         '<button type="button" id="ac-guide-toggle" class="ac-cam-btn" style="background:#ecfdf5;border-color:#34d399;color:#065f46" title="自動帶路前往推薦下一關（快捷鍵 N）">🧭 帶路</button>'
       +       '</div>'
-      +       '<div class="ac-controls-hint hidden md:block">🎮 ' + KEY('WASD') + KEY('方向鍵') + ' 移動' + HINT_SEP + KEY('◀ ▶') + ' 選擇' + HINT_SEP + KEY('Enter') + ' 確認' + HINT_SEP + KEY('Esc') + ' 離開'
-                + HINT_SEP + KEY('V') + ' 視角' + HINT_SEP + KEY('T') + ' 時段' + HINT_SEP + KEY('C') + ' 造型' + HINT_SEP + KEY('N') + ' 下一關' + HINT_SEP + KEY('M') + ' 清單</div>'
+      +       '<div class="ac-controls-hint hidden md:block">🎮 ' + KEY('WASD') + KEY('方向鍵') + ' 移動' + HINT_SEP + KEY('Space') + ' 進入'
+                + HINT_SEP + '<span style="cursor:help;pointer-events:auto" title="快捷鍵：V 視角 · T 時段 · C 造型 · N 推薦帶路 · M 島嶼/清單 · Esc 離開">⌨️ 快捷鍵</span></div>'
       +     '</div>'
       +     '<div id="ac-wardrobe-panel" class="ac-wardrobe-panel hidden"></div>'
       +     '<div id="ac-overlay" class="ac-overlay-layer">'
@@ -2928,7 +2933,7 @@
         var introEl = document.createElement('div');
         introEl.className = 'ac-hint-intro';
         introEl.innerHTML = '<span>' + KEY('W') + KEY('A') + KEY('S') + KEY('D') + ' 或 ' + KEY('↑') + KEY('↓') + KEY('←') + KEY('→') + ' 走路</span>'
-          + '<span>走到建築門口按 ' + KEY('Enter') + ' 進入</span>'
+          + '<span>走近建築按 ' + KEY('Space') + ' 直接進入</span>'
           + '<span>' + KEY('Esc') + ' 離開</span>';
         stageEl.appendChild(introEl);
         introEl.addEventListener('animationend', function () { introEl.remove(); });
@@ -2943,11 +2948,19 @@
     var dialogEl  = container.querySelector('#ac-dialog');
     var camBtn    = container.querySelector('#ac-cam-toggle');
     var timeBtn   = container.querySelector('#ac-time-toggle');
+    var guideBtn  = container.querySelector('#ac-guide-toggle');
     var wardrobeBtn   = container.querySelector('#ac-wardrobe-toggle');
     var wardrobePanel = container.querySelector('#ac-wardrobe-panel');
     var currentLook   = loadAvatarLook(cfg.genderCode);
     var rebuildPlayerFn = null;
     var applyTimeModeFn = null;
+
+    if (guideBtn) {
+      guideBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        guideToRecommendedNode(true);
+      });
+    }
 
     if (timeBtn) {
       timeBtn.addEventListener('click', function (e) {
@@ -3072,11 +3085,11 @@
         name: '🦝 狸克島務長',
         role: '群島總導覽員',
         tips: [
-          '歡迎來到「科技探險群島」！我是島務長狸克，用方向鍵或 WASD 走到任一座主題館門口、按 Enter，就能前往那個系列的島嶼喔！',
-          '看到左上角的「☀️ 時段」按鈕了嗎？點一下可以切換「晴朗白天、魔幻夕陽、璀璨星夜」三種光影！',
-          '想換穿不同帽子、衣服或背上精靈翅膀？點左上角「🪞 更換造型」隨時都能打扮自己！',
+          '歡迎來到「科技探險群島」！我是島務長狸克，用方向鍵或 WASD 走近任一座主題館、按空白鍵 (Space)，就能直接進入那個系列的島嶼喔！',
+          '看到左上角的「☀️ 時段」按鈕了嗎？按 T 鍵或點一下可以切換「晴朗白天、魔幻夕陽、璀璨星夜」三種光影！',
+          '想換穿不同帽子、衣服或背上精靈翅膀？按 C 鍵隨時都能打開隨身梳妝鏡打扮自己！',
           '走近島上的蘋果樹、橘子樹或椰子樹並點一下，樹上的果實就會掉下來喔！',
-          '不知道先去哪一座島嗎？和我對話時用 ◀ ▶ 選「🧭 帶我去推薦關卡」再按 Enter，我直接幫你帶路！'
+          '不知道先去哪一座島嗎？隨時按 N 鍵，我就會直接幫你自動帶路前往推薦關卡！'
         ]
       },
       ethics: {
@@ -3084,7 +3097,7 @@
         role: '豐收果園守護者',
         tips: [
           '歡迎來到「豐收果園與陽光溫室島」！這裡的每一棵果樹都代表一個資訊倫理與資安章節喔！',
-          '走到果樹前按 Enter，會先開啟「重點整理」浮動視窗，讀完再按「開始挑戰」，連續答對就能摘下黃金果實！',
+          '走近果樹按空白鍵 (Space)，會直接開啟「重點整理」浮動視窗，讀完再按「開始挑戰」，連續答對就能摘下黃金果實！',
           '只要通過一個章節，那棵果樹或穀倉的屋頂就會升起「3D 旋轉黃金榮譽星」與慶祝花叢！',
           '走上北邊的石階斜坡，高台上還有「金蘋果傳說神木」與「陽光玻璃大溫室」總複習等你挑戰！',
           '把 10 個章節全部通關後，就能解鎖主島上的「🏆 排行賽露營地」跟全校高手過招喔！'
@@ -3095,9 +3108,9 @@
         role: '森林遊樂園園長',
         tips: [
           '歡迎光臨「森林奇幻遊樂園」！島上的 10 座遊樂設施分別對應 10 道國際運算思維謎題！',
-          '不管是滑梯公園、電流急急棒還是小籠包攤位，順序完全自由，想玩哪一座就走過去按 Enter！',
+          '不管是滑梯公園、電流急急棒還是小籠包攤位，順序完全自由，想玩哪一座就走過去按空白鍵 (Space) 直接進入！',
           '在挑戰視窗過關後，記得按 Windows + Alt + PrintScreen 擷取視窗畫面！',
-          '截好圖之後，走去廣場西側的「🎠 旋轉木馬通關回報亭」上傳截圖，就能領取通關證書囉！',
+          '截好圖之後，走去廣場西側的「🎠 旋轉木馬通關回報亭」按空白鍵上傳截圖，就能領取通關證書囉！',
           '試試切換成「🌙 璀璨星夜」模式，夜晚的摩天輪與遊樂園超浪漫喔！'
         ]
       },
@@ -3107,7 +3120,7 @@
         tips: [
           '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
           '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
-          '走進任一工坊（走到門口按 Enter）後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
+          '走近任一工坊按空白鍵 (Space) 直接進入後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
           '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以回到那座工坊再傳一次 Scratch 作品！',
           '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
         ]
@@ -3118,7 +3131,7 @@
         tips: [
           '歡迎來到「蒸氣齒輪木工村」！先去找廣場旁邊的「🤖 發條機器人」完成清單學習機前導訓練吧！',
           '這裡十座蒸氣工坊全部開放！每一關都是先排好「流程圖 (+2⭐)」，再去寫「Scratch 程式 (最多 +3⭐)」！',
-          '走進任一工坊（走到門口按 Enter）後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
+          '走近任一工坊按空白鍵 (Space) 直接進入後，背景的 3D 水車與蒸氣齒輪會持續運轉，讓你邊看風景邊在浮動視窗裡排流程圖！',
           '拿到 2⭐ 以上就算完成，如果想挑戰滿分 3⭐，隨時可以回到那座工坊再傳一次 Scratch 作品！',
           '十關都完成後，別忘了去北邊高台的「🏛️ 黃金齒輪神殿」挑戰晨星號火箭喔！'
         ]
@@ -3129,7 +3142,7 @@
         tips: [
           '嗶嗶！歡迎登陸「未來科技創客實驗島」！我是你的 AI 領航員諾克號！',
           '島上的 5 座科技實驗艙分別展示智慧門閘、人體感應燈廊、風力能源塔、光控圓頂與研發總部！',
-          '走到任一實驗艙門口按 Enter，就能在科技浮動視窗裡親手操作「3D 互動硬體模擬器」與檢視積木程式邏輯！',
+          '走近任一實驗艙按空白鍵 (Space)，就能直接打開科技浮動視窗操作「3D 互動硬體模擬器」與檢視積木程式邏輯！',
           '在浮動視窗開啟時，背景的 3D 攝影機會自動推進特寫該座科技建築喔！',
           '切換到「🌙 璀璨星夜」模式，整座科技島的光電迴路與霓虹圓頂都會閃閃發光！'
         ]
@@ -3138,9 +3151,9 @@
         name: '🦫 齒輪海狸師傅',
         role: '下學期 Scratch 演算法工坊總導師',
         tips: [
-          '歡迎來到下學期的「Scratch 演算法蒸氣工坊」！先去廣場旁的「🤖 暖身訓練塔」完成積木暖身，或走到「📋 學習目標＆計分看板」前按 Enter 查看規則吧！',
+          '歡迎來到下學期的「Scratch 演算法蒸氣工坊」！先去廣場旁的「🤖 暖身訓練塔」完成積木暖身，或走近「📋 學習目標＆計分看板」按空白鍵 (Space) 查看規則吧！',
           '這個模組你會學到：📦 函式與模組化（把重複動作包成自訂積木）、🔧 參數傳遞（加輸入孔控制方向與次數）、🔍 排序與搜尋演算法！',
-          '島上 10 座工坊全部開放、不限順序！走到任一工坊門口按 Enter，可下載範本並查看提示，做好後把 .sb3 檔上傳批改。',
+          '島上 10 座工坊全部開放、不限順序！走近任一工坊按空白鍵 (Space) 即可進入下載範本並查看提示，做好後把 .sb3 檔上傳批改。',
           '每一關有兩顆星：⭐ 作品星（上傳 .sb3 並通過結構檢查）＋ 💡 觀念星（回答作品裡的一道延伸問題，答錯不扣作品星）！',
           '十關全部完成後，別忘了前往北邊高台的「🏛️ 黃金齒輪神殿」挑戰隱藏魔王關喔！'
         ]
@@ -3207,40 +3220,19 @@
       if (state.nearId === '__npc__') {
         return [
           {
-            label: '💬 繼續聊天（下一句）',
+            label: '💬 聽下一句秘訣',
             onSelect: function () {
               npcTipIndex++;
               state.npcGuideHint = '';
               if (triggerMascotJumpFn) triggerMascotJumpFn();
               renderDialog();
             }
-          },
-          {
-            label: '🧭 詢問推薦關卡',
-            onSelect: function () {
-              if (triggerMascotJumpFn) triggerMascotJumpFn();
-              guideToRecommendedNode();
-            }
-          },
-          {
-            label: '✕ 結束對話 (Esc)',
-            isClose: true,
-            onSelect: function () { dismissDialog(); }
           }
         ];
       }
       var activeNode = findNode(state.nearId);
-      if (!activeNode) return [];
-      if (activeNode.locked) {
-        return [
-          {
-            label: '✕ 離開 (Esc)',
-            isClose: true,
-            onSelect: function () { dismissDialog(); }
-          }
-        ];
-      }
-      var items = (activeNode.actions || []).map(function (a, idx) {
+      if (!activeNode || activeNode.locked) return [];
+      return (activeNode.actions || []).map(function (a, idx) {
         return {
           label: a.label || '進入 →',
           onSelect: function () {
@@ -3249,31 +3241,28 @@
           }
         };
       });
-      items.push({
-        label: '✕ 暫不進入 (Esc)',
-        isClose: true,
-        onSelect: function () { dismissDialog(); }
-      });
-      return items;
     }
 
-    function renderMenuChoicesHtml(items) {
+    function renderMenuChoicesHtml(items, isNpc) {
       if (!items || !items.length) return '';
       if (state.menuIdx >= items.length) state.menuIdx = 0;
       if (state.menuIdx < 0) state.menuIdx = 0;
       var pills = items.map(function (item, idx) {
         var isSel = idx === state.menuIdx;
         var cls = isSel
-          ? (item.isClose
-              ? 'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full font-black text-xs sm:text-sm bg-amber-600 text-white border-2 border-amber-700 ring-4 ring-amber-300 shadow-md select-none pointer-events-none'
-              : 'ac-btn-primary ring-4 ring-amber-300 select-none pointer-events-none')
+          ? 'ac-btn-primary ring-4 ring-amber-300 select-none pointer-events-none'
           : 'inline-flex items-center gap-1 px-3 py-1.5 rounded-full font-extrabold text-xs bg-stone-200/85 text-stone-600 border-2 border-stone-300 opacity-80 select-none pointer-events-none';
         return '<span class="' + cls + '" style="cursor:default">' + (isSel ? '▶ ' : '　') + esc(item.label) + '</span>';
       }).join('');
+      var hintText = isNpc
+        ? '⌨️ 按 空白鍵 (Space) 聽下一句 · 按 N 自動帶路至推薦關卡'
+        : (items.length > 1
+            ? '⌨️ 按 空白鍵 (Space) 立即進入 · 按 Tab 切換項目'
+            : '⌨️ 按 空白鍵 (Space) 直接進入');
       return '<div class="flex flex-col items-end gap-1.5 shrink-0 pointer-events-none select-none">'
         + '<div class="flex items-center gap-2 flex-wrap justify-end">' + pills + '</div>'
         + '<div class="text-[11px] font-black text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-0.5 rounded-full">'
-        +   '⌨️ 方向鍵 ◀ ▶ 選擇 · Enter 確認 · Esc 離開（不支援滑鼠點選）'
+        +   hintText
         + '</div>'
         + '</div>';
     }
@@ -3300,22 +3289,19 @@
           +     '</div>'
           +     '<p class="text-xs sm:text-sm text-stone-700 font-bold mt-0.5 leading-relaxed">' + esc(msg) + '</p>'
           +   '</div>'
-          +   renderMenuChoicesHtml(menuItems)
+          +   renderMenuChoicesHtml(menuItems, true)
           + '</div>';
         return;
       }
 
       var activeNode = findNode(state.nearId);
-      if (!activeNode) {
+      // ★ 極簡動森 HUD：一般關卡建築直接由建築頭頂木牌顯示「[Space] 進入」，不在畫面下方跳出大對話框遮擋視野；
+      //   底部對話框僅留給「島長 NPC」與「廣場規則佈告欄 (board)」使用！
+      if (!activeNode || activeNode.kind !== 'board') {
         dialogEl.classList.add('hidden');
         return;
       }
       dialogEl.classList.remove('hidden');
-
-      var lockBadgeHtml = activeNode.locked
-        ? '<span class="text-xs font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-3 py-1 rounded-full">🔒 '
-          + esc(activeNode.lockReason || '尚未解鎖') + '</span>'
-        : '';
 
       dialogEl.innerHTML = ''
         + '<div class="ac-dialog-speaker">' + esc(activeNode.speakerTag) + '</div>'
@@ -3324,12 +3310,10 @@
         +     '<div class="flex items-center gap-2 flex-wrap">'
         +       '<h3 class="text-base sm:text-lg font-black text-amber-950 truncate">' + esc(activeNode.title) + '</h3>'
         +       (activeNode.starsText ? '<span class="text-xs font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">' + esc(activeNode.starsText) + '</span>' : '')
-        +       (activeNode.statusLabel ? '<span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">' + esc(activeNode.statusLabel) + '</span>' : '')
-        +       lockBadgeHtml
         +     '</div>'
         +     '<p class="text-xs sm:text-sm text-stone-600 font-medium mt-0.5 line-clamp-2">' + activeNode.descHtml + '</p>'
         +   '</div>'
-        +   renderMenuChoicesHtml(menuItems)
+        +   renderMenuChoicesHtml(menuItems, false)
         + '</div>';
     }
 
@@ -4047,7 +4031,7 @@
       worldGroup.add(mascotMesh);
       interactiveMeshes.push(mascotMesh);
       if (npcTag) {
-        npcTag.textContent = currentNpcInfo.name + ' 💬（走近對話）';
+        npcTag.textContent = currentNpcInfo.name + ' 💬';
       }
 
       var foxCompanion = null;
@@ -4492,7 +4476,7 @@
         if (node.locked) {
           spawnFloatScreen(scr.x, scr.y, '🔒 ' + (node.lockReason || '尚未開放'));
         } else {
-          spawnFloatScreen(scr.x, scr.y, '🚶 請用方向鍵 / WASD 走近「' + node.shortTitle + '」互動');
+          spawnFloatScreen(scr.x, scr.y, '🚶 請走近「' + node.shortTitle + '」並按空白鍵 (Space) 進入');
         }
       }
 
@@ -4501,7 +4485,7 @@
           e.stopPropagation();
           e.preventDefault();
           var rect = stageEl.getBoundingClientRect();
-          spawnFloatScreen(rect.width * 0.5, rect.height - 95, '⌨️ 對談選單請用鍵盤 ◀ ▶ 選擇、Enter 確認、Esc 離開');
+          spawnFloatScreen(rect.width * 0.5, rect.height - 95, '⌨️ 走近建築後請按空白鍵 (Space) 直接進入');
           return;
         }
         var nodePin = e.target.closest('.ac-node');
@@ -4516,9 +4500,7 @@
           e.stopPropagation();
           state.camMode = state.camMode === 'follow' ? 'overview' : 'follow';
           state.yawOffset = 0;
-          camBtn.textContent = state.camMode === 'follow'
-            ? '🎥 視角：動森跟隨（V 切換全島鳥瞰）'
-            : '🗺️ 視角：全島鳥瞰（V 切換動森跟隨）';
+          camBtn.textContent = state.camMode === 'follow' ? '🎥 跟隨' : '🗺️ 鳥瞰';
         });
       }
 
@@ -4596,32 +4578,13 @@
         if (document.querySelector('#week-mask, #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden), #dal-airport-modal')) return;
 
         var isDialogActive = !!(dialogEl && !dialogEl.classList.contains('hidden') && state.nearId && !state.dialogDismissed);
-        if (isDialogActive) {
+        if (isDialogActive && e.code === 'Tab') {
           var menuItems = getDialogMenuItems();
-          if (menuItems.length > 0) {
-            if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
-              e.preventDefault();
-              state.keys = {};
-              state.menuIdx = (state.menuIdx - 1 + menuItems.length) % menuItems.length;
-              renderDialog();
-              return;
-            }
-            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Tab') {
-              e.preventDefault();
-              state.keys = {};
-              state.menuIdx = (state.menuIdx + 1) % menuItems.length;
-              renderDialog();
-              return;
-            }
-            if (e.code === 'Enter' || e.code === 'Space') {
-              e.preventDefault();
-              state.keys = {};
-              var chosen = menuItems[state.menuIdx] || menuItems[0];
-              if (chosen && typeof chosen.onSelect === 'function') {
-                chosen.onSelect();
-              }
-              return;
-            }
+          if (menuItems.length > 1) {
+            e.preventDefault();
+            state.menuIdx = (state.menuIdx + 1) % menuItems.length;
+            renderDialog();
+            return;
           }
         }
 
@@ -4631,16 +4594,32 @@
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) {
             e.preventDefault();
           }
-        } else if (e.code === 'Space' || e.code === 'Enter') {
-          if (lastNearCandidateId) {
-            e.preventDefault();
-            state.hasMoved = true;
-            state.dialogDismissed = false;
-            state.nearId = lastNearCandidateId;
-            state.menuIdx = 0;
-            if (lastNearCandidateId === '__npc__' && triggerMascotJumpFn) triggerMascotJumpFn();
+        } else if (e.code === 'Space' || e.key === ' ' || e.code === 'Enter') {
+          var targetId = state.nearId || lastNearCandidateId;
+          if (!targetId) return;
+          e.preventDefault();
+          state.keys = {};
+          state.hasMoved = true;
+          state.dialogDismissed = false;
+          state.nearId = targetId;
+          if (targetId === '__npc__') {
+            npcTipIndex++;
+            state.npcGuideHint = '';
+            if (triggerMascotJumpFn) triggerMascotJumpFn();
             renderDialog();
+            return;
           }
+          var targetNode = findNode(targetId);
+          if (!targetNode) return;
+          if (targetNode.locked) {
+            var rectL = stageEl.getBoundingClientRect();
+            spawnFloatScreen(rectL.width * 0.5, rectL.height * 0.45, '🔒 ' + (targetNode.lockReason || '尚未開放'));
+            renderDialog();
+            return;
+          }
+          state.selectedId = targetId;
+          state.focusUntil = performance.now() + 1400;
+          triggerNodeAction(targetNode, state.menuIdx || 0);
         }
       }
 
@@ -5153,15 +5132,22 @@
           state.dialogDismissed = false;
           state.menuIdx = 0;
           state.npcGuideHint = '';
-          if (!bestId && state.nearId) {
-            state.nearId = null;
-            state.selectedId = null;
+          if (!bestId) {
+            if (state.nearId) {
+              state.nearId = null;
+              state.selectedId = null;
+              renderDialog();
+            }
+          } else if (state.hasMoved) {
+            state.nearId = bestId;
+            state.selectedId = bestId;
+            if (bestId === '__npc__' && triggerMascotJumpFn) triggerMascotJumpFn();
             renderDialog();
           }
         }
 
-        // 當角色走近目標並在門口停下腳步（!state.walking）時，自動彈出該處的鍵盤對談選單
-        if (bestId && !state.walking && state.hasMoved && !state.dialogDismissed && state.nearId !== bestId) {
+        // 當角色走近目標時即時顯示下方簡介與「按空白鍵直接進入」提示（不攔截方向鍵、不需二次確認）
+        if (bestId && state.hasMoved && !state.dialogDismissed && state.nearId !== bestId) {
           state.nearId = bestId;
           state.selectedId = bestId;
           state.menuIdx = 0;
@@ -5173,6 +5159,7 @@
           var pScr = projectToScreen(pWx, playerMesh.position.y + 3.4, pWz);
           playerTag.style.left = Math.round(pScr.x) + 'px';
           playerTag.style.top  = Math.round(pScr.y) + 'px';
+          playerTag.classList.toggle('is-hidden', !!state.hasMoved);
         }
 
         renderer.render(scene, camera);

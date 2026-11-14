@@ -208,32 +208,35 @@ body.ac-sky-bg {
   box-shadow: 0 4px 8px rgba(79, 70, 229, 0.35);
 }
 
-/* 動森立體木牌名稱標籤 */
+/* 動森立體木牌名稱標籤（平時極簡清爽，走近時放大並浮現 Space 進入提示） */
 .ac-node-label {
-  background: rgba(255, 253, 245, 0.96);
-  border: 2.5px solid #8b5a2b;
-  border-radius: 14px;
-  padding: 3.5px 11px;
-  font-size: 12.5px;
+  background: rgba(255, 253, 245, 0.92);
+  border: 2px solid #8b5a2b;
+  border-radius: 13px;
+  padding: 2.5px 9px;
+  font-size: 11.5px;
   font-weight: 900;
   color: #4a3b2c;
   white-space: nowrap;
-  box-shadow: 0 4px 0 #6d441e, 0 6px 12px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 3px 0 #6d441e, 0 4px 10px rgba(0, 0, 0, 0.18);
   display: flex;
   align-items: center;
-  gap: 5px;
-  max-width: 185px;
+  gap: 4px;
+  max-width: 175px;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s, opacity 0.18s ease;
+}
+.ac-node:not(.is-near):not(:hover) {
+  opacity: 0.9;
 }
 .ac-node-label::after {
   content: '';
   position: absolute;
-  bottom: -6px;
+  bottom: -5px;
   left: 50%;
   transform: translateX(-50%);
-  border-width: 6px 6px 0;
+  border-width: 5px 5px 0;
   border-style: solid;
   border-color: #6d441e transparent transparent;
 }
@@ -242,24 +245,57 @@ body.ac-sky-bg {
   background: #fef3c7;
   border-color: #d97706;
   color: #78350f;
-  transform: scale(1.09) translateY(-2px);
+  transform: scale(1.1) translateY(-2px);
+  max-width: 240px;
+}
+
+/* 走近建築時直接浮現在木牌下方的情境按鍵提示（取代底部大對話框） */
+.ac-node-prompt {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 900;
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: 2px solid #fffdf5;
+  box-shadow: 0 3px 0 #14532d, 0 6px 14px rgba(0, 0, 0, 0.28);
+  white-space: nowrap;
+  animation: acWindowPop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ac-node-prompt .ac-key {
+  background: #fffdf5;
+  color: #14532d;
+  border-color: #86efac;
+  font-size: 10.5px;
+  padding: 0 5px;
+}
+.ac-node-prompt.is-locked {
+  background: #78716c;
+  box-shadow: 0 3px 0 #44403c, 0 5px 12px rgba(0, 0, 0, 0.24);
+}
+.ac-node.is-near .ac-node-prompt {
+  display: inline-flex;
 }
 
 @media (max-width: 640px) {
   .ac-node-label {
-    font-size: 11px;
-    padding: 2px 8px;
-    max-width: 135px;
+    font-size: 10.5px;
+    padding: 2px 7px;
+    max-width: 130px;
   }
 }
 
-/* 玩家 3D 頭頂名牌 */
+/* 玩家 3D 頭頂名牌（開始移動後自動淡出，保持畫面中央清爽） */
 .ac-player-tag {
   position: absolute;
   left: 0;
   top: 0;
   transform: translate(-50%, -100%);
-  background: rgba(15, 23, 42, 0.82);
+  background: rgba(15, 23, 42, 0.78);
   color: #fff;
   font-size: 11px;
   font-weight: 900;
@@ -270,6 +306,10 @@ body.ac-sky-bg {
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
   pointer-events: none;
   z-index: 36;
+  transition: opacity 0.4s ease;
+}
+.ac-player-tag.is-hidden {
+  opacity: 0;
 }
 
 /* 搖樹掉落果實飄字 */

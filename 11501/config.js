@@ -38,7 +38,7 @@ defineTerm({
   ],
 
   // ── 章節測驗（quiz.html）與闖關排行賽 ───────────────────
-  QUIZ: { NAME: '資訊倫理', CONTENT: 'content/ethics.js', HINTS: 'content/ethics.hints.js' },
+  QUIZ: { NAME: '資訊倫理', CONTENT: 'content/ethics.js', HINTS: 'content/ethics.hints.js', READ: 'content/ethics.read.js' },
   ARENA_INFO: {
     NAME: '資訊倫理', SUBTITLE: '資訊倫理與相關法律',
     /* 參賽資格：這些章節全部通關。⚠️ 要和 content/ethics.js 的章節一樣（gas/arena.test.js 會比對）；

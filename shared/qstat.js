@@ -88,24 +88,35 @@
    * ★ 同一題出現在多個地方（節、整章挑戰）只留一筆，
    *   但 where 會把所有出處都記下來 —— 你要回去改題目時得找得到它。
    */
-  function bank(content) {
+  function bank(content, read) {
     var out = {};
+    var add = function (list, where) {
+      (list || []).forEach(function (it) {
+        var k = id(it.q);
+        if (!k) return;
+        /* 題庫裡只有答案雜湊（a），教師端拿四個選項各算一次反查「哪一個才是對的」。
+           （有明碼 correct 的舊題庫照舊用它。） */
+        var ci = (it.correct != null) ? it.correct
+               : (global.ANSKEY ? global.ANSKEY.find(it.q, it.options, it.a) : -1);
+        if (!out[k]) out[k] = { id: k, q: it.q, options: it.options, correct: ci, where: [] };
+        if (out[k].where.indexOf(where) < 0) out[k].where.push(where);
+      });
+    };
     (((content || {}).chapters) || []).forEach(function (ch) {
-      var add = function (list, where) {
-        (list || []).forEach(function (it) {
-          var k = id(it.q);
-          if (!k) return;
-          /* 題庫裡只有答案雜湊（a），教師端拿四個選項各算一次反查「哪一個才是對的」。
-             （有明碼 correct 的舊題庫照舊用它。） */
-          var ci = (it.correct != null) ? it.correct
-                 : (global.ANSKEY ? global.ANSKEY.find(it.q, it.options, it.a) : -1);
-          if (!out[k]) out[k] = { id: k, q: it.q, options: it.options, correct: ci, where: [] };
-          if (out[k].where.indexOf(where) < 0) out[k].where.push(where);
-        });
-      };
       (ch.sections || []).forEach(function (s) { add(s.questions, s.title || s.id); });
       if (ch.challenge) add(ch.challenge.questions, (ch.title || ch.id) + '（整章挑戰）');
     });
+    if (read && read.sections) {
+      var title = {};
+      (((content || {}).chapters) || []).forEach(function (ch) {
+        (ch.sections || []).forEach(function (s) { title[s.id] = s.title || s.id; });
+      });
+      Object.keys(read.sections).forEach(function (sid) {
+        (read.sections[sid].paras || []).forEach(function (p, i) {
+          add(p.qs, (title[sid] || sid) + '・第 ' + (i + 1) + ' 段');
+        });
+      });
+    }
     return out;
   }
 

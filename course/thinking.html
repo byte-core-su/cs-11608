@@ -794,7 +794,7 @@
                 const docId = `${classRoom}_${seatNo}_${name}`;
 
                 // 載入先前進度
-                let loadedProgress = [], loadedDates = {};
+                let loadedProgress = [], loadedDates = {}, loadedOcr = {};
                 try {
                     const progressRef = fbStore.doc(fbStore.db, ...THINKING_COL_SEGMENTS(), docId);
                     const snap = await fbStore.getDoc(progressRef);
@@ -802,6 +802,7 @@
                         const data = snap.data();
                         loadedProgress = data.completed || [];
                         loadedDates = data.completionDates || {};
+                        loadedOcr = data.ocrTexts || {};
                         Object.keys(data).forEach(key => {      // 舊格式：欄位名是「completionDates.3」
                             if (key.startsWith('completionDates.')) loadedDates[key.split('.')[1]] = data[key];
                         });
@@ -811,9 +812,26 @@
                 // 依目前完成數重新同步闖關進度的星數（上一次 ② 沒寫成功也會在這裡補上）
                 if (loadedProgress.length > 0) {
                     const cnt = new Set(loadedProgress.map(Number)).size;   // 重複的編號不重複算星
+                    let backfill = [];
+                    try {
+                        const ps = await fbStore.getDoc(fbStore.doc(fbStore.db, window.CONFIG.COLLECTIONS.PROGRESS, sid));
+                        const hist = (ps.exists() && ps.data().history) || [];
+                        const have = new Set(hist.filter(h => h && h.module === 'thinking').map(h => String(h.challenge != null ? h.challenge : h.unit)));
+                        const dayOf = (s) => {
+                            const m = String(s || '').match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+                            const t = m ? new Date(+m[1], +m[2] - 1, +m[3], 12).getTime() : NaN;
+                            return isNaN(t) ? Date.now() : t;
+                        };
+                        [...new Set(loadedProgress.map(Number))].filter(n => Number.isFinite(n) && !have.has(String(n))).forEach(n => {
+                            backfill.push({ module: 'thinking', challenge: n, at: dayOf(loadedDates[n] || loadedDates[String(n)]),
+                                            stars: 2, ocr: loadedOcr[n] || loadedOcr[String(n)] || '', backfill: true });
+                        });
+                    } catch (e) { console.warn('讀統一進度失敗，這次先不補歷程', e); backfill = []; }
+                    if (backfill.length) console.log('[補記] 統一進度少了第', backfill.map(b => b.challenge).join('、'), '題，補上');
                     fbStore.setDoc(fbStore.doc(fbStore.db, window.CONFIG.COLLECTIONS.PROGRESS, sid), {
                         studentId: sid,
                         modules: { thinking: { status: cnt >= 10 ? 'pass' : 'in-progress', level: cnt, stars: window.GRADING.thinkingStars(cnt), source: 'auto', updatedAt: Date.now() } },
+                        ...(backfill.length && { history: fbStore.arrayUnion(...backfill) }),
                         updatedAt: Date.now()
                     }, { merge: true }).catch(e => console.error('同步統一進度失敗', e));
                 }

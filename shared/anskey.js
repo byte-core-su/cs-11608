@@ -66,6 +66,48 @@
     return -1;
   }
 
+  /**
+   * 一題有沒有「還沒換掉的明碼答案」。
+   */
+  function isPlain(item) {
+    return !!item && item.correct !== undefined && item.correct !== null;
+  }
+
+  /* ── 答錯說明的加密（段落閱讀模式，老師 2026-11-06）──────────────
+     ★ 新的作答形式答錯時要「公布正解＋理由」，理由裡一定寫著正解。
+       說明要是用明碼放在資料檔，前面把答案換成雜湊就白做了（F12 一開就讀得到）。
+     ⇒ 用「這一題的正解」當鑰匙把說明鎖起來：
+         seal(題目, 正解文字, 說明) → 一串亂碼
+         open(題目, 正解文字, 亂碼) → 說明
+       引擎是在學生答錯之後，才用 find() 反查正解、再打開說明。
+     ⚠️ 防護等級和答案雜湊**一樣**（不會更好、也不會更差）：
+        會寫程式的人本來就能用 find() 四次反查答案，也就能打開說明；
+        擋的是「隨手 F12 讀一眼」和網頁 AI 直接讀到。 */
+  function keystream(key, n) {
+    var out = [], h = (parseInt(fnv(key + '::ex'), 36) >>> 0) || 0x9e3779b9;   // 0 會讓 xorshift 卡死
+    for (var i = 0; i < n; i++) {
+      h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0;   // xorshift32
+      out.push(h & 255);
+    }
+    return out;
+  }
+  function b64e(bin) { return typeof btoa === 'function' ? btoa(bin) : Buffer.from(bin, 'binary').toString('base64'); }
+  function b64d(s)   { return typeof atob === 'function' ? atob(s) : Buffer.from(s, 'base64').toString('binary'); }
+  function seal(q, correctText, plain) {
+    var bin = unescape(encodeURIComponent(String(plain == null ? '' : plain)));   // UTF-8 位元組
+    var ks = keystream(of(q, correctText), bin.length), out = '';
+    for (var i = 0; i < bin.length; i++) out += String.fromCharCode(bin.charCodeAt(i) ^ ks[i]);
+    return b64e(out);
+  }
+  /** 打不開（正解不對、資料壞掉）回空字串 —— 不可以丟例外卡住答題 */
+  function open(q, correctText, sealed) {
+    try {
+      var bin = b64d(String(sealed || '')), ks = keystream(of(q, correctText), bin.length), out = '';
+      for (var i = 0; i < bin.length; i++) out += String.fromCharCode(bin.charCodeAt(i) ^ ks[i]);
+      return decodeURIComponent(escape(out));
+    } catch (e) { return ''; }
+  }
+
   /* 🔒 鎖住：載入完就凍結，window 上這個名字也不能再指向別的東西 ——
      擋的是在 Console 把判對錯的函式換成「永遠回答對」。
      ⚠️ 只擋「網頁載入之後」才動手的；搶在載入之前的（例如使用者腳本）擋不住，前端只能做到這裡。
@@ -86,7 +128,8 @@
 
   global.ANSKEY = {
     VERSION: VERSION,
-    of: of, check: check, find: find,
+    of: of, check: check, find: find, isPlain: isPlain,
+    seal: seal, open: open,
     _norm: norm, _fnv: fnv
   };
   __lockGlobal(global, 'ANSKEY', global.ANSKEY);

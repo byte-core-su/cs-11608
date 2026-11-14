@@ -41,7 +41,7 @@ defineTerm({
   ],
 
   // ── 章節測驗（quiz.html）與闖關排行賽 ───────────────────
-  QUIZ: { NAME: '媒體與社會議題', CONTENT: 'content/social.js', HINTS: 'content/social.hints.js' },
+  QUIZ: { NAME: '媒體與社會議題', CONTENT: 'content/social.js', HINTS: 'content/social.hints.js', READ: 'content/social.read.js' },
   ARENA_INFO: {
     NAME: '媒體與社會議題', SUBTITLE: '媒體與社會議題・基本演算法',
     /* 參賽資格：這些章節全部通關。⚠️ 要和 content/social.js 的章節一樣（gas/arena.test.js 會比對） */

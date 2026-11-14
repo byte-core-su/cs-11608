@@ -145,6 +145,127 @@ window.GRADING = {
   },
 
   /* ===================================================================
+     ★★ 各模組的「目前星數」—— 全站唯一算法（2026-11-09 統一）
+     -------------------------------------------------------------------
+     把「一個模組現在有幾顆星」收進 GRADING.moduleStars(mods, key, history)，
+     所有頁面都問它，不要在各頁各自寫一套。
+       · ethics    ：優先加總 units[ch].star；沒 units 或加起來比 stars 少時用 stars 兜底
+       · thinking  ：加總 units[id].star + history 裡還沒進 units 的通關關卡，與 stars 取較大值
+       · flowchart ：max(stars, units.length × 2) ＋ 圖片加分（imgUnits）
+       · scratch   ：優先加總 unitStars[u]（>0）；空的時候才退回 stars
+       · concept   ：由 modules.scratch.quiz 現算（quizTotal）
+     =================================================================== */
+  STAR_MODULES: ['ethics', 'thinking', 'flowchart', 'scratch', 'concept'],
+
+  moduleStars: function (mods, key, history) {
+    mods = mods || {};
+    if (key === 'concept') {
+      return this.quizTotal((mods.scratch || {}).quiz).stars;
+    }
+    var d = mods[key] || {};
+    var own = Object.prototype.hasOwnProperty;
+    var st = Number(d.stars) || 0, k, v, sum, n;
+    if (key === 'ethics' && d.units && typeof d.units === 'object') {
+      sum = 0; n = 0;
+      for (k in d.units) {
+        if (!own.call(d.units, k)) continue;
+        v = Math.min(3, Number(d.units[k] && d.units[k].star) || 0);
+        if (v > 0) { sum += v; n++; }
+      }
+      if (n) st = sum;
+    } else if (key === 'thinking') {
+      var seen = {}, cnt = 0;
+      var mark = function (id) { if (id != null && !seen[String(id)]) { seen[String(id)] = 1; cnt++; } };
+      (Array.isArray(history) ? history : []).forEach(function (h) {
+        if (h && h.module === 'thinking') mark(h.challenge != null ? h.challenge : h.unit);
+      });
+      if (d.units && typeof d.units === 'object' && !Array.isArray(d.units)) {
+        for (k in d.units) if (own.call(d.units, k) && (Number(d.units[k] && d.units[k].star) || 0) > 0) mark(k);
+      }
+      cnt = Math.max(cnt, Number(d.level) || 0);
+      if (cnt) st = this.thinkingStars(cnt);
+    } else if (key === 'flowchart' && Array.isArray(d.units) && d.units.length) {
+      var u = {};
+      d.units.forEach(function (x) { u[String(x)] = 1; });
+      st = this.flowchartStars(Object.keys(u).length);
+    } else if (key === 'scratch' && d.unitStars && typeof d.unitStars === 'object') {
+      sum = 0; n = 0;
+      for (k in d.unitStars) {
+        if (!own.call(d.unitStars, k)) continue;
+        v = Number(d.unitStars[k]) || 0;
+        if (v > 0) { sum += v; n++; }
+      }
+      if (n) st = sum;
+    }
+    var cap = { ethics: 30, thinking: 20, flowchart: 20, scratch: 30 }[key];
+    if (cap != null) st = Math.min(st, cap);
+    var b = this.starsWithBonus({ modules: mods }), self = this;
+    if (key === 'flowchart') {
+      if (Array.isArray(d.units) && d.units.length) {
+        var fu = d.units.map(String);
+        st += Object.keys(d.imgUnits || {}).filter(function (id) { return d.imgUnits[id] && fu.indexOf(String(id)) >= 0; }).length * (self.BONUS.img || 1);
+      } else st += b.flowchartBonus || 0;
+    }
+    if (key === 'scratch' && self.BONUS.vid) {
+      if (d.unitStars && typeof d.unitStars === 'object' && Object.keys(d.unitStars).length) {
+        st += Object.keys(d.vidUnits || {}).filter(function (id) { return d.vidUnits[id] && (Number(d.unitStars[id]) || 0) > 0; }).length * self.BONUS.vid;
+      } else st += b.scratchBonus || 0;
+    }
+    return st;
+  },
+
+  /** 一個學生「所有模組加起來」的總星數（預設算該學期 SUBJECTS 的那些模組） */
+  totalStars: function (doc, keys) {
+    var p = doc || {}, mods = p.modules || {};
+    var hist = this.statHistory(p);
+    var list = keys;
+    if (!list) {
+      var subs = ((typeof window !== 'undefined' && window.CONFIG && window.CONFIG.SUBJECTS) || []);
+      list = subs.length ? subs.map(function (s) { return s.key; }) : this.STAR_MODULES;
+    }
+    var sum = 0, self = this;
+    list.forEach(function (k) { sum += self.moduleStars(mods, k, hist); });
+    return sum;
+  },
+
+  /* ── 單一關卡「通關了沒／幾顆星」（含 history 救援，與 moduleStars 對齊）── */
+  unitCleared: function (mods, key, unitId, history) {
+    if (key === 'scratch') {
+      var m = (mods || {}).scratch || {};
+      if (!this.GATE.needsUpload(unitId)) return !!(m.play || {})[unitId];
+      return (Number((m.unitStars || {})[unitId]) || 0) >= this.GATE.PASS_STARS;
+    }
+    return this.unitStar(mods, key, unitId, history) > 0;
+  },
+  unitStar: function (mods, key, unitId, history) {
+    var m = (mods || {})[key] || {};
+    if (key === 'ethics') {
+      var u = (m.units || {})[unitId];
+      return Math.min(3, Number(u && u.star) || 0);
+    }
+    if (key === 'thinking') {
+      var hit = (Array.isArray(history) ? history : []).some(function (h) {
+        return h && h.module === 'thinking' && String(h.challenge != null ? h.challenge : h.unit) === String(unitId);
+      }) || (!Array.isArray(m.units) && (Number(((m.units || {})[unitId] || {}).star) || 0) > 0);
+      return hit ? this.thinkingStars(1) : 0;
+    }
+    if (key === 'flowchart') {
+      var done = (Array.isArray(m.units) ? m.units : []).map(String).indexOf(String(unitId)) >= 0;
+      var fb = (m.imgUnits || {})[unitId] ? (this.BONUS.img || 1) : 0;
+      return done ? this.FLOWCHART_PER_UNIT + fb : 0;
+    }
+    if (key === 'scratch') {
+      var st = Number((m.unitStars || {})[unitId]) || 0;
+      var vb = (this.BONUS.vid && (m.vidUnits || {})[unitId]) ? this.BONUS.vid : 0;
+      return st + (st > 0 ? vb : 0);
+    }
+    if (key === 'concept') {
+      return this.quizStars((mods.scratch || {}).quiz, String(unitId));
+    }
+    return 0;
+  },
+
+  /* ===================================================================
      一關算「通關」了沒（程式設計十關全部開放，這只用在顯示與晨星勇者的開放條件）
        流程圖排對；有接 Apps Script 評分（GRADER_URL）的話再加上作品 ≥ 2⭐。
      =================================================================== */

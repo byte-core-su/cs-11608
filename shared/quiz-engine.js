@@ -30,20 +30,60 @@
   var HINTS = window.QUIZ_HINTS || {};
   try { delete window.QUIZ_HINTS; } catch (e) { window.QUIZ_HINTS = undefined; }
   function hintFor(item) {
-    var h = item && Object.prototype.hasOwnProperty.call(HINTS, item.q) ? HINTS[item.q] : '';
+    /* 段落題庫的題目自己帶著提示 h（整章挑戰改用新題庫，答錯只給「想一想」） */
+    var h = item && typeof item.h === 'string' ? item.h
+          : (item && Object.prototype.hasOwnProperty.call(HINTS, item.q) ? HINTS[item.q] : '');
     return typeof h === 'string' ? h.trim() : '';
+  }
+
+  /* ── 段落閱讀模式（老師 2026-11-06）─────────────────────────
+     ★ content/*.read.js 提供 window.QUIZ_READ = { per, sections: { 小節id: { src, paras: [
+         { title, text: [課本原文段落…], qs: [ { q, options, a, x, h } ] } ] } } }
+     ★ 流程：讀一段 → 考這一段 5 題（答對進下一題、答錯換同段另一題，累積答對 5 題過這段）→ 讀下一段 … 全部段落走完 ＝ 通關。
+     ★ 原來的作答時失焦原則與其他防弊規則全部保留（遮罩、離開就換題、攔複製、每題 60 秒倒數、容錯 20 題警示單）。
+     ⚠️ 上線日期：config.js 的 READ_MODE_FROM（'2026-11-25'）。之前一律走舊的連對 10 題；
+        網址加 ?preview=read 可以先預覽。 */
+  var READ = window.QUIZ_READ || null;
+  try { delete window.QUIZ_READ; } catch (e) { window.QUIZ_READ = undefined; }
+  var READ_PER = (READ && READ.per) || 5;
+  function readPreview() {
+    try { return new URLSearchParams(location.search).get('preview') === 'read'; } catch (e) { return false; }
+  }
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  /** 新題庫是否已上線（上線日到了，或預覽網址） */
+  function readLive() {
+    if (readPreview()) return true;
+    var from = (window.CONFIG && window.CONFIG.READ_MODE_FROM) || '';
+    return !!from && todayKey() >= from;
+  }
+  /** 這一節要不要用段落閱讀模式 */
+  function readOn(id) {
+    var sec = READ && READ.sections && READ.sections[id];
+    if (!sec || !sec.paras || !sec.paras.length) return false;
+    return readLive();
+  }
+  function readQuestions(id) {
+    var sec = READ && READ.sections && READ.sections[id];
+    return sec ? sec.paras.reduce(function (a, p) { return a.concat(p.qs || []); }, []) : [];
   }
 
   // ── 預設值：內容資料沒寫的就用這些 ────────────────────────
   var TARGET    = C.target   || 10;   // 目標連對題數
   var MAX_WRONG = C.maxWrong || 20;   // 容錯上限，超過就跳學習警示單
   var KEEP      = C.keepRecords || 3; // 每個章節保留幾筆闖關紀錄
+  /* ⏱️ 每題作答時間限制（老師 2026-11-06）：
+     一題 60 秒；時間到還沒送出 ⇒ 算答錯；連續兩題時間到 ⇒ 這次挑戰作廢，回到起點重來。 */
+  var Q_LIMIT   = C.questionSeconds || 60;
   /* 🧠 記憶補給站：通關後的重複練習，每次十題、一樣採用失焦機制。內容檔寫了 practice 才有。 */
   /* 入口在章節選單最下面；從**已通關的章節**出題：答錯過的最多 5 題，其餘從答對過的任選。 */
   var PRACTICE  = C.practice ? { label: C.practice.label || '🧠 記憶補給站',
                                  size: C.practice.size || 10,
                                  weak: C.practice.weak || 5 } : null;
   var passedIds = [];   // 已通關（有星）的章節 id —— paintBadges 讀完進度後填
+  var unitStars = {};   // 各章節目前已拿到的最高星數（1～3）—— 拿滿 3 星就鎖定不再重考（去記憶補給站練）
 
   /* ===================================================================
      色票：不用字串拼接組 class，避免 Tailwind CDN 掃不到而失效
@@ -132,6 +172,22 @@
       ORDER.push(cg.id);
     }
   });
+
+  /* ★ 整章挑戰：舊模式、新題庫（老師 2026-11-06：
+       ‧ 新題庫上線（READ_MODE_FROM／?preview=read）後，整章挑戰的題目＝所屬小節段落題庫的聯集；
+         沒有小節的（總整理 review-all）＝這學期全部小節。
+       ‧ 作答仍是舊模式：連對 10 題、答錯全部歸零、只給「想一想」（題目的 h），不公布答案。 */
+  if (READ && READ.sections && readLive()) {
+    var allSecIds = [];
+    C.chapters.forEach(function (ch) { (ch.sections || []).forEach(function (s) { allSecIds.push(s.id); }); });
+    C.chapters.forEach(function (ch) {
+      if (!ch.challenge || !NODES[ch.challenge.id]) return;
+      var ids = (ch.sections || []).map(function (s) { return s.id; });
+      if (!ids.length) ids = allSecIds;
+      if (!ids.length || !ids.every(function (id) { var r = READ.sections[id]; return r && r.paras && r.paras.length; })) return;
+      NODES[ch.challenge.id].questions = ids.reduce(function (a, id) { return a.concat(readQuestions(id)); }, []);
+    });
+  }
 
   /* ===================================================================
      3. 版型：整個畫面由這裡產生，兩個學期共用同一份
@@ -260,6 +316,7 @@
     +             '<span id="score-counter" class="bg-orange-500 text-white text-xs px-3 py-1 rounded-full font-black shadow-sm">連對: 0 / ' + TARGET + '</span>'
     +             '<span id="target-counter" class="bg-amber-100 text-amber-800 text-xs px-3 py-1 rounded-full font-bold border border-amber-300">目標連對: ' + TARGET + '</span>'
     +             '<span id="wrong-counter" class="bg-red-100 text-red-600 text-xs px-3 py-1 rounded-full font-bold shadow-sm">容錯: ' + MAX_WRONG + '</span>'
+    +             '<span id="q-countdown" class="hidden bg-sky-100 text-sky-700 text-xs px-3 py-1 rounded-full font-black shadow-sm">⏳ 這題剩 ' + Q_LIMIT + ' 秒</span>'
     +           '</div>'
     +         '</div>'
     +         '<div class="flex items-center gap-2 shrink-0">'
@@ -366,8 +423,8 @@
     + '<div id="action-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-[80] backdrop-blur-sm">'
     +   '<div class="ac-float-window theme-orchard p-8 max-w-md w-full">'
     +     '<div class="ac-window-badge">🍎 豐收果園 · 採收成果籃</div>'
-    +     '<h3 class="text-2xl font-black mb-2 text-emerald-600">過關紀錄查詢</h3>'
-    +     '<p class="text-slate-600 font-bold mb-6 text-sm">你已經通過這個章節了，這是你的輝煌紀錄！</p>'
+    +     '<h3 id="hist-title" class="text-2xl font-black mb-2 text-emerald-600">過關紀錄查詢</h3>'
+    +     '<p id="hist-desc" class="text-slate-600 font-bold mb-6 text-sm">你已經通過這個章節了，這是你的輝煌紀錄！</p>'
     +     '<div id="history-list" class="space-y-3 mb-8 max-h-[40vh] overflow-y-auto pr-2"></div>'
     +     '<div class="flex space-x-3">'
     +       '<button id="hist-close" class="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-black hover:bg-slate-300 transition shadow-sm">返回目錄</button>'
@@ -394,10 +451,18 @@
   var runStat = {};
   /* 'quiz'＝正式挑戰（計分、回報）；'practice'＝記憶補給站（不計分、不回報、不進題目統計） */
   var mode = 'quiz', prac = null;
+  /* 段落閱讀模式這一次挑戰的狀態（null ＝ 舊的連對模式）：
+     { id, sec, p: 第幾段, got: 這段答對幾題, pool: 這段還沒出的題, started, reread } */
+  var rd = null;
+  function curPara() { return rd.sec.paras[rd.p]; }
+  function paraHTML(p) {
+    return (p.text || []).map(function (t) { return '<p>' + t + '</p>'; }).join('');
+  }
   var timer = null, seconds = 0;
   // 闖關紀錄直接讀 progress 文件的 history
   var recent = [];           // 目前章節最近幾次的紀錄，由新到舊
   var identified = false;
+  var locked = false;        // 目前點開的章節是否已滿 3 星（鎖定不再重考）
 
   var $ = function (id) { return document.getElementById(id); };
   var show = function (id) { $(id).classList.remove('hidden'); };
@@ -479,14 +544,20 @@
         tag: id === 'review-all' ? '傳說黃金果樹' : (id.indexOf('all') >= 0 ? '整章豐收驗收' : '果園章節果樹'),
         title: n.title,
         shortTitle: lay.shortTitle || n.title,
-        desc: star > 0 ? ('已通關 ' + '★'.repeat(star) + '（最高 ' + (u.score || 100) + '%）・按 Space 查看紀錄或再戰') : '走近果樹按 Space 先讀重點，再連對 ' + TARGET + ' 題過關！',
+        desc: star >= 3
+          ? ('已拿滿 ⭐⭐⭐（最高 ' + (u.score || 100) + '%）・按 Space 檢視紀錄（複習請到記憶補給溫室）')
+          : (star > 0 ? ('已通關 ' + '★'.repeat(star) + '（最高 ' + (u.score || 100) + '%）・按 Space 查看紀錄或再戰') : '走近果樹按 Space 先讀重點，再連對 ' + TARGET + ' 題過關！'),
         pass: star > 0,
         starsText: star > 0 ? '★'.repeat(star) : '',
-        statusLabel: star > 0 ? '已通關' : '待挑戰',
+        statusLabel: star >= 3 ? '已滿星' : (star > 0 ? '已通關' : '待挑戰'),
         flagText: isNext ? '👉 推薦挑戰' : '',
         flagKind: isNext ? 'next' : '',
         locked: false,
-        actions: [{ label: star > 0 ? '查看紀錄 / 再挑戰 →' : '閱讀重點並挑戰 →', primary: true, onClick: function () { openChapter(id); } }]
+        actions: [{
+          label: star >= 3 ? '⭐⭐⭐ 已滿星（查看紀錄）→' : (star > 0 ? '查看紀錄 / 再挑戰 →' : '閱讀重點並挑戰 →'),
+          primary: true,
+          onClick: function () { openChapter(id); }
+        }]
       };
     });
 
@@ -528,7 +599,7 @@
         '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">' +
           '<div class="bg-white rounded-2xl border-2 border-amber-200 p-3.5 shadow-sm">' +
             '<div class="text-sm font-black text-amber-900 mb-1">🍎 章節果樹</div>' +
-            '<p class="text-xs text-stone-600 font-bold leading-relaxed">走近果樹按 <span class="ac-key">Space</span> 先讀重點筆記，再連對 <b>' + TARGET + ' 題</b>（容錯 ' + MAX_WRONG + ' 題）即可過關拿星！</p>' +
+            '<p class="text-xs text-stone-600 font-bold leading-relaxed">走近果樹按 <span class="ac-key">Space</span> 先讀重點筆記，每題限時 <b>' + Q_LIMIT + ' 秒</b>，過關即可拿星（拿滿 ⭐⭐⭐ 後鎖定，複習請到溫室）！</p>' +
           '</div>' +
           '<div class="bg-white rounded-2xl border-2 border-amber-200 p-3.5 shadow-sm">' +
             '<div class="text-sm font-black text-amber-900 mb-1">🏡 穀倉＆風車果坊</div>' +
@@ -606,18 +677,47 @@
     setTimeout(paintBadges, 300);
   }
 
+  /** 這一章目前最多幾顆星：units 與 history 兩邊取高的（舊紀錄可能只在其中一邊） */
+  function bestStar(id) {
+    var s = Number(unitStars[id]) || Number((lastUnitsMap && lastUnitsMap[id] && lastUnitsMap[id].star)) || 0;
+    recent.forEach(function (h) {
+      var hs = Number(h.star) || (window.GRADING && h.score != null ? window.GRADING.ethicsStar(h.score) : 0);
+      if (hs > s) s = hs;
+    });
+    return s;
+  }
+  /** 依是否已滿 3 星切換闖關紀錄視窗的文字與按鈕（老師 2026-11-06：已拿 3 星就鎖定，要複習去記憶補給站） */
+  function paintLock(full) {
+    locked = !!full;
+    $('hist-title').textContent = full ? '⭐⭐⭐ 本章已拿滿三星！' : '過關紀錄查詢';
+    $('hist-desc').innerHTML = full
+      ? '這個章節已經拿滿 <b>3 顆星</b>，不再重複計分挑戰。<br>'
+        + (PRACTICE ? '想複習題目，請到島上的「<b>🌱 記憶補給溫室</b>」（或章節清單底下的記憶補給站）練習！' : '你可以檢視下方的通關證書。')
+      : '你已經通過這個章節了（還不到 3 顆星，可以再次挑戰衝滿星）：';
+    $('hist-again').classList.toggle('hidden', !!full);
+    $('hist-close').textContent = (full && PRACTICE) ? '返回（去記憶補給溫室）' : '返回目錄';
+  }
+
   function openChapter(id) {
     currentId = id;
+    recent = [];
 
     // 尚未通關的章節或沒接上進度模組時，0 延遲直接開啟重點閱讀與測驗視窗，不擋學生
     var u = lastUnitsMap && lastUnitsMap[id];
-    var hasPass = u && Number(u.star) > 0;
+    var hasPass = (u && Number(u.star) > 0) || (Number(unitStars[id]) > 0);
     if (!hasPass || !window.REPORT) { proceedToStudy(id); return; }
 
     var done = false;
     var timerId = setTimeout(function () {
       if (done) return;
       done = true;
+      var full = bestStar(id) >= 3;
+      if (full) {
+        paintLock(true);
+        $('history-list').innerHTML = '<div class="text-center text-sm text-slate-500 font-bold py-4">（本章已達 3 星滿分）</div>';
+        $('action-modal').classList.remove('hidden'); $('action-modal').classList.add('flex');
+        return;
+      }
       proceedToStudy(id);
     }, 900);
 
@@ -626,7 +726,9 @@
       done = true;
       clearTimeout(timerId);
       recent = (list || []).slice(0, KEEP);
-      if (!recent.length) { proceedToStudy(id); return; }
+      var full = bestStar(id) >= 3;
+      if (!recent.length && !full) { proceedToStudy(id); return; }
+      paintLock(full);
 
       $('history-list').innerHTML = recent.map(function (h, i) {
         var d = new Date(h.at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
@@ -643,16 +745,46 @@
       done = true;
       clearTimeout(timerId);
       console.error('讀取闖關紀錄失敗', e);
+      if (bestStar(id) >= 3) {
+        paintLock(true);
+        $('history-list').innerHTML = '';
+        $('action-modal').classList.remove('hidden'); $('action-modal').classList.add('flex');
+        return;
+      }
       proceedToStudy(id);
     });
   }
 
   function proceedToStudy(id) {
+    if (bestStar(id || currentId) >= 3) return;    // 已滿 3 星：雙重保險，不進教材與測驗
+    if (readOn(id || currentId)) {
+      rd = { id: id || currentId, sec: READ.sections[id || currentId], p: 0, got: 0, pool: [], started: false, reread: false };
+      showReadPara();
+      return;
+    }
+    rd = null;
+    $('start-quiz-btn').textContent = '開始測驗挑戰 (Enter)';
     var n = NODES[id || currentId];
     $('study-title').textContent = n ? n.title : '建置中';
     $('study-content').innerHTML = n && n.notes ? n.notes : '內容尚未建置';
     // ★ 保留 chapter-screen（3D 果園島嶼）在背景持續運轉，直接彈出浮動視窗！
     show('study-screen');
+  }
+
+  /** 段落閱讀模式：顯示目前這一段課文（第一次、下一段、題目考完要重讀，都走這裡） */
+  function showReadPara() {
+    var n = NODES[rd.id], P = curPara(), N = rd.sec.paras.length;
+    $('study-title').textContent = (n ? n.title : '') + '｜第 ' + (rd.p + 1) + ' 段／共 ' + N + ' 段';
+    $('study-content').innerHTML =
+        (rd.reread ? '<div class="mb-4 p-4 rounded-xl bg-rose-50 border-2 border-rose-200 text-rose-700 font-bold text-base">'
+                     + '這一段的題目都考過了，先把課文再讀一次，再換一組題目。</div>' : '')
+      + (P.title ? '<h4>' + P.title + '</h4>' : '')
+      + paraHTML(P)
+      + (rd.sec.src ? '<p class="text-xs text-slate-400 mt-4">— ' + rd.sec.src + '</p>' : '');
+    $('start-quiz-btn').textContent = '讀完了，開始作答（這段要答對 ' + READ_PER + ' 題）';
+    ['quiz-screen', 'warning-screen', 'result-screen'].forEach(function (x) { if ($(x)) hide(x); });
+    show('study-screen');
+    var box = $('study-content'); if (box) box.scrollTop = 0;
   }
 
   function closeActionModal() {
@@ -714,7 +846,9 @@
     if (explain) return;
     /* 記憶補給站不看 CONFIG，一律「離開就換題」。
        已經公布正解的那一題不必收（答案都看到了，收起來也沒意義）。 */
-    var on = swapOn() || mode === 'practice';
+    /* 段落閱讀模式也一律「離開就換題」（換同一段的另一題）：題目旁邊就有課文可以對照，
+       不換的話，離開去查到的答案回來照樣能用。 */
+    var on = swapOn() || mode === 'practice' || (rd && mode === 'quiz');
     if (!on || !isQuizOn() || !current || swapPending) return;
     if (mode === 'practice' && prac && prac.answered) return;
     swapPending = true;
@@ -735,6 +869,14 @@
       loadQuestion();
       return;
     }
+    if (rd) {                                        // 段落閱讀模式：換同一段的另一題
+      rd.pool.push(old);
+      if (rd.pool.length === 1) {
+        rd.pool = shuffle(curPara().qs.filter(function (q) { return q !== old; })).concat([old]);
+      }
+      loadQuestion();
+      return;
+    }
     pool.push(old);                                  // 放回最後面
     if (pool.length === 1) {                         // 題庫只剩它 ⇒ 先出別題
       pool = shuffle(NODES[currentId].questions.filter(function (q) { return q !== old; }))
@@ -745,14 +887,95 @@
   /** 回到頁面：收遮罩＋（有需要時）換題 */
   function comeBack() { veil(false); swapIfPulled(); }
 
+  /* 段落閱讀模式上方橘色徽章的文字（老師 11-06：是「答對 5 題過這一段」，不是「連對 5 題」） */
+  function readCounter() {
+    return '第 ' + (rd.p + 1) + ' / ' + rd.sec.paras.length + ' 段：答對 ' + rd.got + ' / ' + READ_PER;
+  }
+
+  /** 段落閱讀模式：讀完一段，開始考這一段 */
+  function readStart() {
+    var n = NODES[rd.id];
+    if (!rd.started) {               // 這一次挑戰的第一段：和舊模式的 startQuiz 一樣歸零
+      rd.started = true;
+      mode = 'quiz'; prac = null; practiceChrome(false);
+      streak = 0; score = 0; wrong = 0; seconds = 0; runStat = {};
+      behav = { t: [], copy: 0, away: 0, swap: 0, timeout: 0 };
+      swapPending = false; timeouts = 0;
+      endExplain();
+      startTimer();
+      $('current-chapter-title').textContent = n ? n.title : '';
+    }
+    if (!rd.reread) rd.got = 0;      // 重讀同一段：已經答對的題數留著
+    rd.reread = false;
+    rd.pool = shuffle(curPara().qs.slice());
+    $('target-counter').textContent = '共 ' + rd.sec.paras.length + ' 段';
+    paintMark();
+    hide('study-screen'); show('quiz-screen');
+    loadQuestion();
+  }
+  /** 下一題；這一段的題目出完了就回去重讀 */
+  function readNextQ() {
+    if (!rd.pool.length) { stopCountdown(); rd.reread = true; showReadPara(); return; }
+    loadQuestion();
+  }
+  /** 段落閱讀模式的判分後續（判對錯、逐題統計、作答秒數都已經在 checkAnswer 做完了） */
+  function readAfter(right, isTimeout) {
+    if (right) {
+      score++; rd.got++;
+      if (rd.got >= READ_PER) {
+        if (rd.p + 1 >= rd.sec.paras.length) { showResult(); return; }
+        stopCountdown();
+        rd.p++; rd.got = 0; rd.reread = false;
+        showReadPara();
+        return;
+      }
+      readNextQ();
+      return;
+    }
+    wrong++;
+    if (wrong >= MAX_WRONG) {        // 和舊模式同一條：累積答錯 20 題 → 學習警示單
+      saveStat();
+      clearInterval(timer); stopCountdown(); hide('quiz-screen'); show('warning-screen'); return;
+    }
+    showReadExplain(current, picked, isTimeout);
+  }
+  /** 答錯：公布正解＋理由（說明是用正解加密的，這裡才打開） */
+  function showReadExplain(item, mine, isTimeout) {
+    var ans = -1;
+    item.shuffled.forEach(function (o, i) { if (ans < 0 && isRight(item, i)) ans = i; });
+    var why = (ans >= 0 && window.ANSKEY && window.ANSKEY.open)
+      ? window.ANSKEY.open(item.q, item.shuffled[ans].text, item.x) : '';
+    endExplain(); stopCountdown();
+    explain = { hold: null, read: true };
+    $('score-counter').textContent = readCounter();
+    $('wrong-counter').textContent = '容錯: ' + (MAX_WRONG - wrong);
+    $('question-container').innerHTML =
+        '<div id="qz-explain" class="animate-pop">'
+      +   '<p class="text-lg font-black text-rose-600 mb-3">' + (isTimeout ? '⏰ 時間到，這題算答錯（連續兩題沒作答會從頭開始）' : '❌ 答錯了，看看為什麼') + '</p>'
+      +   '<h3 class="text-lg md:text-xl font-black mb-4 text-slate-800 leading-relaxed">' + item.q + '</h3>'
+      +   '<div class="space-y-2 mb-4">' + item.shuffled.map(function (o, i) {
+            var c = i === ans ? 'bg-emerald-50 border-emerald-500 text-emerald-800'
+                  : (i === mine ? 'bg-rose-50 border-rose-400 text-rose-700 line-through' : 'border-slate-200 text-slate-500');
+            return '<div class="p-3 border-2 rounded-xl font-bold ' + c + '">' + (i === ans ? '✅ ' : '') + o.text + '</div>';
+          }).join('') + '</div>'
+      +   '<div class="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">'
+      +     '<div class="text-amber-700 font-black mb-2">💡 為什麼</div>'
+      +     '<p id="qz-ex-hint" class="text-lg font-bold text-slate-700 leading-relaxed">' + (why || '（說明讀不到，請回頭看課文）') + '</p>'
+      +   '</div>'
+      +   '<p id="qz-ex-time" class="mt-4 text-sm font-bold text-slate-500"></p>'
+      + '</div>';
+    startExplainHold();
+  }
+
   function startQuiz() {
+    if (rd) { readStart(); return; }
     var n = NODES[currentId];
     if (!n || !n.questions.length) { showModal('題庫建置中', '本小節題庫尚未建置完成，敬請期待！'); return; }
     pool = shuffle(n.questions.slice());
     mode = 'quiz'; prac = null; practiceChrome(false);
     streak = 0; score = 0; wrong = 0; seconds = 0; runStat = {};
-    behav = { t: [], copy: 0, away: 0, swap: 0 };
-    swapPending = false;
+    behav = { t: [], copy: 0, away: 0, swap: 0, timeout: 0 };
+    swapPending = false; timeouts = 0;
     endExplain();                // 上一輪停在解釋畫面就離開的話，計時器要收掉
     paintMark();                 // 浮水印：班級座號＋時間
     hide('study-screen'); show('quiz-screen');
@@ -882,9 +1105,71 @@
     $('timer').textContent = String(Math.floor(seconds/60)).padStart(2,'0') + ':' + String(seconds%60).padStart(2,'0');
   }
 
+  /* ── 每題倒數（60 秒，連續兩題未作答作廢）────────────────── */
+  var qLeft = 0, qTick = null, timeouts = 0;   // timeouts：連續幾題時間到
+  function paintCountdown() {
+    var el = $('q-countdown'); if (!el) return;
+    el.textContent = '⏳ 這題剩 ' + qLeft + ' 秒';
+    var hot = qLeft <= 10;
+    el.classList.toggle('bg-sky-100', !hot); el.classList.toggle('text-sky-700', !hot);
+    el.classList.toggle('bg-rose-500', hot); el.classList.toggle('text-white', hot);
+  }
+  function stopCountdown() {
+    clearInterval(qTick); qTick = null;
+    var el = $('q-countdown'); if (el) el.classList.add('hidden');
+  }
+  function startCountdown() {
+    stopCountdown();
+    if (mode !== 'quiz') return;                 // 記憶補給站不限時
+    qLeft = Q_LIMIT;
+    var el = $('q-countdown'); if (el) el.classList.remove('hidden');
+    paintCountdown();
+    qTick = setInterval(function () {
+      if (swapPending) return;                   // 題目被收走（離開就換題）時不算
+      qLeft--; paintCountdown();
+      if (qLeft <= 0) onTimeout();
+    }, 1000);
+  }
+  /** 時間到：算答錯；連續第二次 ⇒ 這次挑戰作廢 */
+  function onTimeout() {
+    stopCountdown();
+    if (mode !== 'quiz' || !current || explain) return;
+    timeouts++;
+    behav.timeout = (behav.timeout || 0) + 1;
+    behav.t.push(Q_LIMIT);
+    if (timeouts >= 2) { abortChallenge(); return; }
+    picked = -1;
+    if (rd) { readAfter(false, true); return; }
+    wrong++; streak = 0;
+    pool = shuffle(NODES[currentId].questions.slice());
+    if (wrong >= MAX_WRONG) {
+      saveStat();
+      clearInterval(timer); stopCountdown(); hide('quiz-screen'); show('warning-screen'); return;
+    }
+    var hint = hintFor(current);
+    if (hint) { showExplain(current, '', hint, true); return; }
+    showModal('⏰ 時間到', '這題超過 ' + Q_LIMIT + ' 秒沒有作答，算答錯。連續兩題沒作答，這次挑戰就要從頭開始！');
+    loadQuestion();
+  }
+  /** 連續兩題時間到：這次挑戰作廢，回到起點（和學習警示單一樣不記成績） */
+  function abortChallenge() {
+    saveStat();                                  // 已經真的作答過的題目照樣進逐題統計
+    clearInterval(timer); stopCountdown(); endExplain(); veil(false);
+    swapPending = false; timeouts = 0;
+    hide('quiz-screen');
+    if (rd) { rd.p = 0; rd.got = 0; rd.started = false; rd.reread = false; showReadPara(); }
+    else show('study-screen');
+    showModal('⏰ 連續兩題沒有作答', '連續兩題超過 ' + Q_LIMIT + ' 秒沒有作答，這次挑戰作廢，請從頭開始。準備好再按開始！');
+  }
+
   function loadQuestion() {
     picked = -1;
-    if (mode === 'practice') {
+    if (rd && mode === 'quiz') {     // 段落閱讀模式：從這一段的題目出
+      $('score-counter').textContent = readCounter();
+      $('wrong-counter').textContent = '容錯: ' + (MAX_WRONG - wrong);
+      if (!rd.pool.length) rd.pool = shuffle(curPara().qs.slice());
+      current = rd.pool.shift();
+    } else if (mode === 'practice') {
       $('score-counter').textContent = '第 ' + (prac.done + 1) + ' / ' + prac.total + ' 題';
       $('wrong-counter').textContent = '答對: ' + prac.right;
       $('next-btn').textContent = '送出答案';
@@ -892,10 +1177,12 @@
       $('score-counter').textContent = '連對: ' + streak + ' / ' + TARGET;
       $('wrong-counter').textContent = '容錯: ' + (MAX_WRONG - wrong);
     }
-    if (!pool.length) pool = (mode === 'practice')
-      ? (prac.spare.length ? [prac.spare.shift()] : [current])
-      : shuffle(NODES[currentId].questions.slice());
-    current = pool.shift();
+    if (!(rd && mode === 'quiz')) {
+      if (!pool.length) pool = (mode === 'practice')
+        ? (prac.spare.length ? [prac.spare.shift()] : [current])
+        : shuffle(NODES[currentId].questions.slice());
+      current = pool.shift();
+    }
 
     var opts = current.options.map(function (t, i) { return { text:t, orig:i }; });
     current.shuffled = shuffle(opts);
@@ -905,8 +1192,16 @@
       html += '<div data-opt="' + i + '" id="opt-' + i + '" class="qz-opt p-4 border-2 border-slate-200 rounded-xl cursor-pointer '
            +  MAIN.optHover + ' transition text-lg font-bold text-slate-700 select-none">' + o.text + '</div>';
     });
+    /* 段落閱讀模式：可以回頭看這一段課文（有課本對照） */
+    if (rd && mode === 'quiz') {
+      html += '</div><details class="qz-peek mt-6 rounded-xl border-2 border-amber-200 bg-amber-50/60">'
+           +  '<summary class="cursor-pointer select-none px-4 py-3 font-bold text-amber-800">📖 回頭看課文（第 ' + (rd.p + 1) + ' 段）</summary>'
+           +  '<div class="study-note-box px-5 pb-4 text-slate-700 leading-relaxed space-y-3 text-base">' + paraHTML(curPara()) + '</div>'
+           +  '</details><div>';
+    }
     $('question-container').innerHTML = html + '</div>';
     qStart = Date.now();          // ★ 這一題從現在開始計時
+    startCountdown();             // 每題倒數（只在正式挑戰）
     paintMark();                  // 時間會變，每題重畫一次
   }
 
@@ -939,7 +1234,7 @@
      記憶補給站也一樣，只是正解照常公布、提示附在下面。
      沒寫提示的題目直接下一題；沒載到 readhold.js 就不等。 */
   var EXPLAIN_SEC = 10, EXPLAIN_SKIP = 2;
-  var explain = null;      // { hold, practice }
+  var explain = null;      // { hold, practice, read }
   function paintExplain(v) {
     var b = $('next-btn'), t = $('qz-ex-time');
     if (!explain) return;
@@ -960,11 +1255,12 @@
       /* 補給站沿用原本的「下一題／看結果」字樣（正解已經公布，這裡沒有「略過」的意思）。 */
       var go = pr ? (last ? '看結果' : '下一題 →') : (left <= 0 ? '繼續作答 →' : '略過 →');
       var wait = pr ? (last ? '看結果' : '下一題') : '略過';
+      if (explain.read) { go = '換一題 →'; wait = '換一題'; }   // 段落閱讀模式：換同一段的另一題
       b.textContent = canSkip ? go : wait + '（' + (left - (EXPLAIN_SEC - EXPLAIN_SKIP)) + '）';
     }
   }
-  function showExplain(item, mineText, hint) {
-    endExplain();
+  function showExplain(item, mineText, hint, isTimeout) {
+    endExplain(); stopCountdown();
     explain = { hold: null };
     /* 計分要當下就更新（平常是 loadQuestion 才更新，而解釋畫面還沒載下一題）—— 
        不然學生會看到「連對 7」停在那裡，以為答錯不算。 */
@@ -972,9 +1268,9 @@
     $('wrong-counter').textContent = '容錯: ' + (MAX_WRONG - wrong);
     $('question-container').innerHTML =
         '<div id="qz-explain" class="animate-pop">'
-      +   '<p class="text-lg font-black text-rose-600 mb-3">❌ 這題答錯了，先別急著下一題</p>'
+      +   '<p class="text-lg font-black text-rose-600 mb-3">' + (isTimeout ? '⏰ 時間到，這題算答錯（連續兩題沒作答會從頭開始）' : '❌ 這題答錯了，先別急著下一題') + '</p>'
       +   '<h3 class="text-lg md:text-xl font-black mb-3 text-slate-800 leading-relaxed">' + item.q + '</h3>'
-      +   '<p class="text-sm text-slate-500 mb-4">你選的是：<span class="font-bold text-rose-600 line-through">' + mineText + '</span></p>'
+      +   (isTimeout ? '' : '<p class="text-sm text-slate-500 mb-4">你選的是：<span class="font-bold text-rose-600 line-through">' + mineText + '</span></p>')
       +   '<div class="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">'
       +     '<div class="text-amber-700 font-black mb-2">💡 想一想</div>'
       +     '<p id="qz-ex-hint" class="text-lg font-bold text-slate-700 leading-relaxed">' + hint + '</p>'
@@ -1007,8 +1303,10 @@
     var left = explain && explain.hold ? explain.hold.left() : 0;
     if (EXPLAIN_SEC - left < EXPLAIN_SKIP && left > 0) return;
     var pr = explain && explain.practice;
+    var rdx = explain && explain.read;
     endExplain();
     if (pr) { practiceStep(); return; }    // 補給站：正解已公布 ⇒ 下一題／看結果
+    if (rdx) { readNextQ(); return; }      // 段落閱讀模式：換同一段的另一題
     loadQuestion();
   }
 
@@ -1016,18 +1314,15 @@
     if (explain) { explainNext(); return; }
     if (mode === 'practice') { practiceStep(); return; }
     if (picked === -1) { showModal('尚未作答', '請先選擇一個選項再送出！'); return; }
+    stopCountdown(); timeouts = 0;    // 有送出答案 ⇒ 「連續時間到」歸零
     /* 這一題想了幾秒（上限 600 —— 中間去上廁所不必記成兩小時） */
     if (qStart) behav.t.push(Math.min(600, Math.round((Date.now() - qStart) / 1000)));
     var right = isRight(current, picked);
 
-    /* ★ 逐題記一筆 ——「這一節下次該重講什麼」只有這個答得出來。
-       ⚠️ 只累加在記憶體裡，**不是每答一題就寫 Firestore**。
-          一次挑戰要連對 10 題、容錯 20 題，實際上可能作答幾十次；
-          每次都寫的話，一堂課三十個人就是上千次寫入，
-          而寫入額度是整個專案共用的。挑戰結束才寫一次。
-       ⚠️ 沒載到 qstat.js 就跳過，不要讓它擋住答題。 */
-    /* 一定要 window. 前綴：這一支的外殼沒有 global 參數 */
+    /* ★ 逐題記一筆 ——「這一節下次該重講什麼」只有這個答得出來。 */
     if (window.QSTAT) window.QSTAT.bump(runStat, current.q, right);
+
+    if (rd && mode === 'quiz') { readAfter(right); return; }
 
     if (right) {
       score++; streak++;
@@ -1038,7 +1333,7 @@
       if (wrong >= MAX_WRONG) {
         /* 累積答錯太多 → 學習警示：這一條路也要存統計 —— 答錯 20 題的人正是最需要知道錯在哪的 */
         saveStat();
-        clearInterval(timer); hide('quiz-screen'); show('warning-screen'); return;
+        clearInterval(timer); stopCountdown(); hide('quiz-screen'); show('warning-screen'); return;
       }
       var hint = hintFor(current);
       if (hint) { showExplain(current, current.shuffled[picked].text, hint); return; }
@@ -1081,7 +1376,10 @@
   /** 已通關章節的題目（去重） */
   function passedQuestions() {
     var out = [];
-    passedIds.forEach(function (id) { if (NODES[id]) out = out.concat(NODES[id].questions); });
+    passedIds.forEach(function (id) {
+      if (readOn(id)) out = out.concat(readQuestions(id));          // 段落閱讀模式上線後，補給站出新題庫
+      else if (NODES[id]) out = out.concat(NODES[id].questions);
+    });
     return out;
   }
 
@@ -1099,7 +1397,7 @@
 
   /** 公布正解的時候按鈕外觀不一樣；正式挑戰要換回來 */
   function practiceChrome(on) {
-    ['target-counter', 'timer', 'quiz-back-study-btn'].forEach(function (id) {
+    ['target-counter', 'timer', 'q-countdown', 'quiz-back-study-btn'].forEach(function (id) {
       var el = $(id); if (el) el.classList.toggle('hidden', !!on);
     });
     var b = $('next-btn'); if (b) b.textContent = '送出答案';
@@ -1108,23 +1406,27 @@
   /** 中斷目前測驗，返回章節重點或返回 3D 島嶼章節選單 */
   function quitQuiz(toStudy) {
     clearInterval(timer);
+    stopCountdown();
     endExplain();
     veil(false);
     swapPending = false;
+    timeouts = 0;
     if (mode === 'quiz') saveStat();
     var wasQuiz = (mode === 'quiz');
     practiceChrome(false);
     hide('quiz-screen');
     if (toStudy && wasQuiz) {
-      show('study-screen');
+      if (rd) showReadPara();
+      else show('study-screen');
     } else {
+      rd = null;
       show('chapter-screen');
       mountQuizIsland(lastUnitsMap);
     }
   }
 
   function startPractice() {
-    endExplain();
+    endExplain(); stopCountdown();
     var qs = passedQuestions();
     if (!PRACTICE || !qs.length) return;
     var go = function (mine) {
@@ -1133,7 +1435,7 @@
       prac = { total: p.pick.length, done: 0, right: 0, wrongs: [], spare: p.spare,
                weak: p.weak, answered: false };
       pool = p.pick;
-      behav = { t: [], copy: 0, away: 0, swap: 0 };
+      behav = { t: [], copy: 0, away: 0, swap: 0, timeout: 0 };
       swapPending = false;
       practiceChrome(true);
       ['study-screen', 'result-screen', 'warning-screen', 'practice-screen']
@@ -1181,7 +1483,9 @@
     $('wrong-counter').textContent = '答對: ' + prac.right;
     $('next-btn').textContent = (prac.done + 1 >= prac.total) ? '看結果' : '下一題';
     /* 補給站：答錯時把「想一想」也附上（和章節測驗一樣 10 秒閱讀、離開就暫停、2 秒後才能按下一題） */
-    var ph = right ? '' : hintFor(current);
+    var ph = right ? '' : ((current.x && ans >= 0 && window.ANSKEY && window.ANSKEY.open)
+      ? window.ANSKEY.open(current.q, current.shuffled[ans].text, current.x)      // 段落題庫：答錯說明
+      : hintFor(current));
     if (ph) {
       var hp = document.createElement('p');
       hp.id = 'prac-hint';
@@ -1230,7 +1534,7 @@
   }
 
   function showResult() {
-    clearInterval(timer);
+    clearInterval(timer); stopCountdown();
     hide('quiz-screen'); show('result-screen');
 
     $('res-class').textContent = user.cls; $('res-no').textContent = user.no; $('res-name').textContent = user.name;
@@ -1245,7 +1549,9 @@
     $('res-duration').textContent = dur;
     $('res-rate').textContent = rate + '%';
     $('res-correct').textContent = score; $('res-total').textContent = total;
-    $('pass-msg').textContent = praise(wrong === 0, rate);
+    $('pass-msg').textContent = rd
+      ? (wrong === 0 ? 'PERFECT! 全部 ' + rd.sec.paras.length + ' 段課文零失誤！' : 'GREAT! 讀完全部 ' + rd.sec.paras.length + ' 段課文，完成挑戰！')
+      : praise(wrong === 0, rate);
     $('cert-return-btn').textContent = '完成挑戰';
 
     saveStat();          // ★ 逐題統計：一次挑戰只寫這一次
@@ -1258,13 +1564,16 @@
       var extra = { duration: dur, correct: score, total: total,
                     pace: pace(), copy: behav.copy, away: behav.away };
       /* 不可以寫成 swap: undefined（Firestore 遇到 undefined 會整筆拒收）：只有開了換題才加這一格 */
-      if (swapOn()) extra.swap = behav.swap;
+      if (swapOn() || rd) extra.swap = behav.swap;
+      extra.timeout = behav.timeout || 0;         // 每題倒數：時間到幾題
+      if (rd) { extra.mode = 'read'; extra.paras = rd.sec.paras.length; }   // 段落閱讀模式的紀錄
       window.REPORT.unit(C.moduleId, currentId, {
         star: star, score: rate,
         extra: extra
       }).then(paintBadges)
         .catch(function (e) { console.error('回報進度失敗', e); });
     }
+    rd = null;
   }
 
   /* ── 通關標記 ────────────────────────────────────────── */
@@ -1273,6 +1582,8 @@
     return window.REPORT.get(C.moduleId).then(function (mod) {
       var units = (mod && mod.units) || {}, done = 0;
       passedIds = ORDER.filter(function (id) { return units[id] && (units[id].star || 0) > 0; });
+      unitStars = {};
+      Object.keys(units).forEach(function (id) { unitStars[id] = Number(units[id] && units[id].star) || 0; });
       paintPractice();
       mountQuizIsland(units);
       document.querySelectorAll('.qz-open').forEach(function (btn) {
@@ -1291,7 +1602,12 @@
       });
       var info = $('chapter-progress');
       if (info) {
+        /* ★ 和闖關基地同一套（GRADING.moduleStars：有各章紀錄就以各章為準）。 */
         var st = (mod && mod.stars) || 0;
+        if (window.GRADING && window.GRADING.moduleStars && mod) {
+          var one = {}; one[C.moduleId] = mod;
+          if ((window.GRADING.STAR_MODULES || []).indexOf(C.moduleId) >= 0) st = window.GRADING.moduleStars(one, C.moduleId);
+        }
         /* ⚠️ 有星星卻一個章節都對不上 —— 連 history 都救不回來的舊資料。
            這時候**不可以**說「還沒有通關的章節」：那和小卡上的星數互相打臉，
            學生會以為成績不見了。照實說：星數還在，明細找不到。 */
@@ -1319,9 +1635,14 @@
     });
     $('start-quiz-btn').addEventListener('click', startQuiz);
     $('next-btn').addEventListener('click', checkAnswer);
-    $('back-chapters-btn').addEventListener('click', function () { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
-    if ($('study-top-close-btn')) $('study-top-close-btn').addEventListener('click', function () { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
-    if ($('study-screen')) $('study-screen').addEventListener('click', function (e) { if (e.target === $('study-screen')) { hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); } });
+    var closeStudyToIsland = function () {
+      if (rd) { clearInterval(timer); endExplain(); rd = null; }   // 段落挑戰中途離開：這一次作廢
+      stopCountdown();
+      hide('study-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap);
+    };
+    $('back-chapters-btn').addEventListener('click', closeStudyToIsland);
+    if ($('study-top-close-btn')) $('study-top-close-btn').addEventListener('click', closeStudyToIsland);
+    if ($('study-screen')) $('study-screen').addEventListener('click', function (e) { if (e.target === $('study-screen')) closeStudyToIsland(); });
     if ($('result-screen')) $('result-screen').addEventListener('click', function (e) { if (e.target === $('result-screen')) { hide('result-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); } });
     if ($('practice-screen')) $('practice-screen').addEventListener('click', function (e) { if (e.target === $('practice-screen')) { hide('practice-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); } });
     if ($('action-modal')) $('action-modal').addEventListener('click', function (e) { if (e.target === $('action-modal')) closeActionModal(); });
@@ -1329,13 +1650,28 @@
     if ($('quiz-quit-btn')) $('quiz-quit-btn').addEventListener('click', function () { quitQuiz(false); });
     if ($('quiz-top-close-btn')) $('quiz-top-close-btn').addEventListener('click', function () { quitQuiz(false); });
     if ($('quiz-back-study-btn')) $('quiz-back-study-btn').addEventListener('click', function () { quitQuiz(true); });
-    $('warn-back-btn').addEventListener('click', function () { hide('warning-screen'); show('study-screen'); });
+    $('warn-back-btn').addEventListener('click', function () {
+      hide('warning-screen');
+      if (rd) { rd.p = 0; rd.got = 0; rd.started = false; rd.reread = false; showReadPara(); return; }   // 從第一段重讀
+      show('study-screen');
+    });
     $('cert-return-btn').addEventListener('click', function () { hide('result-screen'); show('chapter-screen'); mountQuizIsland(lastUnitsMap); });
     $('modal-ok').addEventListener('click', function () {
       $('modal').classList.remove('flex'); $('modal').classList.add('hidden');
     });
-    $('hist-close').addEventListener('click', closeActionModal);
-    $('hist-again').addEventListener('click', function () { proceedToStudy(); closeActionModal(); });
+    $('hist-close').addEventListener('click', function () {
+      closeActionModal();
+      var card = locked && $('qz-practice');
+      if (card) {
+        if (card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('ring-4', 'ring-amber-400');
+        setTimeout(function () { card.classList.remove('ring-4', 'ring-amber-400'); }, 2000);
+      }
+    });
+    $('hist-again').addEventListener('click', function () {
+      if (locked) return;                      // 已滿星：按鈕藏起來了，保險再擋一次
+      proceedToStudy(); closeActionModal();
+    });
     if (PRACTICE) {
       $('qz-practice-go').addEventListener('click', startPractice);
       $('prac-again').addEventListener('click', startPractice);
@@ -1361,7 +1697,7 @@
         if (isEsc) {
           e.preventDefault();
           closeActionModal();
-        } else if (isEnter && $('hist-again')) {
+        } else if (isEnter && !locked && $('hist-again')) {
           e.preventDefault();
           $('hist-again').click();
         }
@@ -1403,9 +1739,7 @@
       if ($('study-screen') && !$('study-screen').classList.contains('hidden')) {
         if (isEsc) {
           e.preventDefault();
-          hide('study-screen');
-          show('chapter-screen');
-          mountQuizIsland(lastUnitsMap);
+          closeStudyToIsland();
         } else if (isEnter && $('start-quiz-btn')) {
           e.preventDefault();
           $('start-quiz-btn').click();
@@ -1434,6 +1768,7 @@
         if (isEsc || isEnter) {
           e.preventDefault();
           hide('warning-screen');
+          if (rd) { rd.p = 0; rd.got = 0; rd.started = false; rd.reread = false; showReadPara(); return; }
           show('study-screen');
         }
         return;

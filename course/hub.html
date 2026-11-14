@@ -272,13 +272,13 @@
         const d = (s.exists() && s.data()) || {};
         /* ★ open_json：哪些模組還沒到開放日（見 shared/schedule.js）。
            和課表放在同一份文件，所以不多一次讀取、也不必改安全規則。 */
-        state.sched = { base: d.base||{}, off: d.off||{}, move: d.move||{},
+        state.sched = { base: d.base||{}, off: d.off||{}, move: d.move||{}, extra: d.extra||{},
                         open_json: d.open_json || '' };
       }catch(e){
         console.warn('讀不到課表，本週成績卡會把出席當成「沒有」', e);
         /* ⚠️ open_json 留空 ＝ 全部當成已開放。設定讀失敗就把教材鎖住，
            是拿學生的課去賭一個設定檔。 */
-        state.sched = { base:{}, off:{}, move:{}, open_json:'' };
+        state.sched = { base:{}, off:{}, move:{}, extra:{}, open_json:'' };
       }
       render();
     }
@@ -326,7 +326,13 @@
     }
 
     function cardData(m, mods){
-      if(!m.combines){ const d = mods[m.id] || { status:'todo' }; return Object.assign({ levelSum: Number(d.level)||0 }, d); }
+      const H = (typeof state!=='undefined' && state && state.data && state.data.history) || [];
+      if(!m.combines){
+        const d = mods[m.id] || { status:'todo' };
+        const out = Object.assign({ levelSum: Number(d.level)||0 }, d);
+        if(typeof GRADING!=='undefined' && GRADING.moduleStars && GRADING.STAR_MODULES && GRADING.STAR_MODULES.indexOf(m.id)>=0) out.stars = GRADING.moduleStars(mods, m.id, H);
+        return out;
+      }
       let stars=0, level=0, levelSum=0; const sts=[];
       m.combines.forEach(id=>{
         const dd=mods[id]||{};
@@ -346,7 +352,8 @@
           st = q.stars; lv = q.done;
           stc = q.done >= (window.CONFIG.UNITS || []).length ? 'pass' : (q.done ? 'in-progress' : 'todo');
         }
-        st += bonusOf(mods, id);          // ★ 老師給的加分星也要算進去
+        if(typeof GRADING!=='undefined' && GRADING.moduleStars) st = GRADING.moduleStars(mods, id, H);
+        else st += bonusOf(mods, id);     // ★ 老師給的加分星也要算進去
         stars+=st; levelSum+=lv; if(lv) level=Math.max(level,lv); sts.push(stc);
       });
       let status='todo';
@@ -494,7 +501,8 @@
                         : genderCode === '2' ? 'bg-rose-100 text-rose-600 border-rose-300'
                         : 'bg-slate-100 text-slate-500 border-slate-300';
       const avatarChar = (displayName || '學').charAt(0);
-      const nextModule = MODULES.find(m => (cardData(m,mods).status || 'todo') !== 'pass');
+      const isOpenNow = m => !(window.SCHEDULE && SCHEDULE.moduleOpen) || SCHEDULE.moduleOpen(state.sched, m.id);
+      const nextModule = MODULES.find(m => isOpenNow(m) && (cardData(m,mods).status || 'todo') !== 'pass');
       const allDone = !nextModule;
 
       /* 卡片尺寸依數量調整：張數少用大卡（不會顯得空盪），張數多用小卡（不用一直往下捲）。 */

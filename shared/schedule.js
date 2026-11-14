@@ -66,9 +66,14 @@
     });
 
     var cls = movedIn || (movedAway ? null : (base[slot] || null));
+    var extra = false;
+    if (!cls) {
+      var ex = ((sched.extra || {})[dateKey] || {})[slot];
+      if (ex) { cls = String(ex); extra = true; }
+    }
     return { cls: cls, off: (off[dateKey] || []).indexOf(slot) >= 0,
              slot: slot, dateKey: dateKey,
-             movedIn: !!movedIn, movedAway: movedAway };
+             movedIn: !!movedIn, movedAway: movedAway, extra: extra };
   }
 
   /**
@@ -140,7 +145,7 @@
           var info = cellInfo(sched, mon, wd, p);
           if (info.cls !== cls) continue;
           out.push({ date: info.dateKey, wd: wd, period: p, slot: info.slot,
-                     off: info.off, movedIn: info.movedIn });
+                     off: info.off, movedIn: info.movedIn, extra: info.extra });
         }
       }
     }

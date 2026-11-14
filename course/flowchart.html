@@ -947,9 +947,15 @@
       state.done[state.unit.id]=true;
       state.status='clear'; render();
       if(!already){
-        const count = Object.keys(state.done).length;
         const now = Date.now();
         try{
+          /* ★ 合計（level／stars）改成「資料庫裡已完成的關卡 ∪ 這一關」再算，避免跨電腦作答時匯總欄位記少。 */
+          try{
+            const snap = await getDoc(doc(db, COLLECTION, state.studentId));
+            const fm = (snap.exists() && snap.data().modules && snap.data().modules.flowchart) || {};
+            (Array.isArray(fm.units) ? fm.units : []).forEach(u=>{ state.done[u]=true; });
+          }catch(e){ console.warn('讀取已完成關卡失敗，先用這台電腦的紀錄', e); }
+          const count = Object.keys(state.done).length;
           await setDoc(doc(db, COLLECTION, state.studentId), {
             studentId: state.studentId,
             modules: { flowchart: { status: count>=UNITS.length?'pass':'in-progress', level: count, stars: window.GRADING.flowchartStars(count), source:'auto', units: arrayUnion(state.unit.id), updatedAt: now } },

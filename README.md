@@ -186,6 +186,11 @@ function TERMS()         { return ['11501', '11502']; }
 ⚠️ 老師的登入只留在那一個瀏覽器分頁——關掉就要重登。這是刻意的：學生也用同一個 Firebase 專案，
 老師的身分留在整個瀏覽器，下一個開學生頁的人會被當成老師。
 
+🎨 **教師端維持原本的平面設計，不套用學生端的 3D 島嶼風格**：`teacher.html`、`course/teacher.html`、
+`course/dashboard.html`、`shared/*.html` 一律用 Tailwind 白底＋slate／indigo 配色，**不要載入** `shared/island.js`、
+`shared/island.css`。學生端的島嶼改版（含 [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md) 的多人同島）只改學生頁，
+教師端只跟著改功能（學期切換、設定路徑、`term.js` 版本號等），不改外觀。
+
 ---
 
 ## 外部資源（移植前請看一下）
@@ -208,6 +213,7 @@ function TERMS()         { return ['11501', '11502']; }
 ├── teacher.html        教師後台的捷徑
 ├── config.js           ★ 全站設定（移植只改這支）
 ├── firestore.rules     ★ 安全規則（最上面三行要改，改完要發布）
+├── ADVANCED_FEATURES.md ★ 進階功能清單與實作藍圖（如：全班 30 人同島探險）
 ├── 11501/              上學期的課程設定與題庫
 │   ├── config.js       四門課、單元、謎題清單
 │   └── content/        ethics.js（資訊倫理題庫）、flowchart.js（程式設計單元）

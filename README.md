@@ -91,6 +91,10 @@ FIREBASE: { ... },                   // ① 第 5 步抄下來的那一段
 
 **只改這一支**。`11501/config.js`、`11502/config.js` 是各學期的課程內容（關卡、題庫在哪），平常不必動。
 
+> 🏝️ **島嶼畫面有兩種**：`ISLAND_ENGINE: '3d'`（立體，預設）或 `'2d'`（像素風，舊電腦、平板也順）。
+> 關卡、進度、按鍵都一樣。不確定選哪個，打開根目錄的 **`versions.html`** 並排比較；
+> 那一頁也能只替「某一台電腦」換成另一種（例如電腦教室比較舊的那幾台）。
+
 ### ③ 改 `firestore.rules` 最上面三行，然後發布
 
 ```
@@ -158,6 +162,7 @@ function TERMS()         { return ['11501', '11502']; }
 | 🐱 作品星 | **有接 Apps Script**：和你的參考解答逐塊比對（積木、位置、設定值），3⭐ 要和範例一致。**沒接**：`.sb3` 交到你指定的地方，作品星不計 |
 | 🧠 下學期概念星 | 概念檢測五題，在瀏覽器裡用關鍵字判定：講到 3 題 1⭐、4 題 2⭐、5 題全對 3⭐ |
 | 💡 5016B 開放式作答 | 瀏覽器裡用關鍵字判定 |
+| 🏝️ 島嶼畫面 | 3D（Three.js）和 2D 像素版（Canvas，`shared/island2d.js`）**共用同一套關卡、木牌、對話框與按鍵規則**，只換「畫島、走路、碰撞」那一層；位置都用百分比記，換畫面存檔位置照樣有效 |
 
 ---
 
@@ -202,6 +207,7 @@ function TERMS()         { return ['11501', '11502']; }
 | 程式設計教學影片、Scratch 範例專案 | 原作者的雲端硬碟／YouTube／Scratch | 同上 |
 | 資訊倫理、媒體與社會議題每章的教材 PDF | 原作者的雲端硬碟 | **請換成你自己的教材**——涉及課本的內容不在授權範圍 |
 | 運算思維的謎題（每學期 10 道） | 外部網站（`reurl.cc` 短網址） | 不必 |
+| 2D 像素版的圖塊、角色 | 網站內 `shared/pixel/`（Ninja Adventure Asset Pack，CC0） | 不必，來源見 `shared/pixel/CREDITS.md` |
 
 ---
 
@@ -210,6 +216,7 @@ function TERMS()         { return ['11501', '11502']; }
 ```
 ./
 ├── index.html          ★ 入口：選學期
+├── versions.html       島嶼畫面比較：3D／2D 並排、替這台電腦選一種
 ├── teacher.html        教師後台的捷徑
 ├── config.js           ★ 全站設定（移植只改這支）
 ├── firestore.rules     ★ 安全規則（最上面三行要改，改完要發布）
@@ -234,7 +241,9 @@ function TERMS()         { return ['11501', '11502']; }
 │   ├── whatislist.html music.html reference.html   上學期程式設計的前導教材
 │   └── scratch.html level.html warmup.html arduino.html   下學期
 └── shared/             共用程式（登入、計分、測驗引擎、實驗室引擎…）
-    ├── term.js         ★ 決定現在是哪一學期，載入那一學期的 config.js
+    ├── term.js         ★ 決定現在是哪一學期，載入那一學期的 config.js；也決定島嶼用 3D 還是 2D（TERMSEL.engine）
+    ├── island.js       ★ 島嶼（木牌、對話框、按鍵、帶路、造型）＋ 3D 畫面
+    ├── island2d.js     2D 像素版畫面（島嶼與登機大廳），素材在 pixel/
     ├── auth.js         ★ 登入（學號＋驗證碼）
     ├── workup.js       上傳 .sb3 給 Apps Script 評分（兩學期的程式設計頁共用）
     ├── codes.html      ★ 學生帳號：名冊匯入、驗證碼（後台分頁）
@@ -273,3 +282,5 @@ function TERMS()         { return ['11501', '11502']; }
 登入方式參考 [byte-core-su/cs-11507](https://github.com/byte-core-su/cs-11507)。
 
 **不在授權範圍內**：課本內容、CDN 載入的外部函式庫、Scratch 的名稱與標誌，以及學生的作品與個人資料。
+
+2D 像素版的圖片來自 [Ninja Adventure Asset Pack](https://pixel-boy.itch.io/ninja-adventure-asset-pack)（[Pixel-boy](https://pixel-boy.itch.io/) & [AAA](https://www.instagram.com/challenger.aaa/)），**CC0 公眾領域**，見 `shared/pixel/CREDITS.md`。

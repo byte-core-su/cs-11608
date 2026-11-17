@@ -32,6 +32,32 @@
     return '../shared/';
   }
 
+  /* ★ 島嶼要用哪一種畫面：'3d'（預設）或 '2d'（Ninja Adventure 像素版）。
+       優先順序：網址 ?engine= ＞ 比較頁的分頁名稱 ＞ 這台電腦選過的（localStorage）＞ config.js 的 ISLAND_ENGINE。
+       term.js 有同一支（TERMSEL.engine），兩邊規則要一樣。 */
+  function resolveEngine() {
+    if (global.TERMSEL && typeof global.TERMSEL.engine === 'function') return global.TERMSEL.engine();
+    var v = '';
+    try { v = new URLSearchParams(global.location.search).get('engine') || ''; } catch (e) {}
+    if (!/^(2d|3d)$/.test(v)) { var m = /(?:^|\s)ac-engine-(2d|3d)(?:\s|$)/.exec(global.name || ''); v = m ? m[1] : ''; }
+    if (!/^(2d|3d)$/.test(v)) { try { v = global.localStorage.getItem('ac_engine') || ''; } catch (e) {} }
+    if (!/^(2d|3d)$/.test(v)) v = String((global.SITE && global.SITE.ISLAND_ENGINE) || '3d').toLowerCase();
+    return v === '2d' ? '2d' : '3d';
+  }
+  var island2dPromise = null;
+  function load2D() {
+    if (global.AC_ISLAND2D) return Promise.resolve(global.AC_ISLAND2D);
+    if (island2dPromise) return island2dPromise;
+    island2dPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = getSharedBaseUrl() + 'island2d.js?v=20261117c';
+      s.onload = function () { global.AC_ISLAND2D ? resolve(global.AC_ISLAND2D) : reject(new Error('island2d.js 沒有載入')); };
+      s.onerror = function (e) { island2dPromise = null; reject(e); };
+      document.head.appendChild(s);
+    });
+    return island2dPromise;
+  }
+
   var threePromise = null;
   function loadThree() {
     if (global.THREE && global.THREE.GLTFLoader && global.AC_GLB_BUNDLE) {
@@ -3306,8 +3332,208 @@
 
     renderDialog();
 
-    // 載入 Three.js 並建構高畫質 PBR 3D 動森島嶼場景
+    /* ★ 鍵盤操作（2026-11-17 從 3D 迴圈裡搬出來）：3D 與 2D 像素版共用同一套按鍵規則。
+         監聽仍在各引擎載入完成後才掛上（順序和以前一樣：頁面自己的按鍵處理先跑）。 */
+    if (camBtn) {
+      camBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        state.camMode = state.camMode === 'follow' ? 'overview' : 'follow';
+        state.yawOffset = 0;
+        camBtn.textContent = state.camMode === 'follow' ? '🎥 跟隨' : '🗺️ 鳥瞰';
+      });
+    }
+
+    var lastNearCandidateId = null;
+
+    function onKeyDown(e) {
+      if (e.defaultPrevented) return;
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+
+      /* ★ 快捷鍵（2026-11-12）：V 切換視角、T 切換時段、C 切換造型、R 隨機穿搭、N 自動帶路前往推薦下一關 —— 手不必離開鍵盤去拿滑鼠。
+           有視窗蓋著、或島嶼被收起來（清單模式）時不作用。M（島嶼／清單）在檔案最下面，清單模式也要能按。 */
+      if ((e.code === 'KeyV' || e.code === 'KeyT' || e.code === 'KeyC' || e.code === 'KeyR' || e.code === 'KeyN') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (!e.repeat && canvasEl.getClientRects().length && !document.querySelector(HOTKEY_BLOCKERS)) {
+          if (e.code === 'KeyR') {
+            if (wardrobePanel && !wardrobePanel.classList.contains('hidden')) {
+              var rBtn = wardrobePanel.querySelector('#ac-look-random');
+              if (rBtn) { e.preventDefault(); rBtn.click(); }
+            }
+            return;
+          }
+          if (e.code === 'KeyC') {
+            if (wardrobeBtn) { e.preventDefault(); wardrobeBtn.click(); }
+            return;
+          }
+          if (e.code === 'KeyN') {
+            e.preventDefault();
+            guideToRecommendedNode(true);
+            return;
+          }
+          var hotBtn = e.code === 'KeyV' ? camBtn : timeBtn;
+          if (hotBtn) { e.preventDefault(); hotBtn.click(); }
+        }
+        return;
+      }
+
+      if (e.code === 'Escape' || e.key === 'Escape') {
+        if (document.getElementById('dal-airport-modal')) return;
+        if (closeBoardModal()) { e.preventDefault(); return; }
+        if (document.querySelector('#modal.flex, #action-modal.flex, #quiz-screen:not(.hidden), #study-screen:not(.hidden), #result-screen:not(.hidden), #practice-screen:not(.hidden), #warning-screen:not(.hidden)')) return;
+        var weekMask = document.getElementById('week-mask');
+        if (weekMask && !weekMask.classList.contains('hidden')) {
+          var weekClose = document.getElementById('close-week');
+          if (weekClose) { e.preventDefault(); weekClose.click(); return; }
+        }
+        var detailView = document.getElementById('detail-view');
+        if (detailView && !detailView.classList.contains('hidden') && typeof window.closeCourseDetail === 'function') {
+          e.preventDefault();
+          window.closeCourseDetail();
+          return;
+        }
+        var imgBox = document.getElementById('imgBox');
+        if (imgBox && imgBox.classList.contains('on')) return;
+        var fcModal = document.getElementById('fc-float-modal');
+        if (fcModal && !fcModal.classList.contains('hidden')) {
+          var fcBack = fcModal.querySelector('#back-menu, #back-refresh, #back-menu2, #back-refresh2');
+          if (fcBack) { e.preventDefault(); fcBack.click(); return; }
+        }
+        var leadClose = document.getElementById('toggle-lead-close');
+        if (leadClose) { e.preventDefault(); leadClose.click(); return; }
+        var floatBackdrop = document.querySelector('.ac-float-backdrop:not(.hidden)');
+        if (floatBackdrop) {
+          var xIcon = floatBackdrop.querySelector('.fa-xmark');
+          var xBtn = (xIcon && xIcon.closest('button')) || floatBackdrop.querySelector('button[data-close], button[data-ac-board-close]');
+          if (xBtn) { e.preventDefault(); xBtn.click(); return; }
+        }
+        if (wardrobePanel && !wardrobePanel.classList.contains('hidden')) {
+          e.preventDefault();
+          wardrobePanel.classList.add('hidden');
+          return;
+        }
+        if (dialogEl && !dialogEl.classList.contains('hidden')) {
+          e.preventDefault();
+          dismissDialog();
+          return;
+        }
+        // 若目前在清單／卡片模式（3D 畫布未顯示），按 Esc 自動切回 3D 島嶼探險
+        if (!onScreen(canvasEl)) {
+          if (toggleIslandListView()) { e.preventDefault(); return; }
+        }
+        // 若在分島的 3D 島嶼畫面上且無任何視窗開啟，按 Esc 直接返回主島（呼應右上角 Esc 離開提示）
+        if ((cfg.variant || 'hub') !== 'hub') {
+          e.preventDefault();
+          location.href = (global.CONFIG && global.CONFIG.HUB_PAGE) || 'hub.html';
+          return;
+        }
+        return;
+      }
+
+      if (document.querySelector('#week-mask:not(.hidden), #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden), #dal-airport-modal')) return;
+
+      var isDialogActive = !!(dialogEl && !dialogEl.classList.contains('hidden') && state.nearId && !state.dialogDismissed);
+      if (isDialogActive && e.code === 'Tab') {
+        var menuItems = getDialogMenuItems();
+        if (menuItems.length > 1) {
+          e.preventDefault();
+          state.menuIdx = (state.menuIdx + 1) % menuItems.length;
+          renderDialog();
+          return;
+        }
+      }
+
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
+        state.hasMoved = true;
+        state.keys[e.code] = true;
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) {
+          e.preventDefault();
+        }
+      } else if (e.code === 'Space' || e.key === ' ' || e.code === 'Enter') {
+        var targetId = state.nearId || lastNearCandidateId;
+        if (!targetId) return;
+        e.preventDefault();
+        state.keys = {};
+        state.hasMoved = true;
+        state.dialogDismissed = false;
+        state.nearId = targetId;
+        if (targetId === '__npc__') {
+          npcTipIndex++;
+          state.npcGuideHint = '';
+          if (triggerMascotJumpFn) triggerMascotJumpFn();
+          renderDialog();
+          return;
+        }
+        var targetNode = findNode(targetId);
+        if (!targetNode) return;
+        if (targetNode.locked) {
+          var rectL = stageEl.getBoundingClientRect();
+          spawnFloatScreen(rectL.width * 0.5, rectL.height * 0.45, '🔒 ' + (targetNode.lockReason || '尚未開放'));
+          renderDialog();
+          return;
+        }
+        state.selectedId = targetId;
+        state.focusUntil = performance.now() + 1400;
+        triggerNodeAction(targetNode, state.menuIdx || 0);
+      }
+    }
+
+    function onKeyUp(e) { delete state.keys[e.code]; }
+    function onBlur() { state.keys = {}; }
+
+    /* 2D 像素版用：每一格算出「最靠近的建築／島長」之後交給這裡，和 3D 迴圈裡的同一段規則一樣 */
+    function applyNearCandidate(bestId) {
+      if (bestId !== lastNearCandidateId) {
+        lastNearCandidateId = bestId;
+        state.dialogDismissed = false;
+        state.menuIdx = 0;
+        state.npcGuideHint = '';
+        if (!bestId) {
+          if (state.nearId) {
+            state.nearId = null;
+            state.selectedId = null;
+            renderDialog();
+          }
+        } else if (state.hasMoved) {
+          state.nearId = bestId;
+          state.selectedId = bestId;
+          if (bestId === '__npc__' && triggerMascotJumpFn) triggerMascotJumpFn();
+          renderDialog();
+        }
+      }
+      if (bestId && state.hasMoved && !state.dialogDismissed && state.nearId !== bestId) {
+        state.nearId = bestId;
+        state.selectedId = bestId;
+        state.menuIdx = 0;
+        if (bestId === '__npc__' && triggerMascotJumpFn) triggerMascotJumpFn();
+        renderDialog();
+      }
+    }
+
     var cleanupThree = null;
+    /* ★ 2D 像素版（Ninja Adventure 素材）：TERMSEL.engine() 說 2d 就改載入 island2d.js，3D 引擎完全不載入。 */
+    if (resolveEngine() === '2d') {
+      load2D().then(function (lib) {
+        if (state.destroyed || !canvasEl.isConnected) return;
+        cleanupThree = lib.run({
+          cfg: cfg, state: state, nodes: nodes, props: props, variantKey: currentVariantKey,
+          prof: activeTerrainProf, base: getSharedBaseUrl(),
+          stageEl: stageEl, canvasEl: canvasEl, overlayEl: overlayEl, playerTag: playerTag, npcTag: npcTag,
+          dialogEl: dialogEl, camBtn: camBtn, timeBtn: timeBtn, wardrobePanel: wardrobePanel,
+          npcInfo: currentNpcInfo,
+          getLook: function () { return currentLook; },
+          setRebuildPlayer: function (fn) { rebuildPlayerFn = fn; },
+          setApplyTimeMode: function (fn) { applyTimeModeFn = fn; },
+          setMascotJump: function (fn) { triggerMascotJumpFn = fn; },
+          onKeyDown: onKeyDown, onKeyUp: onKeyUp, onBlur: onBlur,
+          applyNearCandidate: applyNearCandidate,
+          spawnFloatScreen: spawnFloatScreen, savePos: savePos, findNode: findNode,
+          renderDialog: renderDialog, dismissDialog: dismissDialog
+        });
+      }).catch(function (err) {
+        console.error('2D 像素島嶼載入失敗:', err);
+      });
+    } else {
+    // 載入 Three.js 並建構高畫質 PBR 3D 動森島嶼場景
     loadThree().then(function (THREE) {
       if (state.destroyed || !canvasEl.isConnected) return;
       activeGlbMixers = [];
@@ -4463,151 +4689,6 @@
         }
       }
 
-      if (camBtn) {
-        camBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          state.camMode = state.camMode === 'follow' ? 'overview' : 'follow';
-          state.yawOffset = 0;
-          camBtn.textContent = state.camMode === 'follow' ? '🎥 跟隨' : '🗺️ 鳥瞰';
-        });
-      }
-
-      var lastNearCandidateId = null;
-
-      function onKeyDown(e) {
-        if (e.defaultPrevented) return;
-        var tag = (e.target && e.target.tagName) || '';
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
-
-        /* ★ 快捷鍵（2026-11-12）：V 切換視角、T 切換時段、C 切換造型、R 隨機穿搭、N 自動帶路前往推薦下一關 —— 手不必離開鍵盤去拿滑鼠。
-             有視窗蓋著、或島嶼被收起來（清單模式）時不作用。M（島嶼／清單）在檔案最下面，清單模式也要能按。 */
-        if ((e.code === 'KeyV' || e.code === 'KeyT' || e.code === 'KeyC' || e.code === 'KeyR' || e.code === 'KeyN') && !e.ctrlKey && !e.altKey && !e.metaKey) {
-          if (!e.repeat && canvasEl.getClientRects().length && !document.querySelector(HOTKEY_BLOCKERS)) {
-            if (e.code === 'KeyR') {
-              if (wardrobePanel && !wardrobePanel.classList.contains('hidden')) {
-                var rBtn = wardrobePanel.querySelector('#ac-look-random');
-                if (rBtn) { e.preventDefault(); rBtn.click(); }
-              }
-              return;
-            }
-            if (e.code === 'KeyC') {
-              if (wardrobeBtn) { e.preventDefault(); wardrobeBtn.click(); }
-              return;
-            }
-            if (e.code === 'KeyN') {
-              e.preventDefault();
-              guideToRecommendedNode(true);
-              return;
-            }
-            var hotBtn = e.code === 'KeyV' ? camBtn : timeBtn;
-            if (hotBtn) { e.preventDefault(); hotBtn.click(); }
-          }
-          return;
-        }
-
-        if (e.code === 'Escape' || e.key === 'Escape') {
-          if (document.getElementById('dal-airport-modal')) return;
-          if (closeBoardModal()) { e.preventDefault(); return; }
-          if (document.querySelector('#modal.flex, #action-modal.flex, #quiz-screen:not(.hidden), #study-screen:not(.hidden), #result-screen:not(.hidden), #practice-screen:not(.hidden), #warning-screen:not(.hidden)')) return;
-          var weekMask = document.getElementById('week-mask');
-          if (weekMask && !weekMask.classList.contains('hidden')) {
-            var weekClose = document.getElementById('close-week');
-            if (weekClose) { e.preventDefault(); weekClose.click(); return; }
-          }
-          var detailView = document.getElementById('detail-view');
-          if (detailView && !detailView.classList.contains('hidden') && typeof window.closeCourseDetail === 'function') {
-            e.preventDefault();
-            window.closeCourseDetail();
-            return;
-          }
-          var imgBox = document.getElementById('imgBox');
-          if (imgBox && imgBox.classList.contains('on')) return;
-          var fcModal = document.getElementById('fc-float-modal');
-          if (fcModal && !fcModal.classList.contains('hidden')) {
-            var fcBack = fcModal.querySelector('#back-menu, #back-refresh, #back-menu2, #back-refresh2');
-            if (fcBack) { e.preventDefault(); fcBack.click(); return; }
-          }
-          var leadClose = document.getElementById('toggle-lead-close');
-          if (leadClose) { e.preventDefault(); leadClose.click(); return; }
-          var floatBackdrop = document.querySelector('.ac-float-backdrop:not(.hidden)');
-          if (floatBackdrop) {
-            var xIcon = floatBackdrop.querySelector('.fa-xmark');
-            var xBtn = (xIcon && xIcon.closest('button')) || floatBackdrop.querySelector('button[data-close], button[data-ac-board-close]');
-            if (xBtn) { e.preventDefault(); xBtn.click(); return; }
-          }
-          if (wardrobePanel && !wardrobePanel.classList.contains('hidden')) {
-            e.preventDefault();
-            wardrobePanel.classList.add('hidden');
-            return;
-          }
-          if (dialogEl && !dialogEl.classList.contains('hidden')) {
-            e.preventDefault();
-            dismissDialog();
-            return;
-          }
-          // 若目前在清單／卡片模式（3D 畫布未顯示），按 Esc 自動切回 3D 島嶼探險
-          if (!onScreen(canvasEl)) {
-            if (toggleIslandListView()) { e.preventDefault(); return; }
-          }
-          // 若在分島的 3D 島嶼畫面上且無任何視窗開啟，按 Esc 直接返回主島（呼應右上角 Esc 離開提示）
-          if (variantKey !== 'hub') {
-            e.preventDefault();
-            location.href = (global.CONFIG && global.CONFIG.HUB_PAGE) || 'hub.html';
-            return;
-          }
-          return;
-        }
-
-        if (document.querySelector('#week-mask:not(.hidden), #modal.flex, #action-modal.flex, .ac-float-backdrop:not(.hidden), #dal-airport-modal')) return;
-
-        var isDialogActive = !!(dialogEl && !dialogEl.classList.contains('hidden') && state.nearId && !state.dialogDismissed);
-        if (isDialogActive && e.code === 'Tab') {
-          var menuItems = getDialogMenuItems();
-          if (menuItems.length > 1) {
-            e.preventDefault();
-            state.menuIdx = (state.menuIdx + 1) % menuItems.length;
-            renderDialog();
-            return;
-          }
-        }
-
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].indexOf(e.code) >= 0) {
-          state.hasMoved = true;
-          state.keys[e.code] = true;
-          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) {
-            e.preventDefault();
-          }
-        } else if (e.code === 'Space' || e.key === ' ' || e.code === 'Enter') {
-          var targetId = state.nearId || lastNearCandidateId;
-          if (!targetId) return;
-          e.preventDefault();
-          state.keys = {};
-          state.hasMoved = true;
-          state.dialogDismissed = false;
-          state.nearId = targetId;
-          if (targetId === '__npc__') {
-            npcTipIndex++;
-            state.npcGuideHint = '';
-            if (triggerMascotJumpFn) triggerMascotJumpFn();
-            renderDialog();
-            return;
-          }
-          var targetNode = findNode(targetId);
-          if (!targetNode) return;
-          if (targetNode.locked) {
-            var rectL = stageEl.getBoundingClientRect();
-            spawnFloatScreen(rectL.width * 0.5, rectL.height * 0.45, '🔒 ' + (targetNode.lockReason || '尚未開放'));
-            renderDialog();
-            return;
-          }
-          state.selectedId = targetId;
-          state.focusUntil = performance.now() + 1400;
-          triggerNodeAction(targetNode, state.menuIdx || 0);
-        }
-      }
-
-      function onKeyUp(e) { delete state.keys[e.code]; }
-      function onBlur() { state.keys = {}; }
 
       function resizeRenderer() {
         if (!stageEl) return;
@@ -5166,6 +5247,7 @@
     }).catch(function (err) {
       console.error('Three.js 3D 島嶼載入失敗:', err);
     });
+    }
 
     activeInstance = {
       destroy: function () {

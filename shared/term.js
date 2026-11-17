@@ -174,6 +174,49 @@
     }
   };
 
+  /* ★ 島嶼與機場要用哪一種畫面：'3d'（預設）或 '2d'（Ninja Adventure 像素版，versions.html 可以比較、切換）。
+       優先順序：網址 ?engine=2d|3d（會記在這個分頁）＞ 比較頁 iframe 的名稱 ac-engine-2d/3d
+               ＞ 這台電腦選過的（localStorage 'ac_engine'）＞ config.js 的 ISLAND_ENGINE ＞ '3d'。
+       shared/island.js 的 resolveEngine 會先問這一支。 */
+  var ENGINE_RE = /(?:^|\s)ac-engine-(2d|3d)(?:\s|$)/;
+  function engine() {
+    var v = '';
+    try { v = new URLSearchParams(global.location.search).get('engine') || ''; } catch (e) {}
+    if (/^(2d|3d)$/.test(v)) {
+      // 記在分頁名稱：之後在這個分頁裡換頁（網址不再帶 ?engine=）也維持同一種
+      try { global.name = String(global.name || '').replace(ENGINE_RE, ' ').trim() + ' ac-engine-' + v; } catch (e) {}
+      return v;
+    }
+    var m = ENGINE_RE.exec(global.name || '');
+    if (m) return m[1];
+    try { v = global.localStorage.getItem('ac_engine') || ''; } catch (e) {}
+    if (/^(2d|3d)$/.test(v)) return v;
+    v = String(SITE.ISLAND_ENGINE || '3d').toLowerCase();
+    return v === '2d' ? '2d' : '3d';
+  }
+  /** 這台電腦以後都用哪一種（'2d'／'3d'；傳空字串＝回到 config.js 的預設） */
+  function setEngine(v) {
+    try {
+      if (v === '2d' || v === '3d') global.localStorage.setItem('ac_engine', v);
+      else global.localStorage.removeItem('ac_engine');
+    } catch (e) {}
+    try { global.name = String(global.name || '').replace(ENGINE_RE, ' ').trim(); } catch (e) {}
+    return engine();
+  }
+  var island2dPromise = null;
+  function load2D() {
+    if (global.AC_ISLAND2D) return Promise.resolve(global.AC_ISLAND2D);
+    if (island2dPromise) return island2dPromise;
+    island2dPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = ROOT + 'shared/island2d.js?v=20261117c';
+      s.onload = function () { global.AC_ISLAND2D ? resolve(global.AC_ISLAND2D) : reject(new Error('island2d.js 沒有載入')); };
+      s.onerror = function (e) { island2dPromise = null; reject(e); };
+      document.head.appendChild(s);
+    });
+    return island2dPromise;
+  }
+
   var threeLoadPromise = null;
   function ensureThreeLoaded() {
     if (global.THREE) return Promise.resolve(global.THREE);
@@ -904,6 +947,25 @@
     }
 
     var cleanupThree = null;
+    /* ★ 2D 像素版（Ninja Adventure 素材）：用 island2d.js 畫同一個登機大廳，規則（櫃台、Enter 直接登機、Esc、V）一樣。 */
+    if (engine() === '2d') {
+      load2D().then(function (lib) {
+        if (state.destroyed || !canvasEl.isConnected) return;
+        var stop = lib.lounge({
+          hostEl: hostEl, opts: opts, state: state, base: ROOT + 'shared/',
+          stageEl: stageEl, canvasEl: canvasEl, dialogEl: dialogEl, playerTag: playerTag, camBtn: camBtn,
+          routes: FLIGHT_ROUTES, quickTermId: quickTermId,
+          selectCounter: selectCounter, triggerBoarding: triggerBoarding,
+          closeLoungeDialog: closeLoungeDialog, renderBottomDialog: renderBottomDialog,
+          flashLoungeHint: flashLoungeHint, updateQuickBoard: updateQuickBoard
+        });
+        cleanupThree = function () { state.destroyed = true; stop(); };
+        hostEl._dalCleanup = cleanupThree;
+      }).catch(function (err) {
+        console.error('Dodo Airlines 2D 登機室載入失敗:', err);
+      });
+      return;
+    }
     ensureThreeLoaded().then(function (THREE) {
       if (state.destroyed || !canvasEl.isConnected) return;
 
@@ -1547,7 +1609,10 @@
     /** 帶著學期的網址：TERMSEL.url('course/hub.html', '11502') */
     url: function (path, id) { return ROOT + path + (String(path).indexOf('?') >= 0 ? '&' : '?') + 'term=' + encodeURIComponent(id || current); },
     renderAirportCounter: renderAirportCounter,
-    openAirportModal: openAirportModal
+    openAirportModal: openAirportModal,
+    /** 島嶼畫面：TERMSEL.engine() → '3d' 或 '2d'；TERMSEL.setEngine('2d') 記住這台電腦的選擇 */
+    engine: engine,
+    setEngine: setEngine
   };
   lock(global, 'TERMSEL', global.TERMSEL);
 

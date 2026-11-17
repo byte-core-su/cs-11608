@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>島嶼畫面比較 · 3D 立體版與 2D 像素版</title>
+  <script src="config.js"></script>
+  <script src="shared/term.js?v=20261117f"></script>
+  <style>
+    :root {
+      --bg: #ecfdf5; --ink: #1c1917; --muted: #57534e; --card: #fffbeb; --line: #e7d7b9;
+      --accent: #0f766e; --accent-soft: #ccfbf1; --three: #0284c7; --two: #c2410c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: 'Noto Sans TC', system-ui, sans-serif; color: var(--ink);
+      background: radial-gradient(circle at 1px 1px, rgba(15,118,110,.10) 1px, transparent 0) 0 0 / 22px 22px, var(--bg);
+    }
+    header { max-width: 1500px; margin: 0 auto; padding: 18px 16px 6px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+    h1 { margin: 0; font-size: 22px; font-weight: 900; letter-spacing: .02em; }
+    h1 small { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-top: 4px; letter-spacing: 0; }
+    .bar { max-width: 1500px; margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+    .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .group > b { font-size: 12px; color: var(--muted); margin-right: 2px; }
+    button.chip {
+      font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; border-radius: 999px; padding: 6px 13px;
+      border: 2px solid var(--line); background: #fff; color: var(--ink); transition: background .15s, border-color .15s;
+    }
+    button.chip:hover { border-color: var(--accent); }
+    button.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.chip:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+    .stage { max-width: 1500px; margin: 0 auto; padding: 6px 16px 10px; display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+    .stage.only-3d, .stage.only-2d { grid-template-columns: 1fr; }
+    .stage.only-3d .pane[data-eng="2d"], .stage.only-2d .pane[data-eng="3d"] { display: none; }
+    .pane { background: var(--card); border: 3px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+    .pane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 2px solid var(--line); }
+    .pane-head .tag { font-size: 14px; font-weight: 900; padding: 3px 10px; border-radius: 999px; color: #fff; }
+    .pane[data-eng="3d"] .tag { background: var(--three); }
+    .pane[data-eng="2d"] .tag { background: var(--two); }
+    .pane-head .note { font-size: 12px; color: var(--muted); font-weight: 700; }
+    .pane-head a { font-size: 12px; font-weight: 800; color: var(--accent); }
+    .frame-box { position: relative; width: 100%; aspect-ratio: 1366 / 820; background: #0f172a; overflow: hidden; }
+    .frame-box iframe { position: absolute; left: 0; top: 0; width: 1366px; height: 820px; border: 0; transform-origin: 0 0; background: #fff; }
+    .frame-box .hint {
+      position: absolute; inset: auto 0 0 0; padding: 6px 10px; font-size: 12px; font-weight: 800; color: #fff;
+      background: linear-gradient(0deg, rgba(15,23,42,.8), rgba(15,23,42,0)); pointer-events: none; text-align: center;
+    }
+    .choose { max-width: 1500px; margin: 0 auto; padding: 4px 16px 28px; display: grid; gap: 14px; grid-template-columns: 1.1fr 1fr; }
+    .card { background: #fff; border: 3px solid var(--line); border-radius: 18px; padding: 14px 16px; }
+    .card h2 { margin: 0 0 8px; font-size: 16px; font-weight: 900; }
+    .card p { margin: 6px 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+    .now { font-weight: 900; color: var(--ink); }
+    .now span { display: inline-block; padding: 1px 10px; border-radius: 999px; color: #fff; }
+    .pick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .pick button { font: inherit; font-size: 14px; font-weight: 900; cursor: pointer; border-radius: 12px; padding: 9px 14px; border: 3px solid transparent; }
+    .pick .p3 { background: #e0f2fe; color: #075985; border-color: #7dd3fc; }
+    .pick .p2 { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+    .pick .p0 { background: #f5f5f4; color: #44403c; border-color: #d6d3d1; }
+    .pick button:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #f0e6d2; vertical-align: top; }
+    th { color: var(--muted); font-weight: 800; white-space: nowrap; }
+    td b { color: var(--ink); }
+    @media (max-width: 980px) {
+      .stage, .choose { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏝️ 島嶼畫面比較
+      <small>同一個網站、同一份進度，兩種畫面：左邊 3D 立體版，右邊 2D 像素版（Ninja Adventure 素材）。點一下畫面就能用鍵盤操作那一邊。</small>
+    </h1>
+    <div class="group" role="group" aria-label="版面">
+      <b>版面</b>
+      <button type="button" class="chip" data-layout="both" aria-pressed="true">並排</button>
+      <button type="button" class="chip" data-layout="only-3d" aria-pressed="false">只看 3D</button>
+      <button type="button" class="chip" data-layout="only-2d" aria-pressed="false">只看 2D</button>
+    </div>
+  </header>
+
+  <div class="bar">
+    <div class="group" role="group" aria-label="學期" id="term-group"><b>學期</b></div>
+    <div class="group" role="group" aria-label="場景" id="scene-group"><b>場景</b></div>
+  </div>
+
+  <section class="stage" id="stage">
+    <div class="pane" data-eng="3d">
+      <div class="pane-head">
+        <span class="tag">3D 立體版</span>
+        <span class="note">Three.js · 需要顯示卡</span>
+        <a href="#" target="_blank" rel="noopener" data-open="3d">另開分頁 ↗</a>
+      </div>
+      <div class="frame-box"><iframe name="ac-engine-3d" title="3D 立體版島嶼" loading="lazy"></iframe><div class="hint">點一下畫面後：WASD／方向鍵走路 · Space 進入 · V 視角 · T 時段</div></div>
+    </div>
+    <div class="pane" data-eng="2d">
+      <div class="pane-head">
+        <span class="tag">2D 像素版</span>
+        <span class="note">Canvas 2D · 舊電腦、平板也跑得動</span>
+        <a href="#" target="_blank" rel="noopener" data-open="2d">另開分頁 ↗</a>
+      </div>
+      <div class="frame-box"><iframe name="ac-engine-2d" title="2D 像素版島嶼" loading="lazy"></iframe><div class="hint">點一下畫面後：WASD／方向鍵走路 · Space 進入 · V 視角 · T 時段</div></div>
+    </div>
+  </section>
+
+  <section class="choose">
+    <div class="card">
+      <h2>🖥️ 這台電腦要用哪一種？</h2>
+      <p class="now" id="now"></p>
+      <p>選了之後，這台電腦（這個瀏覽器）開任何一座島、入口機場都會用那一種畫面；不影響其他學生的電腦。
+         想讓<b>全校預設</b>換成另一種，改 <code>config.js</code> 的 <code>ISLAND_ENGINE</code>。</p>
+      <div class="pick">
+        <button type="button" class="p3" data-set="3d">🧊 使用 3D 立體版</button>
+        <button type="button" class="p2" data-set="2d">🕹️ 使用 2D 像素版</button>
+        <button type="button" class="p0" data-set="">↩️ 回到網站預設</button>
+      </div>
+      <p style="margin-top:12px">也可以在網址後面加 <code>?engine=2d</code> 或 <code>?engine=3d</code> 臨時切換（只在那個分頁有效）。</p>
+    </div>
+    <div class="card">
+      <h2>📋 兩種有什麼不一樣</h2>
+      <table>
+        <tr><th></th><th>3D 立體版</th><th>2D 像素版</th></tr>
+        <tr><th>畫面</th><td>立體動森風、可轉鏡頭、光影</td><td>俯視像素風、16 像素圖塊</td></tr>
+        <tr><th>電腦</th><td>需要較好的顯示卡，舊電腦會自動降畫質</td><td>一般電腦、平板都順</td></tr>
+        <tr><th>第一次載入</th><td>約 1～2 MB（Three.js＋模型）</td><td>約 0.5 MB（圖塊）</td></tr>
+        <tr><th>一樣的地方</th><td colspan="2"><b>關卡、進度、存檔位置、按鍵（WASD、Space、Esc、V、T、C、N、M）、帶路、造型都一樣</b>，隨時可以換。</td></tr>
+        <tr><th>素材</th><td>程式產生＋開源 .glb 模型</td><td><a href="shared/pixel/CREDITS.md" target="_blank" rel="noopener">Ninja Adventure（CC0）</a></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      var T = window.TERMSEL;
+      var terms = (T && T.list) || [{ id: '11501', short: '上學期' }, { id: '11502', short: '下學期' }];
+      var SCENES = [
+        { id: 'entry', label: '✈️ 入口機場', path: { '*': 'index.html' } },
+        { id: 'hub', label: '🏝️ 主島', path: { '*': 'course/hub.html' } },
+        { id: 'ethics', label: '🍎 資訊倫理果園', path: { '*': 'course/quiz.html' } },
+        { id: 'thinking', label: '🎪 運算思維樂園', path: { '*': 'course/thinking.html' } },
+        { id: 'code', label: '⚙️ 程式設計島', path: { '11501': 'course/flowchart.html', '11502': 'course/scratch.html' } },
+        { id: 'tech', label: '🤖 科技島', path: { '11501': 'course/5016b.html', '11502': 'course/arduino.html' } }
+      ];
+      var sel = { term: (T && T.current) || terms[0].id, scene: 'hub', layout: 'both' };
+      try {
+        var saved = JSON.parse(sessionStorage.getItem('ac_versions_sel') || '{}');
+        if (saved.scene) sel.scene = saved.scene;
+        if (saved.term && terms.some(function (t) { return t.id === saved.term; })) sel.term = saved.term;
+        if (saved.layout) sel.layout = saved.layout;
+      } catch (e) {}
+
+      var termGroup = document.getElementById('term-group');
+      var sceneGroup = document.getElementById('scene-group');
+      terms.forEach(function (t) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'chip'; b.dataset.term = t.id;
+        b.textContent = (t.name || '') + (t.short ? '（' + t.short + '）' : '');
+        termGroup.appendChild(b);
+      });
+      SCENES.forEach(function (s) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'chip'; b.dataset.scene = s.id; b.textContent = s.label;
+        sceneGroup.appendChild(b);
+      });
+
+      function urlFor() {
+        var sc = SCENES.filter(function (s) { return s.id === sel.scene; })[0] || SCENES[1];
+        var p = sc.path[sel.term] || sc.path['*'];
+        return p + '?term=' + encodeURIComponent(sel.term);
+      }
+      function render() {
+        var u = urlFor();
+        document.querySelectorAll('[data-term]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.term === sel.term)); });
+        document.querySelectorAll('[data-scene]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.scene === sel.scene)); });
+        document.querySelectorAll('[data-layout]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.layout === sel.layout)); });
+        var stage = document.getElementById('stage');
+        stage.className = 'stage' + (sel.layout === 'both' ? '' : ' ' + sel.layout);
+        ['3d', '2d'].forEach(function (eng) {
+          var f = document.querySelector('iframe[name="ac-engine-' + eng + '"]');
+          var hidden = (sel.layout === 'only-3d' && eng === '2d') || (sel.layout === 'only-2d' && eng === '3d');
+          // 看不到的那一邊直接卸載，不讓兩個引擎一起跑（3D 很吃顯示卡）
+          var want = hidden ? 'about:blank' : u;
+          if (f.getAttribute('src') !== want) f.setAttribute('src', want);
+          document.querySelector('[data-open="' + eng + '"]').href = u + '&engine=' + eng;
+        });
+        try { sessionStorage.setItem('ac_versions_sel', JSON.stringify(sel)); } catch (e) {}
+        fit();
+      }
+      function fit() {
+        document.querySelectorAll('.frame-box').forEach(function (box) {
+          var f = box.querySelector('iframe');
+          f.style.transform = 'scale(' + (box.clientWidth / 1366) + ')';
+        });
+      }
+      function showNow() {
+        var eng = T && T.engine ? T.engine() : '3d';
+        var def = String((window.SITE && SITE.ISLAND_ENGINE) || '3d');
+        var own = ''; try { own = localStorage.getItem('ac_engine') || ''; } catch (e) {}
+        document.getElementById('now').innerHTML = '這台電腦目前：<span style="background:' + (eng === '2d' ? 'var(--two)' : 'var(--three)') + '">'
+          + (eng === '2d' ? '2D 像素版' : '3D 立體版') + '</span>　' + (own ? '（自己選的；網站預設是 ' + def.toUpperCase() + '）' : '（網站預設）');
+      }
+
+      document.addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.term) { sel.term = b.dataset.term; render(); }
+        else if (b.dataset.scene) { sel.scene = b.dataset.scene; render(); }
+        else if (b.dataset.layout) { sel.layout = b.dataset.layout; render(); }
+        else if (b.hasAttribute('data-set')) {
+          if (T && T.setEngine) T.setEngine(b.getAttribute('data-set'));
+          else { try { b.getAttribute('data-set') ? localStorage.setItem('ac_engine', b.getAttribute('data-set')) : localStorage.removeItem('ac_engine'); } catch (err) {} }
+          showNow();
+        }
+      });
+      window.addEventListener('resize', fit);
+      // 本頁的分頁名稱不要帶引擎記號（不然「這台電腦目前」會被它蓋過）
+      try { window.name = String(window.name || '').replace(/(?:^|\s)ac-engine-(2d|3d)(?:\s|$)/, ' ').trim(); } catch (e) {}
+      render();
+      showNow();
+    })();
+  </script>
+</body>
+</html>
